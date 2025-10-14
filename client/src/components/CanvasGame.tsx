@@ -420,8 +420,7 @@ export default function CanvasGame() {
       className="border-2 border-gray-700"
       style={{
         imageRendering: "pixelated",
-        imageRendering: "-moz-crisp-edges",
-        imageRendering: "crisp-edges",
+        imageRendering: "crisp-edges" as any,
       }}
     />
   );
