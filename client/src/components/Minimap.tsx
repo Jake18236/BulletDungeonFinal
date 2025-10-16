@@ -4,7 +4,7 @@ import { Card, CardContent } from "./ui/card";
 
 export default function Minimap() {
   const { currentRoom } = useDungeon();
-  const { player } = usePlayer();
+  const { position } = usePlayer();
 
   if (!currentRoom) return null;
 
@@ -19,8 +19,8 @@ export default function Minimap() {
             <div 
               className="absolute w-2 h-2 bg-blue-400 rounded-full"
               style={{
-                left: `${((player.position.x + 20) / 40) * 100}%`,
-                top: `${((player.position.z + 20) / 40) * 100}%`,
+                left: `${((position.x + 20) / 40) * 100}%`,
+                top: `${((position.z + 20) / 40) * 100}%`,
                 transform: 'translate(-50%, -50%)'
               }}
             />

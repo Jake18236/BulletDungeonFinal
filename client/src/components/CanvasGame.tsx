@@ -20,12 +20,23 @@ export default function CanvasGame() {
 
   const { phase, end } = useGame();
   const {
-    player,
+    position,
+    health,
+    maxHealth,
+    speed,
+    canAttack,
+    attackRange,
+    attack: attackStat,
+    defense,
     move: movePlayer,
-    attack: playerAttack,
     takeDamage: playerTakeDamage,
     gainXP,
   } = usePlayer();
+  
+  const playerAttackAction = usePlayer((state) => state.attack);
+  
+  // Create player object for combat
+  const player = { attack: attackStat, defense, health };
 
   const {
     enemies,
@@ -94,11 +105,11 @@ export default function CanvasGame() {
 
       if (moveX !== 0 || moveZ !== 0) {
         const length = Math.sqrt(moveX * moveX + moveZ * moveZ);
-        moveX = (moveX / length) * player.speed * delta;
-        moveZ = (moveZ / length) * player.speed * delta;
+        moveX = (moveX / length) * speed * delta;
+        moveZ = (moveZ / length) * speed * delta;
 
-        const newX = player.position.x + moveX;
-        const newZ = player.position.z + moveZ;
+        const newX = position.x + moveX;
+        const newZ = position.z + moveZ;
 
         // Check room boundaries
         if (Math.abs(newX) < ROOM_SIZE && Math.abs(newZ) < ROOM_SIZE) {
@@ -107,17 +118,17 @@ export default function CanvasGame() {
       }
 
       // Handle player attack
-      if (keysPressed.current.has("Space") && player.canAttack) {
-        playerAttack();
+      if (keysPressed.current.has("Space") && canAttack) {
+        playerAttackAction();
         keysPressed.current.delete("Space");
 
         // Check if attack hits any enemies
         enemies.forEach((enemy) => {
-          const dx = player.position.x - enemy.position.x;
-          const dz = player.position.z - enemy.position.z;
+          const dx = position.x - enemy.position.x;
+          const dz = position.z - enemy.position.z;
           const distance = Math.sqrt(dx * dx + dz * dz);
 
-          if (distance <= player.attackRange) {
+          if (distance <= attackRange) {
             const damage = processCombat(player, enemy);
             if (damage > 0) {
               playHit();
@@ -144,8 +155,8 @@ export default function CanvasGame() {
 
       // Update and draw enemies
       const updatedEnemies = enemies.map((enemy) => {
-        const dx = player.position.x - enemy.position.x;
-        const dz = player.position.z - enemy.position.z;
+        const dx = position.x - enemy.position.x;
+        const dz = position.z - enemy.position.z;
         const distance = Math.sqrt(dx * dx + dz * dz);
 
         // AI behavior
@@ -194,20 +205,20 @@ export default function CanvasGame() {
       drawPlayer(ctx);
 
       // Check game over
-      if (player.health <= 0) {
+      if (health <= 0) {
         end();
       }
 
       // Check room transition
       const roomBoundary = 18;
       if (
-        Math.abs(player.position.x) > roomBoundary ||
-        Math.abs(player.position.z) > roomBoundary
+        Math.abs(position.x) > roomBoundary ||
+        Math.abs(position.z) > roomBoundary
       ) {
         let direction = "north";
-        if (player.position.x > roomBoundary) direction = "east";
-        else if (player.position.x < -roomBoundary) direction = "west";
-        else if (player.position.z > roomBoundary) direction = "south";
+        if (position.x > roomBoundary) direction = "east";
+        else if (position.x < -roomBoundary) direction = "west";
+        else if (position.z > roomBoundary) direction = "south";
 
         changeRoom(direction);
 
@@ -217,18 +228,18 @@ export default function CanvasGame() {
             ? -roomBoundary + 2
             : direction === "west"
             ? roomBoundary - 2
-            : player.position.x;
+            : position.x;
         const resetZ =
           direction === "north"
             ? -roomBoundary + 2
             : direction === "south"
             ? roomBoundary - 2
-            : player.position.z;
+            : position.z;
 
         movePlayer({
-          x: resetX - player.position.x,
+          x: resetX - position.x,
           y: 0,
-          z: resetZ - player.position.z,
+          z: resetZ - position.z,
         });
       }
 
@@ -347,8 +358,8 @@ export default function CanvasGame() {
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
 
-    const screenX = centerX + player.position.x * TILE_SIZE / 2;
-    const screenY = centerY + player.position.z * TILE_SIZE / 2;
+    const screenX = centerX + position.x * TILE_SIZE / 2;
+    const screenY = centerY + position.z * TILE_SIZE / 2;
 
     // Draw player shadow (for semi-3D effect)
     ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
@@ -371,7 +382,7 @@ export default function CanvasGame() {
     ctx.fillStyle = "#ff0000";
     ctx.fillRect(screenX - healthBarWidth / 2, screenY - 22, healthBarWidth, healthBarHeight);
     ctx.fillStyle = "#00ff00";
-    const healthWidth = (player.health / player.maxHealth) * healthBarWidth;
+    const healthWidth = (health / maxHealth) * healthBarWidth;
     ctx.fillRect(screenX - healthBarWidth / 2, screenY - 22, healthWidth, healthBarHeight);
   };
 

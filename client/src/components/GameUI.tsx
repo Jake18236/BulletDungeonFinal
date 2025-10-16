@@ -14,7 +14,16 @@ import { Volume2, VolumeX } from "lucide-react";
 
 export default function GameUI() {
   const { phase, start, restart } = useGame();
-  const { player, reset: resetPlayer } = usePlayer();
+  const {
+    health,
+    maxHealth,
+    xp,
+    xpToNext,
+    level,
+    attack,
+    defense,
+    reset: resetPlayer
+  } = usePlayer();
   const { isMuted, toggleMute } = useAudio();
   const { showInventory, toggleInventory } = useInventory();
   const { generateDungeon, reset: resetDungeon } = useDungeon();
@@ -78,8 +87,8 @@ export default function GameUI() {
               You have fallen in the dungeon...
             </p>
             <div className="text-sm text-gray-400 mb-6 space-y-1">
-              <p>Level Reached: <span className="text-white font-semibold">{player.level}</span></p>
-              <p>XP Gained: <span className="text-white font-semibold">{player.xp}</span></p>
+              <p>Level Reached: <span className="text-white font-semibold">{level}</span></p>
+              <p>XP Gained: <span className="text-white font-semibold">{xp}</span></p>
             </div>
             <Button onClick={handleRestart} className="bg-blue-600 hover:bg-blue-700 text-lg px-8 py-3">
               Try Again
@@ -100,25 +109,25 @@ export default function GameUI() {
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium w-16">Health:</span>
                 <Progress 
-                  value={(player.health / player.maxHealth) * 100} 
+                  value={(health / maxHealth) * 100} 
                   className="w-32 h-3"
                 />
-                <span className="text-xs font-mono">{player.health}/{player.maxHealth}</span>
+                <span className="text-xs font-mono">{health}/{maxHealth}</span>
               </div>
               
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium w-16">XP:</span>
                 <Progress 
-                  value={(player.xp / player.xpToNext) * 100} 
+                  value={(xp / xpToNext) * 100} 
                   className="w-32 h-3"
                 />
-                <span className="text-xs font-mono">{player.xp}/{player.xpToNext}</span>
+                <span className="text-xs font-mono">{xp}/{xpToNext}</span>
               </div>
               
               <div className="flex items-center gap-4 text-sm pt-2 border-t border-gray-700">
-                <span className="font-semibold">Lv {player.level}</span>
-                <span>ATK: {player.attack}</span>
-                <span>DEF: {player.defense}</span>
+                <span className="font-semibold">Lv {level}</span>
+                <span>ATK: {attack}</span>
+                <span>DEF: {defense}</span>
               </div>
             </div>
           </CardContent>
