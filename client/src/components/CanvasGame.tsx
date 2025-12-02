@@ -346,28 +346,37 @@ export default function CanvasGame() {
             if (fireQueue.current > 0) fireQueue.current--;
 
             // Fire projectile logic here...
-            const activeSlot = slots.find((s) => s.id === activeSlotId);
-            if (activeSlot) {
-              const stats = getSlotStats(activeSlotId);
-              const ps = usePlayer.getState();
-              const centerX = CANVAS_WIDTH / 2;
-              const centerY = CANVAS_HEIGHT / 2;
-              const baseAngle = Math.atan2(
-                mouseRef.current.y - centerY,
-                mouseRef.current.x - centerX
-              );
-              const spreadAngle = stats.projectileCount > 1 ? 0.2 : 0;
-              for (let i = 0; i < stats.projectileCount; i++) {
-                let angle = baseAngle;
-                if (stats.projectileCount > 1) {
-                  const offset = (i - (stats.projectileCount - 1) / 2) * spreadAngle;
-                  angle += offset;
-                }
+            const activeSlot = slots.find(s => s.id === activeSlotId);
+            if (activeSlot && !activeSlot.isOnCooldown) {
+              if (fireShot()) {
+                const rect = canvasRef.current!.getBoundingClientRect();
+                const centerX = CANVAS_WIDTH / 2;
+                const centerY = CANVAS_HEIGHT / 2;
 
-                const inaccuracy = (1 - stats.accuracy);
-                angle += (Math.random() - 0.5) * inaccuracy;
+                const stats = getSlotStats(activeSlotId);
+                const ps = usePlayer.getState();
 
-                const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+                const baseAngle = Math.atan2(
+                  mouseRef.current.y - centerY, 
+                  mouseRef.current.x - centerX
+                );
+                const spreadAngle = stats.projectileCount > 1 ? 0.2 : 0;
+                for (let i = 0; i < stats.projectileCount; i++) {
+                  let angle = baseAngle;
+                  if (stats.projectileCount > 1) {
+                    const offset = (i - (stats.projectileCount - 1) / 2) * spreadAngle;
+                    angle += offset;
+                  }
+
+                  const inaccuracy = (1 - stats.accuracy) * 0.3;
+                  angle += (Math.random() - 0.5) * inaccuracy;
+
+                  const direction = new THREE.Vector3(
+                    Math.cos(angle),
+                    0,
+                    Math.sin(angle)
+                  );
+
 
                 addProjectile({
                   position: ps.position.clone(),
@@ -388,6 +397,7 @@ export default function CanvasGame() {
 
               fireShot();
               playHit();
+            }
             }
           }
 
@@ -845,7 +855,7 @@ export default function CanvasGame() {
       ctx.fillRect(centerX - radius, barY, radius * 2, barHeight);
 
       // Progress bar
-      const progress = reloadProgress / reloadTime; // 2 second reload time
+      const progress = reloadProgress / 2.0; // 2 second reload time
       ctx.fillStyle = "#ffaa00";
       ctx.fillRect(centerX - radius, barY, radius * 2 * progress, barHeight);
 
