@@ -44,7 +44,7 @@ export const useEnemies = create<EnemiesState>((set, get) => ({
       switch (chosenType) {
         case "patroller":
           return {
-            health: 60,
+            health: 6,
             maxHealth: 60,
             attack: 1,
             defense: 3,
@@ -55,7 +55,7 @@ export const useEnemies = create<EnemiesState>((set, get) => ({
           } as Partial<Enemy>;
         case "sentry":
           return {
-            health: 80,
+            health: 0,
             maxHealth: 80,
             attack: 1,
             defense: 4,
@@ -67,7 +67,7 @@ export const useEnemies = create<EnemiesState>((set, get) => ({
         case "grunt":
         default:
           return {
-            health: 45,
+            health: 0,
             maxHealth: 45,
             attack: 1,
             defense: 1,

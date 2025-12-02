@@ -14,10 +14,10 @@ import SpellSlotsHUD from "./SpellSlotsHUD";
 import CardManager from "./CardManager";
 import swordSrc from "/images/sword.png";
 
-const TILE_SIZE = 22;
+const TILE_SIZE = 34;
 const CANVAS_WIDTH = 1100;
 const CANVAS_HEIGHT = 700;
-const ROOM_SIZE = 40;
+const ROOM_SIZE = 20;
 
 
 const KNOCKBACK_FORCE = 20;
@@ -901,36 +901,62 @@ export default function CanvasGame() {
     const dy = mouseRef.current.y - centerY;
     const mouseAngle = Math.atan2(dy, dx);
 
-    let img: HTMLImageElement;
-    let scale: number;
-
-    if (type === "sword") {
-      img = swordImg;
-      scale = 0.2;
-    } else if (type === "revolver") {
-      img = revolverImg;
-      scale = 0.45;
-    } else return;
-
-    if (!img.complete) return;
-
-    const w = img.width * scale;
-    const h = img.height * scale;
-
     ctx.save();
+    ctx.translate(centerX, centerY);
 
-    if (type === "sword" && swingRef.current.swinging) {
-      const swingOffset =
-        SWING_ARC * 2 + (swingRef.current.progress * SWING_ARC) / 1.5;
-      ctx.rotate(mouseAngle + swingOffset);
-      ctx.drawImage(img, -w / 2 + 12, -h / 2 - 30, w, h);
-    } else if (type === "sword" && !swingRef.current.swinging) {
-      ctx.rotate(mouseAngle);
-      ctx.drawImage(img, -w / 2 + 12, -h / 2 - 30, w, h);
-    }
     if (type === "revolver") {
+      // Draw gun pointing towards mouse
       ctx.rotate(mouseAngle);
-      ctx.drawImage(img, -w / 2 + 16, -h / 2, w, h);
+
+      // Gun barrel - long rectangle
+      ctx.fillStyle = "#333333";
+      ctx.fillRect(0, -4, 35, 8);
+
+      // Gun grip - rectangle below barrel
+      ctx.fillRect(10, 4, 12, 20);
+
+      // Gun trigger guard
+      ctx.strokeStyle = "#222222";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(15, 8, 6, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Muzzle highlight
+      ctx.fillStyle = "#555555";
+      ctx.beginPath();
+      ctx.arc(35, 0, 3, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (type === "sword") {
+      // Draw sword pointing towards mouse
+      ctx.rotate(mouseAngle);
+
+      // Blade
+      ctx.fillStyle = "#cccccc";
+      ctx.beginPath();
+      ctx.moveTo(0, -3);
+      ctx.lineTo(40, 0);
+      ctx.lineTo(0, 3);
+      ctx.closePath();
+      ctx.fill();
+
+      // Blade edge highlight
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, -2);
+      ctx.lineTo(40, 0);
+      ctx.stroke();
+
+      // Hilt/handle
+      ctx.fillStyle = "#8b4513";
+      ctx.fillRect(-8, -4, 8, 8);
+
+      // Handle detail
+      ctx.fillStyle = "#a0522d";
+      ctx.fillRect(-7, -3, 1, 6);
+      ctx.fillRect(-5, -3, 1, 6);
+      ctx.fillRect(-3, -3, 1, 6);
     }
 
     ctx.restore();
