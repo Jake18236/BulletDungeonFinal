@@ -7,8 +7,10 @@ interface PlayerState {
   speed: number;
   
   
-  health: number;
-  maxHealth: number;
+  hearts: number;
+  maxHearts: number;
+  invincibilityTimer: number;
+  invincibilityDuration: number;
   defense: number;
   firerate: number,
   ammo: number;
@@ -23,7 +25,8 @@ interface PlayerState {
   updateReload: (delta: number) => void;
 
   move: (delta: THREE.Vector3) => void;
-  takeDamage: (amount: number) => void;
+  loseHeart: () => void;
+  updateInvincibility: (delta: number) => void;
   reset: () => void;
 }
 
@@ -34,8 +37,10 @@ export const usePlayer = create<PlayerState>((set) => ({
   
   firerate: 0.5,
   
-  health: 100,
-  maxHealth: 100,
+  hearts: 5,
+  maxHearts: 5,
+  invincibilityTimer: 0,
+  invincibilityDuration: 3,
   defense: 0,
   ammo: 6,
   maxAmmo: 6,
@@ -81,15 +86,23 @@ export const usePlayer = create<PlayerState>((set) => ({
     position: state.position.clone().add(delta)
   })),
 
-  takeDamage: (amount) => set((state) => ({
-    health: Math.max(state.health - amount, 0)
+  loseHeart: () => set((state) => ({
+    hearts: Math.max(state.hearts - 1, 0),
+    invincibilityTimer: state.invincibilityDuration
   })),
+
+  updateInvincibility: (delta) => set((state) => {
+    if (state.invincibilityTimer <= 0) return {};
+    return { invincibilityTimer: Math.max(state.invincibilityTimer - delta, 0) };
+  }),
 
   reset: () => set({
     position: new THREE.Vector3(),
     velocity: new THREE.Vector3(),
-    health: 100,
-    maxHealth: 100,
+    hearts: 5,
+    maxHearts: 5,
+    invincibilityTimer: 0,
+    invincibilityDuration: 3,
     firerate: 0.2,
     ammo: 6,
     maxAmmo: 6,

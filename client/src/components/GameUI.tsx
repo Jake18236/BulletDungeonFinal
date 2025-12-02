@@ -16,8 +16,8 @@ import { Volume2, VolumeX } from "lucide-react";
 export default function GameUI() {
   const { phase, start, restart } = useGame();
   const {
-    health,
-    maxHealth,
+    hearts,
+    maxHearts,
 
     defense,
     reset: resetPlayer
@@ -98,12 +98,19 @@ export default function GameUI() {
           <CardContent className="p-4">
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium w-16">Health:</span>
-                <Progress 
-                  value={(health / maxHealth) * 100} 
-                  className="w-32 h-3"
-                />
-                <span className="text-xs font-mono">{health}/{maxHealth}</span>
+                <span className="text-sm font-medium">Hearts:</span>
+                <div className="flex gap-1">
+                  {Array.from({ length: maxHearts }).map((_, i) => (
+                    <div
+                      key={i}
+                      className={`w-6 h-6 rounded-full border-2 ${
+                        i < hearts
+                          ? 'bg-red-500 border-red-600'
+                          : 'bg-gray-800 border-gray-600'
+                      }`}
+                    />
+                  ))}
+                </div>
               </div>
 
 

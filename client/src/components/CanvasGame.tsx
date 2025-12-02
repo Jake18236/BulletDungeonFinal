@@ -171,8 +171,9 @@ export default function CanvasGame() {
   const { phase, end } = useGame();
   const {
     position,
-    health,
-    maxHealth,
+    hearts,
+    maxHearts,
+    invincibilityTimer,
     speed,
     firerate,
     reloadTime,
@@ -185,7 +186,8 @@ export default function CanvasGame() {
     startReload,
     updateReload,
 
-    takeDamage: playerTakeDamage,
+    loseHeart,
+    updateInvincibility,
   } = usePlayer();
   const { slots, activeSlotId, getSlotStats, startCooldown, updateCooldowns } =
     useSpellSlots();
@@ -316,6 +318,7 @@ export default function CanvasGame() {
       if (currentRoom) drawDungeon(ctx);
 
       updateReload(delta);
+      updateInvincibility(delta);
 
       if (ammo === 0 && !isReloading) {
         startReload();
@@ -482,9 +485,8 @@ export default function CanvasGame() {
 
           enemy.state = "chasing";
 
-          if (distance <= enemy.attackRange && enemy.canAttack) {
-            const damage = Math.max(enemy.speed, 0);
-            playerTakeDamage(damage);
+          if (distance <= enemy.attackRange && enemy.canAttack && invincibilityTimer <= 0) {
+            loseHeart();
             playHit();
             enemy.canAttack = false;
             enemy.attackCooldown = enemy.attackCooldown;
@@ -595,12 +597,8 @@ export default function CanvasGame() {
             new THREE.Vector3(nx * KNOCKBACK_FORCE, 0, nz * KNOCKBACK_FORCE),
           );
 
-          if (enemy.canAttack) {
-            const damage = Math.max(
-              (enemy.attack ?? 1) - (player.defense ?? 0),
-              1,
-            );
-            playerTakeDamage(damage);
+          if (enemy.canAttack && invincibilityTimer <= 0) {
+            loseHeart();
             playHit();
             enemy.canAttack = false;
             enemy.attackCooldown = enemy.attackCooldown;
@@ -634,7 +632,7 @@ export default function CanvasGame() {
       drawProjectilesAndTrails(ctx);
       drawReloadIndicator(ctx);
       drawCustomCursor(ctx);
-      if (health <= 0) end();
+      if (hearts <= 0) end();
 
       animationFrameRef.current = requestAnimationFrame(gameLoop);
     };
@@ -1084,6 +1082,16 @@ export default function CanvasGame() {
 
     ctx.save();
     ctx.translate(centerX, centerY);
+
+    // Flashing effect during invincibility
+    if (invincibilityTimer > 0) {
+      const flashFrequency = 0.15; // Flash every 150ms
+      const flash = Math.sin((invincibilityTimer / flashFrequency) * Math.PI * 4) > 0;
+      if (!flash) {
+        ctx.restore();
+        return; // Skip drawing to create flash effect
+      }
+    }
 
     ctx.fillStyle = "#4a9eff";
     ctx.beginPath();
