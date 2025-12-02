@@ -484,13 +484,6 @@ export default function CanvasGame() {
           }
 
           enemy.state = "chasing";
-
-          if (distance <= enemy.attackRange && enemy.canAttack && invincibilityTimer <= 0) {
-            loseHeart();
-            playHit();
-            enemy.canAttack = false;
-            enemy.attackCooldown = enemy.attackCooldown;
-          }
         } else if (enemy.state !== "patrolling") {
           enemy.state = "patrolling";
         }
