@@ -46,7 +46,7 @@ export const useEnemies = create<EnemiesState>((set, get) => ({
           return {
             health: 60,
             maxHealth: 60,
-            attack: 12,
+            attack: 1,
             defense: 3,
             speed: 1,
             detectionRange: 1000,
@@ -57,7 +57,7 @@ export const useEnemies = create<EnemiesState>((set, get) => ({
           return {
             health: 80,
             maxHealth: 80,
-            attack: 10,
+            attack: 1,
             defense: 4,
             speed: 0,
             detectionRange: 12,
@@ -69,7 +69,7 @@ export const useEnemies = create<EnemiesState>((set, get) => ({
           return {
             health: 45,
             maxHealth: 45,
-            attack: 14,
+            attack: 1,
             defense: 1,
             speed: 3.5,
             detectionRange: 7,

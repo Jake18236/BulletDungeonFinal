@@ -564,32 +564,6 @@ export default function CanvasGame() {
         const dist = Math.hypot(dx, dz);
 
         if (dist > 0 && dist < PLAYER_RADIUS + ENEMY_RADIUS) {
-          const overlap = PLAYER_RADIUS + ENEMY_RADIUS - dist;
-          const nx = dx / dist;
-          const nz = dz / dist;
-
-          enemy.position.x += nx * overlap * 0.6;
-          enemy.position.z += nz * overlap * 0.6;
-
-          usePlayer.setState((s) => {
-            const v = s.velocity
-              ? s.velocity.clone()
-              : new THREE.Vector3(0, 0, 0);
-            v.add(
-              new THREE.Vector3(
-                -nx * overlap * KNOCKBACK_FORCE * 10,
-                100000,
-                -nz * overlap * KNOCKBACK_FORCE * 10,
-              ),
-            );
-            return { velocity: v };
-          });
-
-          if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
-          enemy.velocity.add(
-            new THREE.Vector3(nx * KNOCKBACK_FORCE, 0, nz * KNOCKBACK_FORCE),
-          );
-
           if (enemy.canAttack && invincibilityTimer <= 0) {
             loseHeart();
             playHit();
