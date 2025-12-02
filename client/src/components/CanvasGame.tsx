@@ -321,6 +321,9 @@ export default function CanvasGame() {
         startReload();
       }
 
+      // Update firing state
+      setFiring(isMouseDown.current && !isReloading && ammo > 0);
+
       // firing logic
         if (isMouseDown.current && !isReloading && ammo > 0) {
           fireTimer.current += delta;
@@ -398,7 +401,7 @@ export default function CanvasGame() {
 
       if (moveX !== 0 || moveZ !== 0) {
         const len = Math.sqrt(moveX ** 2 + moveZ ** 2);
-        const speedModifier = isFiring && !isReloading ? 0.5 : 1;
+        const speedModifier = isFiring && !isReloading ? 0.4 : 1;
 
         let dx = (moveX / len) * speed * delta * speedModifier;
         let dz = (moveZ / len) * speed * delta * speedModifier;
