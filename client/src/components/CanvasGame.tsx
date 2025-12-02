@@ -594,7 +594,7 @@ export default function CanvasGame() {
             loseHeart();
             playHit();
             enemy.canAttack = false;
-            enemy.attackCooldown = enemy.attackCooldown;
+            enemy.attackCooldown = enemy.maxAttackCooldown;
           }
         }
 
