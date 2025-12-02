@@ -156,6 +156,7 @@ export default function CanvasGame() {
   const animationFrameRef = useRef<number>();
   const keysPressed = useRef<Set<string>>(new Set());
   const lastTimeRef = useRef<number>(0);
+  const damagedThisFrameRef = useRef<boolean>(false);
 
   const terrainRef = useRef<TerrainObstacle[]>([]);
   <canvas
@@ -319,6 +320,7 @@ export default function CanvasGame() {
 
       updateReload(delta);
       updateInvincibility(delta);
+      damagedThisFrameRef.current = false; // Reset damage flag each frame
 
       if (ammo === 0 && !isReloading) {
         startReload();
@@ -564,11 +566,12 @@ export default function CanvasGame() {
         const dist = Math.hypot(dx, dz);
 
         if (dist > 0 && dist < PLAYER_RADIUS + ENEMY_RADIUS) {
-          if (enemy.canAttack && invincibilityTimer <= 0) {
+          if (enemy.canAttack && invincibilityTimer <= 0 && !damagedThisFrameRef.current) {
             loseHeart();
             playHit();
             enemy.canAttack = false;
             enemy.attackCooldown = enemy.maxAttackCooldown;
+            damagedThisFrameRef.current = true; // Only take damage once per frame
           }
         }
 
