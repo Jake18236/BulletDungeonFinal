@@ -22,7 +22,7 @@ export default function Dungeon() {
     if (!currentRoom) return [];
     
     const elements = [];
-    const roomSize = 20;
+    const roomSize = 40;
     
     // Floor
     elements.push(
@@ -33,7 +33,7 @@ export default function Dungeon() {
     );
     
     // Walls
-    const wallPositions = [
+    const wallPositions: { pos: [number, number, number]; rot: [number, number, number]; args: [number, number, number]; }[] = [
       { pos: [0, 2, roomSize], rot: [0, 0, 0], args: [roomSize * 2, 4, 1] }, // North
       { pos: [0, 2, -roomSize], rot: [0, 0, 0], args: [roomSize * 2, 4, 1] }, // South  
       { pos: [roomSize, 2, 0], rot: [0, 0, 0], args: [1, 4, roomSize * 2] }, // East
@@ -52,8 +52,9 @@ export default function Dungeon() {
     // Room exits (gaps in walls)
     currentRoom.exits.forEach((exit, index) => {
       const exitSize = 3;
-      let position, args;
-      
+      let position: [number, number, number] | undefined;
+      let args: [number, number, number] | undefined;
+
       switch (exit) {
         case 'north':
           position = [0, 2, roomSize];
@@ -72,7 +73,7 @@ export default function Dungeon() {
           args = [1, 4, exitSize];
           break;
       }
-      
+
       if (position && args) {
         elements.push(
           <mesh key={`exit-${index}`} position={position}>

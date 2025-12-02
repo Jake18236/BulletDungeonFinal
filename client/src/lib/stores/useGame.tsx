@@ -5,7 +5,7 @@ export type GamePhase = "ready" | "playing" | "ended";
 
 interface GameState {
   phase: GamePhase;
-  
+
   // Actions
   start: () => void;
   restart: () => void;
@@ -15,7 +15,7 @@ interface GameState {
 export const useGame = create<GameState>()(
   subscribeWithSelector((set) => ({
     phase: "ready",
-    
+
     start: () => {
       set((state) => {
         // Only transition from ready to playing
@@ -25,11 +25,11 @@ export const useGame = create<GameState>()(
         return {};
       });
     },
-    
+
     restart: () => {
       set(() => ({ phase: "ready" }));
     },
-    
+
     end: () => {
       set((state) => {
         // Only transition from playing to ended

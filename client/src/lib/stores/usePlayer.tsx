@@ -1,113 +1,101 @@
 import { create } from "zustand";
-
-interface Position {
-  x: number;
-  y: number;
-  z: number;
-}
+import * as THREE from "three";
 
 interface PlayerState {
-  position: Position;
+  position: THREE.Vector3;
+  velocity: THREE.Vector3;
+  speed: number;
+  
+  
   health: number;
   maxHealth: number;
-  level: number;
-  xp: number;
-  xpToNext: number;
-  attack: number;
   defense: number;
-  speed: number;
-  attackRange: number;
-  canAttack: boolean;
-  attackCooldown: number;
-  maxAttackCooldown: number;
-  
-  // Actions
-  move: (delta: Position) => void;
-  attack: () => void;
-  takeDamage: (damage: number) => void;
-  gainXP: (amount: number) => void;
-  levelUp: () => void;
+  firerate: number,
+  ammo: number;
+  maxAmmo: number;
+  isReloading: boolean;
+  reloadTime: number
+  reloadProgress: number;
+  isFiring: boolean;
+  setFiring: (val: boolean) => void;
+  fireShot: () => boolean;
+  startReload: () => void;
+  updateReload: (delta: number) => void;
+
+  move: (delta: THREE.Vector3) => void;
+  takeDamage: (amount: number) => void;
   reset: () => void;
 }
 
-const initialState = {
-  position: { x: 0, y: 0, z: 0 },
+export const usePlayer = create<PlayerState>((set) => ({
+  position: new THREE.Vector3(),
+  velocity: new THREE.Vector3(),
+  speed: 15,
+  
+  firerate: 0.5,
+  
   health: 100,
   maxHealth: 100,
-  level: 1,
-  xp: 0,
-  xpToNext: 100,
-  attack: 20,
-  defense: 5,
-  speed: 8,
-  attackRange: 2,
-  canAttack: true,
-  attackCooldown: 0,
-  maxAttackCooldown: 0.5,
-};
+  defense: 0,
+  ammo: 6,
+  maxAmmo: 6,
+  reloadTime: 1.5,
+  isReloading: false,
+  reloadProgress: 0,
+  isFiring: false,
 
-export const usePlayer = create<PlayerState>((set, get) => ({
-  ...initialState,
-  
-  move: (delta) => set((state) => ({
-    position: {
-      x: state.position.x + delta.x,
-      y: state.position.y + delta.y,
-      z: state.position.z + delta.z
+  setFiring: (val) => set({ isFiring: val }),
+
+  fireShot: () => {
+    const state = usePlayer.getState();
+    if (state.ammo > 0 && !state.isReloading) {
+      set({ ammo: state.ammo - 1 });
+      return true;
     }
-  })),
-  
-  attack: () => {
-    const state = get();
-    if (state.canAttack) {
-      set({
-        canAttack: false,
-        attackCooldown: state.maxAttackCooldown
-      });
-      
-      // Reset attack cooldown
-      setTimeout(() => {
-        set({ canAttack: true, attackCooldown: 0 });
-      }, state.maxAttackCooldown * 1000);
-    }
+    return false;
   },
-  
-  takeDamage: (damage) => set((state) => {
-    const actualDamage = Math.max(1, damage - state.defense);
-    return {
-      health: Math.max(0, state.health - actualDamage)
-    };
+
+  startReload: () => set({
+    isReloading: true,
+    reloadProgress: 0
   }),
-  
-  gainXP: (amount) => set((state) => {
-    const newXP = state.xp + amount;
-    if (newXP >= state.xpToNext) {
-      // Level up
-      const newLevel = state.level + 1;
+
+  updateReload: (delta) => set((state) => {
+    if (!state.isReloading) return {};
+
+    const newProgress = state.reloadProgress + delta;
+    
+
+    if (newProgress >= state.reloadTime) {
       return {
-        xp: newXP - state.xpToNext,
-        level: newLevel,
-        xpToNext: newLevel * 100,
-        maxHealth: state.maxHealth + 10,
-        health: Math.min(state.health + 10, state.maxHealth + 10),
-        attack: state.attack + 2,
-        defense: state.defense + 1
+        isReloading: false,
+        reloadProgress: 0,
+        ammo: state.maxAmmo
       };
     }
-    return { xp: newXP };
+
+    return { reloadProgress: newProgress };
   }),
-  
-  levelUp: () => set((state) => ({
-    level: state.level + 1,
-    maxHealth: state.maxHealth + 10,
-    health: state.maxHealth + 10,
-    attack: state.attack + 2,
-    defense: state.defense + 1,
-    xpToNext: (state.level + 1) * 100
+
+  move: (delta) => set((state) => ({
+    position: state.position.clone().add(delta)
   })),
-  
-  reset: () => set(() => ({
-    ...initialState,
-    position: { x: 0, y: 0, z: 0 }
-  }))
+
+  takeDamage: (amount) => set((state) => ({
+    health: Math.max(state.health - amount, 0)
+  })),
+
+  reset: () => set({
+    position: new THREE.Vector3(),
+    velocity: new THREE.Vector3(),
+    health: 100,
+    maxHealth: 100,
+    firerate: 0.2,
+    ammo: 6,
+    maxAmmo: 6,
+    isReloading: false,
+    reloadTime: 1.5,
+    reloadProgress: 0,
+    isFiring: false,
+  })
 }));

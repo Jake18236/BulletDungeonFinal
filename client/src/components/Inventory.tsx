@@ -1,47 +1,43 @@
+import React, { useEffect } from "react";
 import { useInventory } from "../lib/stores/useInventory";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { Button } from "./ui/button";
-import { X } from "lucide-react";
 
-export default function Inventory() {
-  const { items, toggleInventory, useItem } = useInventory();
+export default function InventoryUI() {
+  const inventory = useInventory();
+
+  const slots = Array(8).fill(null);
+  inventory.items.forEach((item, idx) => {
+    if (idx < slots.length) slots[idx] = item;
+  });
+  
+  // --- Handle hotkeys 1-8 ---
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key >= "1" && e.key <= "8") {
+        const index = parseInt(e.key) - 1;
+        const item = slots[index];
+        if (item) {
+          inventory.equipWeapon(item.id);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [slots]);
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-      <Card className="w-96 max-h-96 bg-gray-900 text-white border-gray-700">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Inventory</CardTitle>
-          <Button
-            onClick={toggleInventory}
-            variant="ghost"
-            size="sm"
-            className="text-gray-400 hover:text-white"
-          >
-            <X size={16} />
-          </Button>
-        </CardHeader>
-        <CardContent className="p-4">
-          {items.length === 0 ? (
-            <p className="text-gray-400 text-center py-8">No items</p>
-          ) : (
-            <div className="grid grid-cols-4 gap-2">
-              {items.map((item) => (
-                <div
-                  key={item.id}
-                  className="border border-gray-600 rounded p-2 text-center hover:bg-gray-800 cursor-pointer"
-                  onClick={() => useItem(item.id)}
-                >
-                  <div className="text-2xl mb-1">{item.icon}</div>
-                  <div className="text-xs">{item.name}</div>
-                  {item.quantity > 1 && (
-                    <div className="text-xs text-gray-400">x{item.quantity}</div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+    
+    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2 pointer-events-auto">
+      {slots.map((item, idx) => (
+        <div
+          key={idx}
+          className={`w-12 h-12 border-2 border-gray-700 rounded-md flex items-center justify-center
+                      ${inventory.equippedWeaponId === item?.id ? "border-yellow-400" : ""}`}
+          onClick={() => item && inventory.equipWeapon(item.id)}
+        >
+          {item ? <img src={item.icon} alt={item.name} className="w-10 h-10" /> : null}
+        </div>
+      ))}
     </div>
   );
 }

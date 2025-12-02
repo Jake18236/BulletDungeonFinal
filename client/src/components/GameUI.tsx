@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useGame } from "../lib/stores/useGame";
 import { usePlayer } from "../lib/stores/usePlayer";
 import { useAudio } from "../lib/stores/useAudio";
@@ -12,34 +12,25 @@ import Inventory from "./Inventory";
 import Minimap from "./Minimap";
 import { Volume2, VolumeX } from "lucide-react";
 
+
 export default function GameUI() {
   const { phase, start, restart } = useGame();
   const {
     health,
     maxHealth,
-    xp,
-    xpToNext,
-    level,
-    attack,
+
     defense,
     reset: resetPlayer
   } = usePlayer();
   const { isMuted, toggleMute } = useAudio();
-  const { showInventory, toggleInventory } = useInventory();
+
   const { generateDungeon, reset: resetDungeon } = useDungeon();
   const { generateRoomEnemies, reset: resetEnemies } = useEnemies();
 
-  // Handle inventory toggle
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === "KeyI" && phase === "playing") {
-        toggleInventory();
-      }
-    };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [phase, toggleInventory]);
+  // Handle inventory toggle
+
+
 
   const handleStart = () => {
     resetPlayer();
@@ -47,6 +38,7 @@ export default function GameUI() {
     resetDungeon();
     generateDungeon();
     generateRoomEnemies();
+    useInventory.getState().reset();
     start();
   };
 
@@ -65,7 +57,7 @@ export default function GameUI() {
             </p>
             <div className="text-sm text-gray-400 mb-6 space-y-1">
               <p><span className="font-semibold">WASD / Arrow Keys</span> - Move</p>
-              <p><span className="font-semibold">Space</span> - Attack</p>
+
               <p><span className="font-semibold">I</span> - Inventory</p>
             </div>
             <Button onClick={handleStart} className="bg-blue-600 hover:bg-blue-700 text-lg px-8 py-3">
@@ -87,8 +79,7 @@ export default function GameUI() {
               You have fallen in the dungeon...
             </p>
             <div className="text-sm text-gray-400 mb-6 space-y-1">
-              <p>Level Reached: <span className="text-white font-semibold">{level}</span></p>
-              <p>XP Gained: <span className="text-white font-semibold">{xp}</span></p>
+              <p>Final Stats:</p>
             </div>
             <Button onClick={handleRestart} className="bg-blue-600 hover:bg-blue-700 text-lg px-8 py-3">
               Try Again
@@ -114,20 +105,11 @@ export default function GameUI() {
                 />
                 <span className="text-xs font-mono">{health}/{maxHealth}</span>
               </div>
-              
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium w-16">XP:</span>
-                <Progress 
-                  value={(xp / xpToNext) * 100} 
-                  className="w-32 h-3"
-                />
-                <span className="text-xs font-mono">{xp}/{xpToNext}</span>
-              </div>
-              
+
+
+
               <div className="flex items-center gap-4 text-sm pt-2 border-t border-gray-700">
-                <span className="font-semibold">Lv {level}</span>
-                <span>ATK: {attack}</span>
-                <span>DEF: {defense}</span>
+                {/* Stats removed: attack/defense handled elsewhere */}
               </div>
             </div>
           </CardContent>
@@ -153,16 +135,13 @@ export default function GameUI() {
         <Minimap />
       </div>
 
-      {/* Inventory */}
-      {showInventory && <Inventory />}
-
       {/* Instructions */}
       <div className="fixed bottom-4 left-4 z-40">
         <Card className="bg-black bg-opacity-80 text-white border-gray-600">
           <CardContent className="p-3">
             <div className="text-xs space-y-1">
-              <p><span className="font-semibold">WASD:</span> Move | <span className="font-semibold">Space:</span> Attack</p>
-              <p><span className="font-semibold">I:</span> Inventory</p>
+              <p><span className="font-semibold">WASD:</span> Move</p>
+
             </div>
           </CardContent>
         </Card>

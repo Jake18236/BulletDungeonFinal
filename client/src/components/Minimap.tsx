@@ -24,7 +24,7 @@ export default function Minimap() {
                 transform: 'translate(-50%, -50%)'
               }}
             />
-            
+
             {/* Room exits */}
             {currentRoom.exits.map((exit, index) => (
               <div
@@ -38,7 +38,7 @@ export default function Minimap() {
               />
             ))}
           </div>
-          
+
           {/* Room coordinates */}
           <div className="absolute -bottom-5 left-0 text-xs text-gray-400">
             Room ({currentRoom.x}, {currentRoom.y})
