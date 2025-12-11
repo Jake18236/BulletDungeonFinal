@@ -1,14 +1,15 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 
-export type GamePhase = "ready" | "playing" | "ended";
+export type GamePhase = "ready" | "playing" | "paused" | "ended" | "resumed";
 
 interface GameState {
   phase: GamePhase;
-
-  // Actions
+  setPhase: (phase: GamePhase) => void;
   start: () => void;
   restart: () => void;
+  pause: () => void;
+  resume: () => void;
   end: () => void;
 }
 
@@ -16,9 +17,10 @@ export const useGame = create<GameState>()(
   subscribeWithSelector((set) => ({
     phase: "ready",
 
+    setPhase: (phase) => set({ phase }),
+
     start: () => {
       set((state) => {
-        // Only transition from ready to playing
         if (state.phase === "ready") {
           return { phase: "playing" };
         }
@@ -26,18 +28,19 @@ export const useGame = create<GameState>()(
       });
     },
 
-    restart: () => {
-      set(() => ({ phase: "ready" }));
-    },
+    pause: () => set({ phase: "paused" }),
+
+    resume: () => set({ phase: "playing" }),
+
+    restart: () => set({ phase: "ready" }),
 
     end: () => {
       set((state) => {
-        // Only transition from playing to ended
         if (state.phase === "playing") {
           return { phase: "ended" };
         }
         return {};
       });
-    }
+    },
   }))
 );

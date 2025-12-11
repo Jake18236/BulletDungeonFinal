@@ -22,7 +22,7 @@ export default function Game() {
   const { changeRoom } = useDungeon();
 
   useFrame((state, delta) => {
-    if (phase !== "playing") return;
+    
 
     // Enemy AI and room transitions only
     const updatedEnemies = enemies.map(enemy => {
@@ -45,7 +45,7 @@ export default function Game() {
     if (health <= 0) end();
   });
 
-  if (phase !== "playing") return null;
+  
 
   return (
     <group>

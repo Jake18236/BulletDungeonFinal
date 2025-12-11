@@ -79,8 +79,8 @@ interface SpellSlotsState {
 }
 
 // Base stats for projectiles
-const BASE_DAMAGE = 1;
-const BASE_SPEED = 80;
+const BASE_DAMAGE = 100;
+const BASE_SPEED = 30;
 const BASE_RANGE = 50;
 const BASE_RELOAD = 0.9; // seconds
 const BASE_ACCURACY = 1.0;

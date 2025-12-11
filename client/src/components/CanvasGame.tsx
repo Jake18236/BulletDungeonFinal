@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import Matter from "matter-js";
@@ -10,17 +11,19 @@ import { useAudio } from "../lib/stores/useAudio";
 import { useInventory } from "../lib/stores/useInventory";
 import { useSpellSlots } from "../lib/stores/useSpellSlots";
 import { useProjectiles } from "../lib/stores/useProjectiles";
+import { useXP } from "../lib/stores/useXP";
 import SpellSlotsHUD from "./SpellSlotsHUD";
 import CardManager from "./CardManager";
 import swordSrc from "/images/sword.png";
+import GameUI from "./GameUI"  
+import { any } from "zod";
+import { LevelUpScreen } from "./GameUI";
+import Darkness from "./Darkness";
 
-const TILE_SIZE = 34;
-const CANVAS_WIDTH = 1100;
-const CANVAS_HEIGHT = 700;
-const ROOM_SIZE = 20;
-
-
-const KNOCKBACK_FORCE = 20;
+const TILE_SIZE = 50;
+const CANVAS_WIDTH = 1490;
+const CANVAS_HEIGHT = 750;
+const ROOM_SIZE = 200;
 
 interface Position {
   x: number;
@@ -41,23 +44,20 @@ function generateRoomTerrain(roomX: number, roomY: number): TerrainObstacle[] {
   const obstacles: TerrainObstacle[] = [];
   const seed = roomX * 1000 + roomY;
 
-  // Seeded random function
   const seededRandom = (n: number) => {
     const x = Math.sin(seed + n) * 1000;
     return x - Math.floor(x);
   };
 
-  // Add rocky outcroppings along walls (cave-like feel)
   const numOutcrops = 4;
-
   for (let i = 0; i < numOutcrops; i++) {
-    const side = Math.floor(seededRandom(i * 20) * 4); // 0=north, 1=south, 2=east, 3=west
-    const position = seededRandom(i * 10 - 10) * 70 - 35; // Position along the wall
-    const depth = seededRandom(i * 10 + 7) * 10 + 2; // How far it juts out
-    const width = seededRandom(i * 10 + 9) * 8 + 3; // Width of outcrop
+    const side = Math.floor(seededRandom(i * 20) * 4);
+    const position = seededRandom(i * 10 - 10) * 70 - 35;
+    const depth = seededRandom(i * 10 + 7) * 10 + 2;
+    const width = seededRandom(i * 10 + 9) * 8 + 3;
 
     switch (side) {
-      case 0: // North wall
+      case 0:
         obstacles.push({
           x: position,
           z: -ROOM_SIZE + depth / 2,
@@ -66,7 +66,7 @@ function generateRoomTerrain(roomX: number, roomY: number): TerrainObstacle[] {
           type: "rock",
         });
         break;
-      case 1: // South wall
+      case 1:
         obstacles.push({
           x: position,
           z: ROOM_SIZE - depth / 2,
@@ -75,7 +75,7 @@ function generateRoomTerrain(roomX: number, roomY: number): TerrainObstacle[] {
           type: "rock",
         });
         break;
-      case 2: // East wall
+      case 2:
         obstacles.push({
           x: ROOM_SIZE - depth / 2,
           z: position,
@@ -84,7 +84,7 @@ function generateRoomTerrain(roomX: number, roomY: number): TerrainObstacle[] {
           type: "rock",
         });
         break;
-      case 3: // West wall
+      case 3:
         obstacles.push({
           x: -ROOM_SIZE + depth / 2,
           z: position,
@@ -96,15 +96,12 @@ function generateRoomTerrain(roomX: number, roomY: number): TerrainObstacle[] {
     }
   }
 
-  // Add some pillars/stalagmites in the room
   const numPillars = Math.floor(seededRandom(100) * 2) + 1;
-
   for (let i = 0; i < numPillars; i++) {
     const x = (seededRandom(i * 20 + 100) - 0.5) * 25;
     const z = (seededRandom(i * 20 + 105) - 0.5) * 25;
     const size = seededRandom(i * 20 + 110) * 2 + 1.5;
 
-    // Don't place pillars too close to center (spawn point)
     if (Math.hypot(x, z) > 5) {
       obstacles.push({
         x: x,
@@ -119,14 +116,12 @@ function generateRoomTerrain(roomX: number, roomY: number): TerrainObstacle[] {
   return obstacles;
 }
 
-// Check collision with terrain
 function checkTerrainCollision(
   pos: THREE.Vector3,
   obstacles: TerrainObstacle[],
   radius: number,
 ): { collision: boolean; normal?: THREE.Vector2 } {
   for (const obs of obstacles) {
-    // AABB collision detection
     const closestX = Math.max(
       obs.x - obs.width / 2,
       Math.min(pos.x, obs.x + obs.width / 2),
@@ -141,7 +136,6 @@ function checkTerrainCollision(
     const distSq = distX * distX + distZ * distZ;
 
     if (distSq < radius * radius) {
-      // Calculate normal for collision response
       const dist = Math.sqrt(distSq);
       const normal = new THREE.Vector2(distX / dist, distZ / dist);
       return { collision: true, normal };
@@ -157,18 +151,8 @@ export default function CanvasGame() {
   const keysPressed = useRef<Set<string>>(new Set());
   const lastTimeRef = useRef<number>(0);
   const damagedThisFrameRef = useRef<boolean>(false);
-
   const terrainRef = useRef<TerrainObstacle[]>([]);
-  <canvas
-    ref={canvasRef}
-    width={CANVAS_WIDTH}
-    height={CANVAS_HEIGHT}
-    className="border-2 border-gray-700"
-    style={{
-      imageRendering: "pixelated" as any,
-      cursor: "none", // Hide default cursor
-    }}
-  />;
+
   const { phase, end } = useGame();
   const {
     position,
@@ -186,17 +170,15 @@ export default function CanvasGame() {
     fireShot,
     startReload,
     updateReload,
-
     loseHeart,
     updateInvincibility,
   } = usePlayer();
-  const { slots, activeSlotId, getSlotStats, startCooldown, updateCooldowns } =
-    useSpellSlots();
-
+  const { slots, activeSlotId, getSlotStats, startCooldown, updateCooldowns } = useSpellSlots();
   const { projectiles, addProjectile, updateProjectiles } = useProjectiles();
 
   const [showCardManager, setShowCardManager] = useState(false);
-
+  const { xp, level, xpToNextLevel } = useXP();
+  const { xpOrbs, addXPOrb, updateXPOrbs } = useEnemies();
   const movePlayer = usePlayer((s) => s.move);
   const player = usePlayer.getState();
   const mouseRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -204,43 +186,35 @@ export default function CanvasGame() {
   const { currentRoom, changeRoom } = useDungeon();
   const { playHit, playSuccess } = useAudio();
   const { items, addItem } = useInventory();
-  const fireQueue = useRef(0); // pending shots
-  const fireTimer = useRef(0); // cooldown timer
-  const firstShotAfterReload = useRef(false);
 
+  const fireTimer = useRef(0);
+  const canFire = useRef(true);
+  const isMouseDown = useRef(false);
+  const canInteract = phase === "playing" || showCardManager;
 
-  // Generate terrain when room changes
   useEffect(() => {
     if (currentRoom) {
       terrainRef.current = generateRoomTerrain(currentRoom.x, currentRoom.y);
     }
   }, [currentRoom]);
 
-  // --- Keyboard handlers ---
   useEffect(() => {
-    const handleMouseDown = (e: MouseEvent) => {
-      if (e.button !== 0) return;
-      isMouseDown.current = true;
-      fireQueue.current++; // immediate shot
+    const handleKeyDown = (e: KeyboardEvent) => {
+      keysPressed.current.add(e.code);
+      if (!canInteract) return;
+
+      if (e.code === "KeyR" && !isReloading && ammo < 6) {
+        startReload();
+      }
+
+      if (e.code === "KeyC") {
+        setShowCardManager((prev) => !prev);
+      }
     };
 
-    const handleMouseUp = (e: MouseEvent) => {
-      if (e.button !== 0) return;
-      isMouseDown.current = false;
+    const handleKeyUp = (e: KeyboardEvent) => {
+      keysPressed.current.delete(e.code);
     };
-
-    window.addEventListener("mousedown", handleMouseDown);
-    window.addEventListener("mouseup", handleMouseUp);
-    return () => {
-      window.removeEventListener("mousedown", handleMouseDown);
-      window.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, []);
-
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => keysPressed.current.add(e.code);
-    const handleKeyUp = (e: KeyboardEvent) => keysPressed.current.delete(e.code);
 
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
@@ -249,57 +223,44 @@ export default function CanvasGame() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [position]);
-  
-  const isMouseDown = useRef(false);
-
+  }, [canInteract, isReloading, ammo, startReload]);
 
   useEffect(() => {
+    const handleMouseDown = (e: MouseEvent) => {
+      if (!canInteract || e.button !== 0) return;
+      isMouseDown.current = true;
+    };
+
+    const handleMouseUp = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      isMouseDown.current = false;
+    };
+
     const handleMouseMove = (e: MouseEvent) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
+
       const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+
       mouseRef.current = {
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top,
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY,
       };
     };
 
+    window.addEventListener("mousedown", handleMouseDown);
+    window.addEventListener("mouseup", handleMouseUp);
     window.addEventListener("mousemove", handleMouseMove);
-    return () => window.removeEventListener("mousemove", handleMouseMove);
-  }, []);
 
-  // --- Weapon attack handler ---
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === "KeyR" && !isReloading && ammo < 6) {
-        startReload();
-      }
+    return () => {
+      window.removeEventListener("mousedown", handleMouseDown);
+      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("mousemove", handleMouseMove);
     };
-  
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isReloading, ammo, startReload]);
-  
-  useEffect(() => {
-    if (!isReloading) {
-      firstShotAfterReload.current = true;
-    }
-  }, [isReloading]);
-  
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === "KeyC") {
-        setShowCardManager((prev) => !prev);
-      }
-    };
+  }, [canInteract]);
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  // --- Main game loop ---
   useEffect(() => {
     const gameLoop = (currentTime: number) => {
       const delta = lastTimeRef.current
@@ -318,70 +279,68 @@ export default function CanvasGame() {
 
       if (currentRoom) drawDungeon(ctx);
 
-      updateReload(delta);
-      updateInvincibility(delta);
-      damagedThisFrameRef.current = false; // Reset damage flag each frame
+      if (phase === "playing") {
+        updateReload(delta);
+        updateInvincibility(delta);
+        damagedThisFrameRef.current = false;
 
-      if (ammo === 0 && !isReloading) {
-        startReload();
-      }
+        if (ammo === 0 && !isReloading) {
+          startReload();
+        }
 
-      // Update firing state
-      setFiring(isMouseDown.current && !isReloading && ammo > 0);
+        if (fireTimer.current > 0) {
+          fireTimer.current -= delta;
+          if (fireTimer.current <= 0) {
+            fireTimer.current = 0;
+            canFire.current = true;
+          }
+        }
 
-      // firing logic
-        if (isMouseDown.current && !isReloading && ammo > 0) {
-          fireTimer.current += delta;
+        setFiring(isMouseDown.current && !isReloading && ammo > 0);
 
-          // Check if we can fire either because it's first shot or cooldown passed
-          while (
-            (firstShotAfterReload.current || fireTimer.current >= firerate) &&
-            ammo > 0
-          ) {
-            if (!firstShotAfterReload.current) {
-              fireTimer.current -= firerate;
-            }
+        if (isMouseDown.current && !isReloading && ammo > 0 && canFire.current) {
+          const activeSlot = slots.find(s => s.id === activeSlotId);
+          if (activeSlot && !activeSlot.isOnCooldown) {
+            if (fireShot()) {
+              const centerX = CANVAS_WIDTH / 2;
+              const centerY = CANVAS_HEIGHT / 2;
 
-            firstShotAfterReload.current = false; // reset after first shot
-            if (fireQueue.current > 0) fireQueue.current--;
+              const stats = getSlotStats(activeSlotId);
+              const ps = usePlayer.getState();
 
-            // Fire projectile logic here...
-            const activeSlot = slots.find(s => s.id === activeSlotId);
-            if (activeSlot && !activeSlot.isOnCooldown) {
-              if (fireShot()) {
-                const rect = canvasRef.current!.getBoundingClientRect();
-                const centerX = CANVAS_WIDTH / 2;
-                const centerY = CANVAS_HEIGHT / 2;
+              const baseAngle = Math.atan2(
+                mouseRef.current.y - centerY,
+                mouseRef.current.x - centerX
+              );
+              const handOffset = 8;
+              const barrelLength = 28;
+              const totalOffsetPixels = handOffset + barrelLength;
+              const totalOffset = totalOffsetPixels / (TILE_SIZE / 2);
 
-                const stats = getSlotStats(activeSlotId);
-                const ps = usePlayer.getState();
+              const spreadAngle = stats.projectileCount > 1 ? 0.2 : 0;
+              for (let i = 0; i < stats.projectileCount; i++) {
+                let angle = baseAngle;
+                if (stats.projectileCount > 1) {
+                  const offset = (i - (stats.projectileCount - 1) / 2) * spreadAngle;
+                  angle += offset;
+                }
 
-                const baseAngle = Math.atan2(
-                  mouseRef.current.y - centerY, 
-                  mouseRef.current.x - centerX
-                );
-                const spreadAngle = stats.projectileCount > 1 ? 0.2 : 0;
-                for (let i = 0; i < stats.projectileCount; i++) {
-                  let angle = baseAngle;
-                  if (stats.projectileCount > 1) {
-                    const offset = (i - (stats.projectileCount - 1) / 2) * spreadAngle;
-                    angle += offset;
-                  }
+                const inaccuracy = (1 - stats.accuracy);
+                angle += (Math.random() - 0.5) * inaccuracy;
 
-                  const inaccuracy = (1 - stats.accuracy) * 0.3;
-                  angle += (Math.random() - 0.5) * inaccuracy;
+                const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
 
-                  const direction = new THREE.Vector3(
-                    Math.cos(angle),
+                const barrelPosition = ps.position.clone().add(
+                  new THREE.Vector3(
+                    Math.cos(baseAngle) * totalOffset,
                     0,
-                    Math.sin(angle)
-                  );
-
+                    Math.sin(baseAngle) * totalOffset
+                  )
+                );
 
                 addProjectile({
-                  position: ps.position.clone(),
+                  position: barrelPosition,
                   direction,
-                  
                   slotId: activeSlotId,
                   damage: stats.damage,
                   speed: stats.speed,
@@ -395,224 +354,213 @@ export default function CanvasGame() {
                 });
               }
 
-              fireShot();
               playHit();
+
+              fireTimer.current = firerate;
+              canFire.current = false;
             }
-            }
-          }
-
-
-        }
-      
-      // --- Player movement with terrain collision ---
-      // --- Player movement in game loop ---
-      let moveX = 0;
-      let moveZ = 0;
-
-      if (keysPressed.current.has("KeyW") || keysPressed.current.has("ArrowUp")) moveZ -= 1;
-      if (keysPressed.current.has("KeyS") || keysPressed.current.has("ArrowDown")) moveZ += 1;
-      if (keysPressed.current.has("KeyA") || keysPressed.current.has("ArrowLeft")) moveX -= 1;
-      if (keysPressed.current.has("KeyD") || keysPressed.current.has("ArrowRight")) moveX += 1;
-
-      if (moveX !== 0 || moveZ !== 0) {
-        const len = Math.sqrt(moveX ** 2 + moveZ ** 2);
-        const speedModifier = isFiring && !isReloading ? 0.4 : 1;
-
-        let dx = (moveX / len) * speed * delta * speedModifier;
-        let dz = (moveZ / len) * speed * delta * speedModifier;
-
-        let currentPos = usePlayer.getState().position.clone();
-        let newPos = currentPos.clone().add(new THREE.Vector3(dx, 0, dz));
-
-        // Terrain collision
-        const terrainCheck = checkTerrainCollision(newPos, terrainRef.current, 0.8);
-        if (terrainCheck.collision && terrainCheck.normal) {
-          dx = dx - terrainCheck.normal.x * (dx * terrainCheck.normal.x + dz * terrainCheck.normal.y);
-          dz = dz - terrainCheck.normal.y * (dx * terrainCheck.normal.x + dz * terrainCheck.normal.y);
-          newPos = currentPos.clone().add(new THREE.Vector3(dx, 0, dz));
-          if (checkTerrainCollision(newPos, terrainRef.current, 0.8).collision) {
-            newPos = currentPos; // stuck, can't move
           }
         }
 
-        // Room bounds
-        const bounced = bounceAgainstBounds(newPos, new THREE.Vector3(0,0,0), ROOM_SIZE, 1);
+        let moveX = 0;
+        let moveZ = 0;
 
-        // Apply movement
-        usePlayer.setState({ position: bounced.position });
-      }
+        if (keysPressed.current.has("KeyW") || keysPressed.current.has("ArrowUp")) moveZ -= 1;
+        if (keysPressed.current.has("KeyS") || keysPressed.current.has("ArrowDown")) moveZ += 1;
+        if (keysPressed.current.has("KeyA") || keysPressed.current.has("ArrowLeft")) moveX -= 1;
+        if (keysPressed.current.has("KeyD") || keysPressed.current.has("ArrowRight")) moveX += 1;
 
+        if (moveX !== 0 || moveZ !== 0) {
+          const len = Math.sqrt(moveX ** 2 + moveZ ** 2);
+          const speedModifier = isFiring && !isReloading ? 0.4 : 1;
 
+          let dx = (moveX / len) * speed * delta * speedModifier;
+          let dz = (moveZ / len) * speed * delta * speedModifier;
 
+          let currentPos = usePlayer.getState().position.clone();
+          let newPos = currentPos.clone().add(new THREE.Vector3(dx, 0, dz));
 
-      updateProjectiles(
-        delta,
-        enemies,
-        position,
-        ROOM_SIZE,
-        (enemyId, damage, knockback) => {
-          // Handle enemy hit
-          const enemy = enemies.find((e) => e.id === enemyId);
-          if (enemy) {
-            enemy.health -= damage;
-            if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
-            enemy.velocity.add(knockback);
-            playHit();
-            if (enemy.health <= 0) {
-              playSuccess();
-              removeEnemy(enemyId);
+          const terrainCheck = checkTerrainCollision(newPos, terrainRef.current, 0.8);
+          if (terrainCheck.collision && terrainCheck.normal) {
+            dx = dx - terrainCheck.normal.x * (dx * terrainCheck.normal.x + dz * terrainCheck.normal.y);
+            dz = dz - terrainCheck.normal.y * (dx * terrainCheck.normal.x + dz * terrainCheck.normal.y);
+            newPos = currentPos.clone().add(new THREE.Vector3(dx, 0, dz));
+            if (checkTerrainCollision(newPos, terrainRef.current, 0.8).collision) {
+              newPos = currentPos;
             }
           }
-        },
-      );
 
-      // --- Enemies movement with terrain collision ---
-      const updatedEnemies = enemies.map((enemy) => {
-        const dx = position.x - enemy.position.x;
-        const dz = position.z - enemy.position.z;
-        const distance = Math.sqrt(dx * dx + dz * dz);
+          const bounced = bounceAgainstBounds(newPos, new THREE.Vector3(0,0,0), ROOM_SIZE, 1);
+          usePlayer.setState({ position: bounced.position });
+        }
 
-        if (distance <= enemy.detectionRange) {
-          const dirX = dx / distance;
-          const dirZ = dz / distance;
+        updateProjectiles(
+          delta,
+          enemies,
+          position,
+          ROOM_SIZE,
+          (enemyId, damage, knockback) => {
+            const enemy = enemies.find((e) => e.id === enemyId);
+            if (enemy) {
+              enemy.health -= damage;
+              if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
+              enemy.velocity.add(knockback);
+              playHit();
+              if (enemy.health <= 0) {
+                playSuccess();
+                removeEnemy(enemyId);
+              }
+            }
+          },
+        );
 
-          const moveAmount = enemy.speed * delta;
-          const newEnemyPos = new THREE.Vector3(
-            enemy.position.x + dirX * moveAmount,
+        const updatedEnemies = enemies.map((enemy) => {
+          const dx = position.x - enemy.position.x;
+          const dz = position.z - enemy.position.z;
+          const distance = Math.sqrt(dx * dx + dz * dz);
+
+          if (distance <= enemy.detectionRange) {
+            const dirX = dx / distance;
+            const dirZ = dz / distance;
+
+            const moveAmount = enemy.speed * delta;
+            const newEnemyPos = new THREE.Vector3(
+              enemy.position.x + dirX * moveAmount,
+              0,
+              enemy.position.z + dirZ * moveAmount,
+            );
+
+            const enemyTerrainCheck = checkTerrainCollision(
+              newEnemyPos,
+              terrainRef.current,
+              0.7,
+            );
+
+            if (!enemyTerrainCheck.collision) {
+              enemy.position.x = newEnemyPos.x;
+              enemy.position.z = newEnemyPos.z;
+            }
+          } 
+
+          if (enemy.attackCooldown > 0) {
+            enemy.attackCooldown -= delta;
+            if (enemy.attackCooldown <= 0) enemy.canAttack = true;
+          }
+
+          if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
+
+          const velNewPos = new THREE.Vector3(
+            enemy.position.x + enemy.velocity.x * delta,
             0,
-            enemy.position.z + dirZ * moveAmount,
+            enemy.position.z + enemy.velocity.z * delta,
           );
 
-          // Check terrain collision for enemy
-          const enemyTerrainCheck = checkTerrainCollision(
-            newEnemyPos,
+          const velTerrainCheck = checkTerrainCollision(
+            velNewPos,
             terrainRef.current,
             0.7,
           );
 
-          if (!enemyTerrainCheck.collision) {
-            enemy.position.x = newEnemyPos.x;
-            enemy.position.z = newEnemyPos.z;
+          if (!velTerrainCheck.collision) {
+            enemy.position.x = velNewPos.x;
+            enemy.position.z = velNewPos.z;
+          } else {
+            enemy.velocity.multiplyScalar(-0.5);
           }
 
-          enemy.state = "chasing";
-        } else if (enemy.state !== "patrolling") {
-          enemy.state = "patrolling";
+          enemy.velocity.multiplyScalar(Math.max(0, 1 - 6 * delta));
+
+          const bouncedEnemy = bounceAgainstBounds(
+            enemy.position,
+            enemy.velocity,
+            ROOM_SIZE,
+            0.6,
+          );
+          enemy.position.copy(bouncedEnemy.position);
+          enemy.velocity.copy(bouncedEnemy.velocity);
+
+          return enemy;
+        });
+
+        for (let i = 0; i < updatedEnemies.length; i++) {
+          for (let j = i + 1; j < updatedEnemies.length; j++) {
+            const e1 = updatedEnemies[i];
+            const e2 = updatedEnemies[j];
+            const dx = e1.position.x - e2.position.x;
+            const dz = e1.position.z - e2.position.z;
+            const dist = Math.hypot(dx, dz);
+            const minDist = 1.5;
+            if (dist > 0 && dist < minDist) {
+              const push = (minDist - dist) / 2;
+              const nx = dx / dist;
+              const nz = dz / dist;
+              e1.position.x += nx * push;
+              e1.position.z += nz * push;
+              e2.position.x -= nx * push;
+              e2.position.z -= nz * push;
+            }
+          }
         }
 
-        if (enemy.attackCooldown > 0) {
-          enemy.attackCooldown -= delta;
-          if (enemy.attackCooldown <= 0) enemy.canAttack = true;
-        }
+        const PLAYER_RADIUS = 1.1;
+        const ENEMY_RADIUS = 0.7;
+        const DAMPING = 1.5;
 
-        if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
+        const aliveEnemies: typeof updatedEnemies = [];
 
-        // Apply velocity with terrain collision
-        const velNewPos = new THREE.Vector3(
-          enemy.position.x + enemy.velocity.x * delta,
-          0,
-          enemy.position.z + enemy.velocity.z * delta,
-        );
-
-        const velTerrainCheck = checkTerrainCollision(
-          velNewPos,
-          terrainRef.current,
-          0.7,
-        );
-
-        if (!velTerrainCheck.collision) {
-          enemy.position.x = velNewPos.x;
-          enemy.position.z = velNewPos.z;
-        } else {
-          // Bounce off terrain
-          enemy.velocity.multiplyScalar(-0.5);
-        }
-
-        enemy.velocity.multiplyScalar(Math.max(0, 1 - 6 * delta));
-
-        const bouncedEnemy = bounceAgainstBounds(
-          enemy.position,
-          enemy.velocity,
-          ROOM_SIZE,
-          0.6,
-        );
-        enemy.position.copy(bouncedEnemy.position);
-        enemy.velocity.copy(bouncedEnemy.velocity);
-
-        drawEnemy(ctx, enemy);
-        return enemy;
-      });
-
-      // Enemy-Enemy separation
-      for (let i = 0; i < updatedEnemies.length; i++) {
-        for (let j = i + 1; j < updatedEnemies.length; j++) {
-          const e1 = updatedEnemies[i];
-          const e2 = updatedEnemies[j];
-          const dx = e1.position.x - e2.position.x;
-          const dz = e1.position.z - e2.position.z;
+        for (const enemy of updatedEnemies) {
+          const dx = enemy.position.x - position.x;
+          const dz = enemy.position.z - position.z;
           const dist = Math.hypot(dx, dz);
-          const minDist = 1;
-          if (dist > 0 && dist < minDist) {
-            const push = (minDist - dist) / 2;
-            const nx = dx / dist;
-            const nz = dz / dist;
-            e1.position.x += nx * push;
-            e1.position.z += nz * push;
-            e2.position.x -= nx * push;
-            e2.position.z -= nz * push;
+
+          if (dist > 0 && dist < PLAYER_RADIUS + ENEMY_RADIUS) {
+            if (enemy.canAttack && invincibilityTimer <= 0 && !damagedThisFrameRef.current) {
+              loseHeart();
+              playHit();
+              enemy.canAttack = false;
+              enemy.attackCooldown = enemy.maxAttackCooldown;
+              damagedThisFrameRef.current = true;
+            }
           }
+
+          if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
+          enemy.velocity.multiplyScalar(Math.max(0, 1 - DAMPING * delta));
+
+          const bounced = bounceAgainstBounds(
+            enemy.position,
+            enemy.velocity,
+            ROOM_SIZE,
+            0.6,
+          );
+          enemy.position.copy(bounced.position);
+          enemy.velocity.copy(bounced.velocity);
+
+          if (enemy.health <= 0) {
+            playSuccess();
+            addXPOrb(enemy.position.clone(), 25);
+            removeEnemy(enemy.id);
+            continue;
+          }
+
+          aliveEnemies.push(enemy);
         }
+
+        updateXPOrbs(delta, position);
+        updateEnemies(aliveEnemies);
+        updateCooldowns(delta);
+
+        useEnemies.getState().updateAutoSpawn(delta, player.position);
+
+        if (hearts <= 0) end();
       }
 
-      const PLAYER_RADIUS = 1.1;
-      const ENEMY_RADIUS = 0.7;
-      const DAMPING = 1.5;
-
-      const aliveEnemies: typeof updatedEnemies = [];
-
-      for (const enemy of updatedEnemies) {
-        const dx = enemy.position.x - position.x;
-        const dz = enemy.position.z - position.z;
-        const dist = Math.hypot(dx, dz);
-
-        if (dist > 0 && dist < PLAYER_RADIUS + ENEMY_RADIUS) {
-          if (enemy.canAttack && invincibilityTimer <= 0 && !damagedThisFrameRef.current) {
-            loseHeart();
-            playHit();
-            enemy.canAttack = false;
-            enemy.attackCooldown = enemy.maxAttackCooldown;
-            damagedThisFrameRef.current = true; // Only take damage once per frame
-          }
-        }
-
-        if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
-        enemy.velocity.multiplyScalar(Math.max(0, 1 - DAMPING * delta));
-
-        const bounced = bounceAgainstBounds(
-          enemy.position,
-          enemy.velocity,
-          ROOM_SIZE,
-          0.6,
-        );
-        enemy.position.copy(bounced.position);
-        enemy.velocity.copy(bounced.velocity);
-
-        if (enemy.health <= 0) {
-          removeEnemy(enemy.id);
-          playSuccess();
-          continue;
-        }
-
-        aliveEnemies.push(enemy);
-      }
-
-      updateEnemies(aliveEnemies);
-      updateCooldowns(delta);
+      enemies.forEach(enemy => drawEnemy(ctx, enemy));
       drawPlayer(ctx);
-      drawProjectilesAndTrails(ctx);
+      drawProjectilesAndTrails(ctx, phase !== "playing", position);
+      drawXPOrbs(ctx);
+      drawXPBar(ctx);
       drawReloadIndicator(ctx);
       drawCustomCursor(ctx);
-      if (hearts <= 0) end();
 
       animationFrameRef.current = requestAnimationFrame(gameLoop);
     };
@@ -628,61 +576,24 @@ export default function CanvasGame() {
     speed,
     enemies,
     updateEnemies,
+    phase,
   ]);
 
   const drawCustomCursor = (ctx: CanvasRenderingContext2D) => {
     const x = mouseRef.current.x;
     const y = mouseRef.current.y;
 
-    // Target crosshair
-    ctx.strokeStyle = isReloading ? "#ff0000" : "#00ff00";
+    ctx.beginPath();
+    ctx.arc(x, y, 15, 0, Math.PI * 2);
+    ctx.strokeStyle = "#ff0000";
     ctx.lineWidth = 2;
-
-    // Outer circle
-    ctx.beginPath();
-    ctx.arc(x, y, 20, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Crosshair lines
-    ctx.beginPath();
-    ctx.moveTo(x - 25, y);
-    ctx.lineTo(x - 15, y);
-    ctx.moveTo(x + 15, y);
-    ctx.lineTo(x + 25, y);
-    ctx.moveTo(x, y - 25);
-    ctx.lineTo(x, y - 15);
-    ctx.moveTo(x, y + 15);
-    ctx.lineTo(x, y + 25);
-    ctx.stroke();
-
-    // Center dot
-    ctx.fillStyle = isReloading ? "#ff0000" : "#00ff00";
-    ctx.beginPath();
-    ctx.arc(x, y, 2, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Ammo counter
-    ctx.fillStyle = ammo === 0 ? "#ff0000" : "#ffffff";
+    ctx.fillStyle = "#ffffff";
     ctx.font = "bold 16px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(`${ammo}/${6}`, x, y + 40);
-
-    // Ammo indicators (revolver chambers)
-    const chamberRadius = 30;
-    for (let i = 0; i < 6; i++) {
-      const angle = (i / 6) * Math.PI * 2 - Math.PI / 2;
-      const cx = x + Math.cos(angle) * chamberRadius;
-      const cy = y + Math.sin(angle) * chamberRadius;
-
-      ctx.fillStyle = i < ammo ? "#ffaa00" : "#333333";
-      ctx.beginPath();
-      ctx.arc(cx, cy, 4, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.strokeStyle = "#666666";
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`${ammo}/6`, x + 20, y);
   };
 
   const drawDungeon = (ctx: CanvasRenderingContext2D) => {
@@ -690,9 +601,7 @@ export default function CanvasGame() {
 
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
-
     const floorSize = ROOM_SIZE * TILE_SIZE;
-
     const offsetX = (-position.x * TILE_SIZE) / 2;
     const offsetZ = (-position.z * TILE_SIZE) / 2;
 
@@ -721,7 +630,6 @@ export default function CanvasGame() {
       ctx.stroke();
     }
 
-    // Draw terrain obstacles
     terrainRef.current.forEach((obstacle) => {
       const screenX = centerX + ((obstacle.x - position.x) * TILE_SIZE) / 2;
       const screenY = centerY + ((obstacle.z - position.z) * TILE_SIZE) / 2;
@@ -729,37 +637,23 @@ export default function CanvasGame() {
       const h = (obstacle.height * TILE_SIZE) / 2;
 
       if (obstacle.type === "rock") {
-        // Rocky outcrop - darker brown
         ctx.fillStyle = "#505050ff";
         ctx.fillRect(screenX - w / 2, screenY - h / 2, w, h);
-
-        // Add texture
         ctx.fillStyle = "#484542ff";
         ctx.fillRect(screenX - w / 2 + 2, screenY - h / 2 + 2, w / 3, h / 3);
         ctx.fillRect(screenX + w / 6, screenY + h / 6, w / 4, h / 4);
       } else if (obstacle.type === "pillar") {
-        // Pillar/stalagmite
         ctx.fillStyle = "#5a5a5a";
         ctx.beginPath();
         ctx.arc(screenX, screenY, w / 2, 0, Math.PI * 2);
         ctx.fill();
 
-        // Shadow
         ctx.fillStyle = "rgba(0, 0, 0, 0.52)";
         ctx.beginPath();
-        ctx.ellipse(
-          screenX + 2,
-          screenY + 2,
-          w / 2 - 1,
-          w / 3,
-          0,
-          0,
-          Math.PI * 2,
-        );
+        ctx.ellipse(screenX + 2, screenY + 2, w / 2 - 1, w / 3, 0, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      // Outline
       ctx.strokeStyle = "#1a1a1a";
       ctx.lineWidth = 2;
       ctx.strokeRect(screenX - w / 2, screenY - h / 2, w, h);
@@ -840,7 +734,70 @@ export default function CanvasGame() {
       }
     });
   };
-  
+
+  const drawXPOrbs = (ctx: CanvasRenderingContext2D) => {
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
+
+    xpOrbs.forEach((orb) => {
+      const screenX = centerX + ((orb.position.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((orb.position.z - position.z) * TILE_SIZE) / 2;
+
+      const gradient = ctx.createRadialGradient(screenX, screenY, 0, screenX, screenY, 12);
+      gradient.addColorStop(0, "rgba(18, 150, 97, 0.8)");
+      gradient.addColorStop(0.5, "rgba(28, 186, 123, 0.4)");
+      gradient.addColorStop(1, "rgba(43, 207, 142, 0)");
+
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(screenX, screenY, 12, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#033822";
+      ctx.beginPath();
+      ctx.arc(screenX, screenY, 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+      ctx.beginPath();
+      ctx.arc(screenX - 2, screenY - 2, 2, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  };
+
+
+  // Add this function to draw XP bar at top of screen:
+  const drawXPBar = (ctx: CanvasRenderingContext2D) => {
+    const barWidth = 400;
+    const barHeight = 20;
+    const barX = (CANVAS_WIDTH - barWidth) / 2;
+    const barY = 20;
+
+    // Background
+    ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+    ctx.fillRect(barX - 5, barY - 5, barWidth + 10, barHeight + 10);
+
+    // XP Bar background
+    ctx.fillStyle = "#333333";
+    ctx.fillRect(barX, barY, barWidth, barHeight);
+
+    // XP Bar fill
+    const progress = xp / xpToNextLevel;
+    ctx.fillStyle = "#64c8ff";
+    ctx.fillRect(barX, barY, barWidth * progress, barHeight);
+
+    // Border
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(barX, barY, barWidth, barHeight);
+
+    // Text
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 14px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("blue XP", barX + barWidth / 2, barY + barHeight + 20);
+  };
+
   const drawReloadIndicator = (ctx: CanvasRenderingContext2D) => {
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
@@ -874,7 +831,7 @@ export default function CanvasGame() {
 
   const swordImg = new Image();
   swordImg.src = swordSrc;
-
+  
   const revolverImg = new Image();
   revolverImg.src = "/images/revolver.png";
 
@@ -912,33 +869,113 @@ export default function CanvasGame() {
     const mouseAngle = Math.atan2(dy, dx);
 
     ctx.save();
-    ctx.translate(centerX, centerY);
+    
 
     if (type === "revolver") {
-      // Draw gun pointing towards mouse
       ctx.rotate(mouseAngle);
 
-      // Gun barrel - long rectangle
+      // Offset to position gun in hand (8 pixels from player center)
+      const handOffset = 8;
+      ctx.translate(handOffset, 0);
+
+      // Determine if gun should flip (when pointing left)
+      const flipGun = Math.abs(mouseAngle) > Math.PI / 2;
+
+      if (flipGun) {
+        ctx.scale(1, -1); // Flip vertically when pointing left
+      }
+
+      // Barrel (long rectangle)
+      ctx.fillStyle = "#2a2a2a";
+      ctx.fillRect(0, -3, 28, 6);
+
+      // Barrel top highlight
+      ctx.fillStyle = "#404040";
+      ctx.fillRect(0, -3, 28, 2);
+
+      // Cylinder (revolver chamber)
+      ctx.fillStyle = "#3a3a3a";
+      ctx.beginPath();
+      ctx.arc(8, 0, 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Cylinder detail (chamber divisions)
+      ctx.strokeStyle = "#2a2a2a";
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(8, 0);
+        ctx.lineTo(8 + Math.cos(angle) * 5, Math.sin(angle) * 5);
+        ctx.stroke();
+      }
+
+      // Frame (connects barrel to grip)
       ctx.fillStyle = "#333333";
-      ctx.fillRect(0, -4, 35, 8);
+      ctx.fillRect(6, -4, 8, 8);
 
-      // Gun grip - rectangle below barrel
-      ctx.fillRect(10, 4, 12, 20);
+      // Grip (angled down and back)
+      ctx.fillStyle = "#4a3020";
+      ctx.beginPath();
+      ctx.moveTo(6, 1);
+      ctx.lineTo(6, 6);
+      ctx.lineTo(-2, 12);
+      ctx.lineTo(-4, 12);
+      ctx.lineTo(-4, 4);
+      ctx.lineTo(4, 1);
+      ctx.closePath();
+      ctx.fill();
 
-      // Gun trigger guard
-      ctx.strokeStyle = "#222222";
+      // Grip texture (wood grain lines)
+      ctx.strokeStyle = "#3a2010";
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 4; i++) {
+        ctx.beginPath();
+        ctx.moveTo(2 - i * 1.5, 3 + i * 2);
+        ctx.lineTo(-2 - i * 0.5, 8 + i * 1.5);
+        ctx.stroke();
+      }
+
+      // Trigger guard
+      ctx.strokeStyle = "#2a2a2a";
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(15, 8, 6, 0, Math.PI * 2);
+      ctx.arc(8, 4, 4, Math.PI * 0.2, Math.PI * 0.8);
       ctx.stroke();
 
-      // Muzzle highlight
-      ctx.fillStyle = "#555555";
+      // Trigger
+      ctx.fillStyle = "#333333";
       ctx.beginPath();
-      ctx.arc(35, 0, 3, 0, Math.PI * 2);
+      ctx.arc(8, 5, 1.5, 0, Math.PI * 2);
       ctx.fill();
+
+      // Hammer (at back of gun)
+      ctx.fillStyle = "#2a2a2a";
+      ctx.beginPath();
+      ctx.moveTo(2, -4);
+      ctx.lineTo(4, -6);
+      ctx.lineTo(6, -6);
+      ctx.lineTo(6, -4);
+      ctx.closePath();
+      ctx.fill();
+
+      // Muzzle (front of barrel)
+      ctx.fillStyle = "#1a1a1a";
+      ctx.beginPath();
+      ctx.arc(28, 0, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Muzzle opening
+      ctx.fillStyle = "#000000";
+      ctx.beginPath();
+      ctx.arc(28, 0, 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Front sight
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(26, -5, 2, 3);
+      ctx.translate(centerX, centerY);
     } else if (type === "sword") {
-      // Draw sword pointing towards mouse
       ctx.rotate(mouseAngle);
 
       // Blade
@@ -972,113 +1009,129 @@ export default function CanvasGame() {
     ctx.restore();
   };
 
-  
-
-  
-
-  const drawProjectilesAndTrails = (ctx: CanvasRenderingContext2D) => {
+  const drawProjectilesAndTrails = (
+    ctx: CanvasRenderingContext2D,
+    isPaused: boolean,
+    playerPos: THREE.Vector3
+  ) => {
     const { projectiles, trailGhosts } = useProjectiles.getState();
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
 
-    ctx.save();
-    ctx.globalCompositeOperation = "lighter";
+    const MIN_TAIL_LEN = 5;
+    const MAX_TAIL_LEN = 120;
+    const SEGMENT_DIST = 0.02; // minimal distance to add a new trail segment
+    const SPEED_TO_LENGTH = 2;
+    const JITTER_AMPLITUDE = 1;
+    const HEAD_SCALE = 3;
 
     const worldToScreen = (pos: THREE.Vector3) => ({
-      x: centerX + (pos.x - position.x) * TILE_SIZE / 2,
-      y: centerY + (pos.z - position.z) * TILE_SIZE / 2,
+      x: centerX + (pos.x - playerPos.x) * TILE_SIZE / 2,
+      y: centerY + (pos.z - playerPos.z) * TILE_SIZE / 2,
     });
 
-    const drawCometTrail = (trail: THREE.Vector3[], color: string, size: number, fade: number) => {
-      if (trail.length < 2) return;
-
-      // Draw trail as quadratic curves
-      ctx.beginPath();
-      for (let i = 0; i < trail.length - 1; i++) {
-        const t = i / trail.length;
-        const alpha = fade * 40 * (1 - t);
-        const width = size * 50 * (1 - t);
-
-        const p0 = worldToScreen(trail[i]);
-        const p1 = worldToScreen(trail[i + 1]);
-
-        ctx.lineWidth = width;
-        ctx.strokeStyle = hexToRgba(color, alpha);
-        ctx.shadowBlur = width * 1.5;
-        ctx.shadowColor = color;
-
-        if (i === 0) ctx.moveTo(p0.x, p0.y);
-
-        const midX = (p0.x + p1.x) / 2;
-        const midY = (p0.y + p1.y) / 2;
-        ctx.quadraticCurveTo(p0.x, p0.y, midX, midY);
+    const seedFromId = (id: string) => {
+      let h = 2166136261 >>> 0;
+      for (let i = 0; i < id.length; i++) {
+        h ^= id.charCodeAt(i);
+        h = Math.imul(h, 16777619) >>> 0;
       }
-      ctx.stroke();
-
-      // Draw rotated oval tip at the end
-      const lastIndex = trail.length - 1;
-      const secondLastIndex = trail.length - 2;
-      const pEndScreen = worldToScreen(trail[lastIndex]);
-      const pPrevScreen = worldToScreen(trail[secondLastIndex]);
-
-      const dx = pEndScreen.x - pPrevScreen.x;
-      const dy = pEndScreen.y - pPrevScreen.y;
-      const angle = Math.atan2(dy, dx);
-
-      const tailWidth = size * 100 * (1 - (lastIndex / trail.length));
-      const tailHeight = tailWidth / 2;
-      const tailAlpha = fade * 20;
-
-      ctx.save();
-      ctx.translate(pEndScreen.x, pEndScreen.y);
-      ctx.rotate(angle);
-      ctx.beginPath();
-      ctx.ellipse(0, 0, tailWidth, tailHeight, 0, 0, Math.PI * 2);
-      ctx.fillStyle = hexToRgba(color, tailAlpha);
-      ctx.shadowBlur = tailWidth * 2;
-      ctx.shadowColor = color;
-      ctx.fill();
-      ctx.restore();
+      return h / 0xffffffff;
     };
 
-    // --- Draw live projectile trails ---
-    projectiles.forEach((proj) => {
-      drawCometTrail(proj.trailHistory, proj.color, proj.size, 1);
+    ctx.save();
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
 
-      // Draw projectile head
-      const last = worldToScreen(proj.trailHistory[0]);
-      const angle = Math.atan2(proj.velocity.z, proj.velocity.x);
-      ctx.save();
-      ctx.translate(last.x, last.y);
-      ctx.rotate(angle);
+    const now = performance.now() / 1000;
 
-      ctx.fillStyle = proj.color;
-      ctx.fillRect(0, -proj.size / 2, proj.size * 0.8, proj.size);
+    const updateTrail = (p: Projectile) => {
+      if (!p.trailHistory) p.trailHistory = [];
+
+      const last = p.trailHistory[0] ?? p.position.clone();
+      const dist = last.distanceTo(p.position);
+
+      if (dist >= SEGMENT_DIST) {
+        const steps = Math.floor(dist / SEGMENT_DIST);
+        for (let i = 1; i <= steps; i++) {
+          const interp = last.clone().lerp(p.position, i / steps);
+          p.trailHistory.unshift(interp);
+        }
+      }
+
+      if (p.trailHistory.length > p.trailLength) {
+        p.trailHistory.length = p.trailLength;
+      }
+    };
+
+    const drawTrail = (trail: THREE.Vector3[], size: number, color: string) => {
+      if (trail.length < 2) return;
+
+      const headScreen = worldToScreen(trail[0]);
+      const tailScreen = worldToScreen(trail[trail.length - 1]);
+      const dx = headScreen.x - tailScreen.x;
+      const dy = headScreen.y - tailScreen.y;
+      const dist = Math.hypot(dx, dy);
+      const targetLen = Math.min(MAX_TAIL_LEN, Math.max(MIN_TAIL_LEN, dist));
+
+      const angle = Math.atan2(dy, dx);
+      const cosA = Math.cos(angle);
+      const sinA = Math.sin(angle);
+
+      const jitterX = Math.sin(now * 2.0) * JITTER_AMPLITUDE * 0.6;
+      const jitterY = Math.cos(now * 2.0) * JITTER_AMPLITUDE * 0.6;
+
+      const headRadius = Math.max(1, (size * HEAD_SCALE) / 2);
+      const tailWidth = 0.6;
+
+      const leftTail = { x: 0, y: -tailWidth * 0.5 };
+      const rightTail = { x: 0, y: tailWidth * 0.5 };
+      const leftHead = { x: targetLen, y: -headRadius * 2 };
+      const rightHead = { x: targetLen, y: headRadius };
+
+      const wobble = (xLocal: number) => Math.sin(xLocal / targetLen * Math.PI * 2 + now * 40) * (JITTER_AMPLITUDE * 0.25);
+
+      const localToScreen = (lx: number, ly: number) => ({
+        x: tailScreen.x + (lx * cosA - ly * sinA) + jitterX + wobble(lx),
+        y: tailScreen.y + (lx * sinA + ly * cosA) + jitterY + wobble(lx),
+      });
+
+      const pA = localToScreen(leftTail.x, leftTail.y);
+      const pB = localToScreen(leftHead.x, leftHead.y);
+      const pC = localToScreen(rightHead.x, rightHead.y);
+      const pD = localToScreen(rightTail.x, rightTail.y);
 
       ctx.beginPath();
-      ctx.arc(proj.size * 0.8, 0, proj.size / 2, 0, Math.PI * 2);
-      ctx.fillStyle = hexToRgba(proj.color, 0.8);
+      ctx.moveTo(pA.x, pA.y);
+      ctx.quadraticCurveTo(pB.x, pB.y, (pB.x + pC.x) / 2, (pB.y + pC.y) / 2);
+      ctx.lineTo(pC.x, pC.y);
+      ctx.quadraticCurveTo(pD.x, pD.y, pA.x, pA.y);
+      ctx.closePath();
+      ctx.fillStyle = color;
       ctx.fill();
-      ctx.restore();
+
+      ctx.beginPath();
+      ctx.arc(headScreen.x, headScreen.y, headRadius, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.lineWidth = 0.5;
+      ctx.strokeStyle = color;
+      ctx.stroke();
+    };
+
+    // --- Update and draw all projectiles ---
+    projectiles.forEach((p) => {
+      if (!(p as any)._seed) (p as any)._seed = seedFromId(p.id || Math.random().toString());
+
+      if (!isPaused) updateTrail(p);
+      drawTrail(p.trailHistory, p.size, p.color);
     });
 
     // --- Draw ghost trails ---
-    trailGhosts.forEach((ghost) => {
-      const fade = ghost.life / 0.2;
-      drawCometTrail(ghost.trail, ghost.color, ghost.size, fade);
-    });
+    trailGhosts.forEach((g) => drawTrail(g.trail, g.size, g.color));
 
     ctx.restore();
   };
-  
-  function hexToRgba(hex: string, alpha: number) {
-    const bigint = parseInt(hex.replace("#", ""), 16);
-    const r = (bigint >> 16) & 255;
-    const g = (bigint >> 8) & 255;
-    const b = bigint & 255;
-    return `rgba(${r},${g},${b},${alpha})`;
-  }
-
 
 
 
@@ -1101,7 +1154,7 @@ export default function CanvasGame() {
 
     ctx.fillStyle = "#4a9eff";
     ctx.beginPath();
-    ctx.arc(0, 0, 20, 0, Math.PI * 2);
+    ctx.arc(0, 0, 15, 0, Math.PI * 2);
     ctx.fill();
 
     const { items, equippedWeaponId } = useInventory.getState();
@@ -1112,44 +1165,52 @@ export default function CanvasGame() {
   };
 
   const drawEnemy = (ctx: CanvasRenderingContext2D, enemy: any) => {
+    // --- SAFETY CHECKS (fixes your crash) ---
+    if (!enemy || !enemy.position) return;
+    if (enemy.position.x == null || enemy.position.z == null) return;
+
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
 
     const screenX = centerX + ((enemy.position.x - position.x) * TILE_SIZE) / 2;
     const screenY = centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2;
 
-    ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+    // Body shadow
+    ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
     ctx.beginPath();
     ctx.ellipse(screenX, screenY + 18, 12, 6, 0, 0, Math.PI * 2);
     ctx.fill();
 
+    // Body
     ctx.fillStyle = "#ff4444";
-    ctx.fillRect(screenX - 12, screenY - 12, 24, 24);
+    ctx.fillRect(screenX - 12, screenY - 12, 36, 36);
 
+    // Eyes
     ctx.fillStyle = "#aa2222";
-    ctx.fillRect(screenX - 8, screenY - 8, 8, 8);
-    ctx.fillRect(screenX + 2, screenY + 2, 8, 8);
+    ctx.fillRect(screenX - 8, screenY - 8, 12, 12);
+    ctx.fillRect(screenX + 2, screenY + 2, 12, 12);
 
-    const healthBarWidth = 30;
-    const healthBarHeight = 4;
+    // Healthbar
+    const healthBarWidth = 50;
+    const healthBarHeight = 6;
+
     ctx.fillStyle = "#ff0000";
     ctx.fillRect(
       screenX - healthBarWidth / 2,
       screenY - 22,
       healthBarWidth,
-      healthBarHeight,
+      healthBarHeight
     );
+
     ctx.fillStyle = "#00ff00";
-    const healthWidth = (enemy.health / enemy.maxHealth) * healthBarWidth;
+    const pct = Math.max(0, enemy.health / enemy.maxHealth); // another safety guard
     ctx.fillRect(
       screenX - healthBarWidth / 2,
       screenY - 22,
-      healthWidth,
-      healthBarHeight,
+      pct * healthBarWidth,
+      healthBarHeight
     );
   };
-
-  if (phase !== "playing") return null;
 
   return (
     <>
@@ -1158,16 +1219,12 @@ export default function CanvasGame() {
         width={CANVAS_WIDTH}
         height={CANVAS_HEIGHT}
         className="border-2 border-gray-700"
-        style={{ imageRendering: "pixelated" as any }}
+        
       />
-
-      {/* Add spell system UI */}
-      {phase === "playing" && (
-        <>
-          <SpellSlotsHUD />
-          {showCardManager && <CardManager />}
-        </>
-      )}
+      <Darkness />
+      
+      <LevelUpScreen />
     </>
   );
+
 }

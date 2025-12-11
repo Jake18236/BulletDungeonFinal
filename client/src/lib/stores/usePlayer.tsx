@@ -11,7 +11,7 @@ interface PlayerState {
   maxHearts: number;
   invincibilityTimer: number;
   invincibilityDuration: number;
-  defense: number;
+ 
   firerate: number,
   ammo: number;
   maxAmmo: number;
@@ -23,7 +23,7 @@ interface PlayerState {
   fireShot: () => boolean;
   startReload: () => void;
   updateReload: (delta: number) => void;
-
+  
   move: (delta: THREE.Vector3) => void;
   loseHeart: () => void;
   updateInvincibility: (delta: number) => void;
@@ -33,15 +33,15 @@ interface PlayerState {
 export const usePlayer = create<PlayerState>((set) => ({
   position: new THREE.Vector3(),
   velocity: new THREE.Vector3(),
-  speed: 15,
+  speed: 10,
   
-  firerate: 0.5,
+  firerate: 0.25,
   
   hearts: 5,
   maxHearts: 5,
   invincibilityTimer: 0,
   invincibilityDuration: 3,
-  defense: 0,
+  
   ammo: 6,
   maxAmmo: 6,
   reloadTime: 1.5,

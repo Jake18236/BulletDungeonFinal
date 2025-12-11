@@ -11,7 +11,10 @@ export interface Projectile {
   maxRange: number;
   distanceTraveled: number;
   rotationY: number;
-
+  
+  
+  currentLength: number; 
+  jitterOffset: THREE.Vector3;
   // Visual
   color: string;
   size: number;
@@ -70,7 +73,8 @@ interface ProjectilesState {
     }>,
     playerPos: THREE.Vector3,
     roomBounds: number,
-    onHit: (enemyId: string, damage: number, knockback: THREE.Vector3) => void
+    onHit: (enemyId: string, damage: number, knockback: THREE.Vector3) => void,
+    isPaused: boolean,
   ) => void;
 
   removeProjectile: (id: string) => void;
@@ -91,7 +95,8 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       maxRange: config.range,
       distanceTraveled: 0,
       rotationY: Math.atan2(config.direction.x, config.direction.z),
-
+      currentLength: 0, // Will be updated every frame
+      jitterOffset: new THREE.Vector3(), // Initial offset
       color: getProjectileColor(config),
       size: 10,
       trailColor: getTrailColor(config),
@@ -120,147 +125,134 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
     }));
   },
 
-  updateProjectiles: (delta, enemies, playerPos, roomBounds, onHit) => {
+  updateProjectiles: (
+    delta: number,
+    enemies: Enemy[],
+    playerPos: THREE.Vector3,
+    roomBounds: number,
+    onHit: (enemyId: string, damage: number, knockback: THREE.Vector3) => void,
+    isPaused: boolean
+  ) => {
     const updated: Projectile[] = [];
     const { trailGhosts } = get();
 
     for (const proj of get().projectiles) {
-      // --- Move projectile ---
-      const move = proj.velocity.clone().multiplyScalar(delta);
-      proj.position.add(move);
-      proj.distanceTraveled += move.length();
-
-      // --- Update trail history (world positions only) ---
-      // inside updateProjectiles, after moving the projectile
+      // Initialize trail if missing
       if (!proj.trailHistory) proj.trailHistory = [];
 
-      // Interpolate points if distance is large (prevents gaps)
-      const lastPos = proj.trailHistory[0] ?? proj.position.clone();
-      const dist = proj.position.distanceTo(lastPos);
-      if (dist > 0.05) {
-        const steps = Math.ceil(dist / 0.05);
-        for (let s = 1; s <= steps; s++) {
-          const interpolated = lastPos.clone().lerp(proj.position, s / steps);
-          proj.trailHistory.unshift(interpolated);
+      if (!isPaused) {
+        // --- Record previous head position for trail ---
+        const prevPos = proj.position.clone();
+        proj.trailHistory.unshift(prevPos);
+
+        if (proj.trailHistory.length > proj.trailLength) {
+          proj.trailHistory.length = proj.trailLength;
         }
-      } else {
-        proj.trailHistory.unshift(proj.position.clone());
-      }
 
-      // Limit trail length
-      if (proj.trailHistory.length > proj.trailLength) proj.trailHistory = proj.trailHistory.slice(0, proj.trailLength);
+        // --- Move projectile ---
+        const move = proj.velocity.clone().multiplyScalar(delta);
+        proj.position.add(move);
 
-      
-
-      // --- Homing ---
-      if (proj.homing && enemies.length > 0) {
-        const nearest = enemies.reduce(
-          (acc, e) => {
-            if (proj.piercedEnemies.has(e.id)) return acc;
-            const d = proj.position.distanceTo(e.position);
-            return d < acc.dist ? { enemy: e, dist: d } : acc;
-          },
-          { enemy: null as any, dist: Infinity }
-        );
-        if (nearest.enemy && nearest.dist < 15) {
-          const dir = nearest.enemy.position.clone().sub(proj.position).normalize();
-          proj.velocity.lerp(dir.multiplyScalar(proj.speed), 5 * delta);
-          proj.velocity.normalize().multiplyScalar(proj.speed);
-          proj.rotationY = Math.atan2(proj.velocity.x, proj.velocity.z);
+        // --- Bouncing ---
+        if (proj.bouncesLeft > 0) {
+          if (Math.abs(proj.position.x) > roomBounds) {
+            proj.velocity.x *= -1;
+            proj.bouncesLeft--;
+          }
+          if (Math.abs(proj.position.z) > roomBounds) {
+            proj.velocity.z *= -1;
+            proj.bouncesLeft--;
+          }
+        } else if (Math.abs(proj.position.x) > roomBounds || Math.abs(proj.position.z) > roomBounds) {
+          continue; // remove projectile out of bounds
         }
-      }
 
-      // --- Check range ---
-      if (proj.distanceTraveled > proj.maxRange) {
-        if (proj.trailHistory.length > 1) {
-          // Add to ghost trails
+        // --- Homing ---
+        if (proj.homing && enemies.length > 0) {
+          const nearest = enemies.reduce(
+            (acc, e) => {
+              if (proj.piercedEnemies.has(e.id)) return acc;
+              const d = proj.position.distanceTo(e.position);
+              return d < acc.dist ? { enemy: e, dist: d } : acc;
+            },
+            { enemy: null as Enemy | null, dist: Infinity }
+          );
+          if (nearest.enemy && nearest.dist < 15) {
+            const dir = nearest.enemy.position.clone().sub(proj.position).normalize();
+            proj.velocity.lerp(dir.multiplyScalar(proj.speed), 5 * delta);
+            proj.velocity.normalize().multiplyScalar(proj.speed);
+            proj.rotationY = Math.atan2(proj.velocity.x, proj.velocity.z);
+          }
+        }
+
+        // --- Enemy hits ---
+        let hit = false;
+        for (const enemy of enemies) {
+          if (proj.piercedEnemies.has(enemy.id)) continue;
+
+          const radius = 1.0;
+          const dist = proj.position.distanceTo(enemy.position);
+
+          if (dist < radius) {
+            hit = true;
+            onHit(enemy.id, proj.damage, proj.velocity.clone().normalize().multiplyScalar(8));
+            proj.piercedEnemies.add(enemy.id);
+
+            // Explosive
+            if (proj.explosive) {
+              for (const e of enemies) {
+                if (e.position.distanceTo(proj.position) < proj.explosive.radius) {
+                  onHit(
+                    e.id,
+                    proj.explosive.damage,
+                    e.position.clone().sub(proj.position).normalize().multiplyScalar(12)
+                  );
+                }
+              }
+            }
+
+            // Chain lightning
+            if (proj.chainLightning && proj.chainLightning.chainedEnemies.size < proj.chainLightning.chains) {
+              proj.chainLightning.chainedEnemies.add(enemy.id);
+              const targets = enemies.filter(
+                (e) =>
+                  e.id !== enemy.id &&
+                  !proj.chainLightning!.chainedEnemies.has(e.id) &&
+                  e.position.distanceTo(enemy.position) < proj.chainLightning!.range
+              );
+              if (targets.length > 0) {
+                const t = targets[0];
+                onHit(t.id, proj.damage * 0.7, new THREE.Vector3());
+                proj.chainLightning.chainedEnemies.add(t.id);
+              }
+            }
+
+            if (proj.piercedEnemies.size > proj.piercing) break;
+          }
+        }
+
+        if (hit && proj.piercedEnemies.size > proj.piercing) continue;
+
+        // --- Check max range ---
+        proj.distanceTraveled += move.length();
+        if (proj.distanceTraveled > proj.maxRange) {
           trailGhosts.push({
             id: proj.id,
-            life: 0.2, // lingering duration
+            life: 0.2,
             trail: [...proj.trailHistory],
             color: proj.color,
             size: proj.size,
           });
-        }
-        continue;
-      }
-
-      // --- Bouncing ---
-      if (proj.bouncesLeft > 0) {
-        if (Math.abs(proj.position.x) > roomBounds) {
-          proj.velocity.x *= -1;
-          proj.bouncesLeft--;
-        }
-        if (Math.abs(proj.position.z) > roomBounds) {
-          proj.velocity.z *= -1;
-          proj.bouncesLeft--;
-        }
-      } else if (
-        Math.abs(proj.position.x) > roomBounds ||
-        Math.abs(proj.position.z) > roomBounds
-      ) {
-        continue;
-      }
-
-      // --- Enemy hits ---
-      let hit = false;
-      for (const enemy of enemies) {
-        if (proj.piercedEnemies.has(enemy.id)) continue;
-        if (proj.position.distanceTo(enemy.position) < 1.0) {
-          hit = true;
-
-          onHit(
-            enemy.id,
-            proj.damage,
-            proj.velocity.clone().normalize().multiplyScalar(8)
-          );
-
-          proj.piercedEnemies.add(enemy.id);
-
-          // Explosive
-          if (proj.explosive) {
-            for (const e of enemies) {
-              if (e.position.distanceTo(proj.position) < proj.explosive.radius) {
-                onHit(
-                  e.id,
-                  proj.explosive.damage,
-                  e.position.clone().sub(proj.position).normalize().multiplyScalar(12)
-                );
-              }
-            }
-          }
-
-          // Chain lightning
-          if (
-            proj.chainLightning &&
-            proj.chainLightning.chainedEnemies.size < proj.chainLightning.chains
-          ) {
-            proj.chainLightning.chainedEnemies.add(enemy.id);
-            const targets = enemies.filter(
-              (e) =>
-                e.id !== enemy.id &&
-                !proj.chainLightning!.chainedEnemies.has(e.id) &&
-                e.position.distanceTo(enemy.position) < proj.chainLightning!.range
-            );
-            if (targets.length > 0) {
-              const t = targets[0];
-              onHit(t.id, proj.damage * 0.7, new THREE.Vector3());
-              proj.chainLightning.chainedEnemies.add(t.id);
-            }
-          }
-
-          if (proj.piercedEnemies.size > proj.piercing) break;
+          continue;
         }
       }
-
-      if (hit && proj.piercedEnemies.size > proj.piercing) continue;
 
       updated.push(proj);
     }
 
     // --- Update ghost trails ---
     const newGhosts = trailGhosts
-      .map((g) => ({ ...g, life: g.life - delta }))
+      .map((g) => ({ ...g, life: g.life - (isPaused ? 0 : delta) }))
       .filter((g) => g.life > 0);
 
     set({
@@ -268,6 +260,8 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       trailGhosts: newGhosts,
     });
   },
+
+
 
 
 

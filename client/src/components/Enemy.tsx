@@ -27,19 +27,7 @@ export default function Enemy({ enemy }: EnemyProps) {
   woodTexture.magFilter = THREE.NearestFilter;
   woodTexture.minFilter = THREE.NearestFilter;
 
-  const patrolTarget = useMemo(() => {
-    // If this enemy has explicit patrol points, use the current index
-    if (enemy.patrolPoints && enemy.patrolPoints.length > 0) {
-      const idx = enemy.currentPatrolIndex ?? 0;
-      return enemy.patrolPoints[idx % enemy.patrolPoints.length];
-    }
 
-    return enemy.patrolTarget || new THREE.Vector3(
-      (Math.random() - 0.5) * 10,
-      0,
-      (Math.random() - 0.5) * 10
-    );
-  }, [enemy.id]);
 
   useFrame((_state, delta) => {
     if (!meshRef.current) return;
