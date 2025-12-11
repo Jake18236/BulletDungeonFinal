@@ -5,25 +5,36 @@ interface PlayerState {
   position: THREE.Vector3;
   velocity: THREE.Vector3;
   speed: number;
-  
-  
+
   hearts: number;
   maxHearts: number;
   invincibilityTimer: number;
   invincibilityDuration: number;
- 
-  firerate: number,
+  defense: number;
+  firerate: number;
   ammo: number;
   maxAmmo: number;
   isReloading: boolean;
-  reloadTime: number
+  reloadTime: number;
   reloadProgress: number;
   isFiring: boolean;
+
+  baseDamage: number;
+  baseProjectileSpeed: number;
+  baseProjectileRange: number;
+  projectileCount: number;
+  homing: boolean;
+  piercing: number;
+  bouncing: number;
+  explosive?: { radius: number; damage: number };
+  chainLightning?: { chains: number; range: number };
+  accuracy: number;
+
   setFiring: (val: boolean) => void;
   fireShot: () => boolean;
   startReload: () => void;
   updateReload: (delta: number) => void;
-  
+
   move: (delta: THREE.Vector3) => void;
   loseHeart: () => void;
   updateInvincibility: (delta: number) => void;
@@ -34,20 +45,31 @@ export const usePlayer = create<PlayerState>((set) => ({
   position: new THREE.Vector3(),
   velocity: new THREE.Vector3(),
   speed: 10,
-  
-  firerate: 0.25,
-  
+
+  firerate: 0.5,
+
   hearts: 5,
   maxHearts: 5,
   invincibilityTimer: 0,
   invincibilityDuration: 3,
-  
+  defense: 0,
   ammo: 6,
   maxAmmo: 6,
   reloadTime: 1.5,
   isReloading: false,
   reloadProgress: 0,
   isFiring: false,
+
+  baseDamage: 100,
+  baseProjectileSpeed: 80,
+  baseProjectileRange: 50,
+  projectileCount: 1,
+  homing: false,
+  piercing: 0,
+  bouncing: 0,
+  explosive: undefined,
+  chainLightning: undefined,
+  accuracy: 1.0,
 
   setFiring: (val) => set({ isFiring: val }),
 
@@ -69,7 +91,7 @@ export const usePlayer = create<PlayerState>((set) => ({
     if (!state.isReloading) return {};
 
     const newProgress = state.reloadProgress + delta;
-    
+
 
     if (newProgress >= state.reloadTime) {
       return {
@@ -110,5 +132,15 @@ export const usePlayer = create<PlayerState>((set) => ({
     reloadTime: 1.5,
     reloadProgress: 0,
     isFiring: false,
+    baseDamage: 100,
+    baseProjectileSpeed: 80,
+    baseProjectileRange: 50,
+    projectileCount: 1,
+    homing: false,
+    piercing: 0,
+    bouncing: 0,
+    explosive: undefined,
+    chainLightning: undefined,
+    accuracy: 1.0,
   })
 }));

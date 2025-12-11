@@ -261,7 +261,6 @@ export function LevelUpScreen() {
 export default function GameUI() {
   const { phase, start, restart } = useGame();
   const { hearts, maxHearts, reset: resetPlayer } = usePlayer();
-  const { isMuted, toggleMute } = useAudio();
   const { generateDungeon, reset: resetDungeon } = useDungeon();
   const { generateRoomEnemies, reset: resetEnemies } = useEnemies();
 
@@ -271,7 +270,6 @@ export default function GameUI() {
     resetDungeon();
     generateDungeon();
     generateRoomEnemies();
-    useInventory.getState().reset();
     start();
   };
 
@@ -336,19 +334,11 @@ export default function GameUI() {
         </Card>
       </div>
 
-      {/* Controls */}
-      <div className="fixed top-4 right-4 z-40">
-        <Button
-          onClick={toggleMute}
-          variant="outline"
-          size="sm"
-          className="bg-black bg-opacity-80 text-white border-gray-600 hover:bg-gray-800"
-        >
-          {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-        </Button>
-      </div>
 
-      
+      {/* Minimap */}
+      <div className="fixed bottom-4 right-4 z-40">
+        <Minimap />
+      </div>
 
       {/* Instructions */}
       <div className="fixed bottom-4 left-4 z-40">
@@ -364,7 +354,7 @@ export default function GameUI() {
       </div>
 
       {/* LEVEL UP SCREEN */}
-      
+      <LevelUpScreen />
     </>
   );
 }

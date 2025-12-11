@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import { usePlayer } from "./useplayer_(1)";
-import { useGame } from "./usegame_(1)";
+import { usePlayer } from "./usePlayer";
+import { useGame } from "./useGame";
 
 export interface Upgrade {
   id: string;

@@ -12,8 +12,8 @@ import { useInventory } from "../lib/stores/useInventory";
 import { useSpellSlots } from "../lib/stores/useSpellSlots";
 import { useProjectiles } from "../lib/stores/useProjectiles";
 import { useXP } from "../lib/stores/useXP";
-import SpellSlotsHUD from "./SpellSlotsHUD";
-import CardManager from "./CardManager";
+
+
 import swordSrc from "/images/sword.png";
 import GameUI from "./GameUI"  
 import { any } from "zod";
