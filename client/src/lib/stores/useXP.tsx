@@ -850,7 +850,7 @@ const generateRandomUpgrades = (takenUpgrades: Set<string>): Upgrade[] => {
 
   // Shuffle and pick 3
   const shuffled = [...available].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, 5);
+  return shuffled.slice(0, 10);
 };
 
 export const useXP = create<XPState>((set, get) => ({

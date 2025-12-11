@@ -1339,6 +1339,7 @@ export default function CanvasGame() {
       const screenX = centerX + ((summon.position.x - position.x) * TILE_SIZE) / 2;
       const screenY = centerY + ((summon.position.z - position.z) * TILE_SIZE) / 2;
 
+
       ctx.save();
       ctx.translate(screenX, screenY);
       ctx.rotate(summon.rotation);
@@ -1369,7 +1370,7 @@ export default function CanvasGame() {
         ctx.arc(4, -2, 2, 0, Math.PI * 2);
         ctx.fill();
       }
-      else if (summon.type === "scythe") {
+      if (summon.type === "scythe") {
         // Scythe blade
         ctx.fillStyle = summon.color;
         ctx.beginPath();
@@ -1395,7 +1396,7 @@ export default function CanvasGame() {
         ctx.arc(0, -summon.size/2, summon.size/2, 0, Math.PI * 2);
         ctx.stroke();
       }
-      else if (summon.type === "spear") {
+      if (summon.type === "spear") {
         // Spear head
         ctx.fillStyle = summon.color;
         ctx.beginPath();
@@ -1419,8 +1420,12 @@ export default function CanvasGame() {
         ctx.arc(0, -summon.size/2, 8, 0, Math.PI * 2);
         ctx.fill();
       }
-      else if (summon.type === "dagger") {
-        // Dagger blade
+      if (summon.type === "dagger") {
+        
+
+        
+
+        // Blade
         ctx.fillStyle = summon.color;
         ctx.beginPath();
         ctx.moveTo(0, -summon.size);
@@ -1439,19 +1444,22 @@ export default function CanvasGame() {
         ctx.arc(0, 4, 3, 0, Math.PI * 2);
         ctx.fill();
 
-        // Trail effect
+        // Trail
         if (summon.velocity.length() > 10) {
           ctx.strokeStyle = summon.color;
           ctx.globalAlpha = 0.3;
-          ctx.lineWidth = 3;
+          ctx.lineWidth = 30;
           ctx.beginPath();
-          const vel = summon.velocity.clone().normalize().multiplyScalar(-15);
+          const trail = summon.velocity.clone().normalize().multiplyScalar(-15);
           ctx.moveTo(0, 0);
-          ctx.lineTo(vel.x, vel.z);
+          ctx.lineTo(trail.x, trail.z);
           ctx.stroke();
         }
+
+        ctx.restore();
       }
-      else if (summon.type === "electrobug") {
+
+      if (summon.type === "electrobug") {
         // Bug body
         ctx.fillStyle = summon.color;
         ctx.beginPath();

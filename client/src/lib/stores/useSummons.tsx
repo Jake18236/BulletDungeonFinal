@@ -174,8 +174,8 @@ export const useSummons = create<SummonState>((set, get) => ({
         attackCooldown: 0,
         color: "#ff4444",
         size: 20,
-        orbitRadius: 40,
-        orbitSpeed: 3,
+        orbitRadius: 10,
+        orbitSpeed: 0.1,
         orbitAngle: Math.random() * Math.PI * 2,
         curse: state.scytheCurse,
       },
@@ -190,11 +190,11 @@ export const useSummons = create<SummonState>((set, get) => ({
         orbitAngle: Math.random() * Math.PI * 2,
       },
       dagger: {
-        damage: 30,
-        attackSpeed: 0,
-        attackCooldown: 0,
+        damage: 10,
+        attackSpeed: 1,
+        attackCooldown: 2,
         color: "#ff00ff",
-        size: 15,
+        size: 45,
         homingStrength: 8,
         burn: state.daggerBurn,
       },
@@ -211,12 +211,11 @@ export const useSummons = create<SummonState>((set, get) => ({
     };
 
     const config = configs[type];
-
-    // Create multiple summons for spear and dagger
     const count = type === "spear" ? state.spearCount : type === "dagger" ? state.daggerCount : 1;
 
+    const newSummons: Summon[] = [];
     for (let i = 0; i < count; i++) {
-      const summon: Summon = {
+      newSummons.push({
         id: `${type}_${Date.now()}_${i}`,
         type,
         position: playerPos.clone().add(new THREE.Vector3(
@@ -227,14 +226,15 @@ export const useSummons = create<SummonState>((set, get) => ({
         velocity: new THREE.Vector3(),
         rotation: 0,
         ...config,
-      };
-
-      set(state => ({
-        summons: [...state.summons, summon],
-        hasSummons: { ...state.hasSummons, [type]: true },
-      }));
+      });
     }
+
+    set(state => ({
+      summons: [...state.summons, ...newSummons],
+      hasSummons: { ...state.hasSummons, [type]: true },
+    }));
   },
+
 
   updateSummons: (delta, playerPos, enemies) => {
     const state = get();
@@ -407,88 +407,79 @@ export const useSummons = create<SummonState>((set, get) => ({
           }
         });
       }
+                if (summon.type === "dagger") {
+                  const playerPos = usePlayer.getState().position;
+                  const MAX_SPEED = 20;       // constant dagger speed
+                  const TURN_RATE = 5;       // how fast dagger steers
+                  const TARGET_RADIUS = 700;  // max distance from player to select enemy
+                  const HIT_COOLDOWN = 1000;  // ms an enemy cannot be retargeted
 
-      // MAGIC DAGGER: Homing with velocity
-        // MAGIC DAGGER: Fixed
-        else if (summon.type === "dagger") {
-          const playerPos = usePlayer.getState().position;
+                  const now = Date.now();
 
-          // Initialize orbit if missing
-          if (updated.orbitAngle === undefined) {
-            updated.orbitAngle = (Math.random() * Math.PI * 2);
-          }
+                  // Track recently hit enemies
+                  if (!updated.hitCooldowns) updated.hitCooldowns = new Map<string, number>();
 
-          // Orbit around player
-          const ORBIT_RADIUS = 30; // can scale with upgrades
-          const ORBIT_SPEED = 3;   // radians/sec
+                  // Filter valid targets: within 200 units of player & not on cooldown
+                  const validTargets = enemies.filter(e => 
+                    e.health > 0 &&
+                    e.position.distanceTo(playerPos) <= TARGET_RADIUS &&
+                    (!updated.hitCooldowns.has(e.id) || now - updated.hitCooldowns.get(e.id)! > HIT_COOLDOWN)
+                  );
 
-          updated.orbitAngle += ORBIT_SPEED * delta;
-          const orbitPos = new THREE.Vector3(
-            playerPos.x + Math.cos(updated.orbitAngle) * ORBIT_RADIUS,
-            0,
-            playerPos.z + Math.sin(updated.orbitAngle) * ORBIT_RADIUS
-          );
+                  // Select target if none or previous target is gone
+                  if (!updated.target || !validTargets.includes(enemies.find(e => e.id === updated.targetId)!)) {
+                    if (validTargets.length > 0) {
+                      // Pick the target minimizing travel time (distance / speed)
+                      let best = validTargets[0];
+                      let bestTime = updated.position.distanceTo(best.position) / MAX_SPEED;
+                      validTargets.forEach(e => {
+                        const t = updated.position.distanceTo(e.position) / MAX_SPEED;
+                        if (t < bestTime) {
+                          bestTime = t;
+                          best = e;
+                        }
+                      });
+                      updated.target = best.position.clone();
+                      updated.targetId = best.id;
+                    } else {
+                      // No valid target: hover near player
+                      updated.target = playerPos.clone().add(new THREE.Vector3(Math.random() * 20 - 10, 0, Math.random() * 20 - 10));
+                      updated.targetId = undefined;
+                    }
+                  }
 
-          // Find nearest enemy globally
-          const liveEnemies = enemies.filter(e => e.health > 0);
-          let nearestEnemy: any = null;
-          let nearestDist = Infinity;
-          liveEnemies.forEach(e => {
-            const d = e.position.distanceTo(updated.position);
-            if (d < nearestDist) {
-              nearestDist = d;
-              nearestEnemy = e;
-            }
-          });
+                  // Steering
+                  if (updated.target) {
+                    const desiredDir = updated.target.clone().sub(updated.position).normalize().multiplyScalar(MAX_SPEED);
+                    updated.velocity.lerp(desiredDir, delta * TURN_RATE);
+                  }
 
-          // Homing toward nearest enemy
-          if (nearestEnemy) {
-            updated.target = nearestEnemy.position.clone();
-          }
+                  // Apply velocity
+                  updated.position.add(updated.velocity.clone().multiplyScalar(delta));
 
-          const targetPos = updated.target ?? orbitPos;
-          const dir = targetPos.clone().sub(updated.position);
-          const dist = dir.length();
+                  // Rotation for visuals
+                  updated.rotation = Math.atan2(updated.velocity.z, updated.velocity.x);
 
-          if (dist > 1) {
-            const moveVec = dir.normalize().multiplyScalar(summon.homingStrength! * delta);
-            updated.velocity.add(moveVec);
-          }
+                  // Check hits
+                  enemies.forEach(enemy => {
+                    if (updated.position.distanceTo(enemy.position) < 1) {
+                      // Damage enemy
+                      enemy.health -= summon.damage * state.summonDamageMultiplier;
 
-          // Cap speed
-          const MAX_SPEED = 50;
-          if (updated.velocity.length() > MAX_SPEED) {
-            updated.velocity.normalize().multiplyScalar(MAX_SPEED);
-          }
+                      // Burn effect
+                      if (summon.burn) {
+                        get().applyStatusEffect(enemy.id, "burn", 12, 4);
+                      }
 
-          // Apply velocity and slight drag
-          updated.position.add(updated.velocity.clone().multiplyScalar(delta));
-          updated.velocity.multiplyScalar(0.95);
+                      // Mark enemy as recently hit
+                      updated.hitCooldowns.set(enemy.id, now);
 
-          // Rotation for visual effect
-          updated.rotation += delta * 15;
-
-          // Collision with enemies
-          liveEnemies.forEach(enemy => {
-            const dist = updated.position.distanceTo(enemy.position);
-            if (dist < 10) {
-              let damage = summon.damage * state.summonDamageMultiplier;
-              enemy.health -= damage;
-
-              if (summon.burn) {
-                get().applyStatusEffect(enemy.id, "burn", 12, 4);
-              }
-
-              // Slight bounce away
-              const bounceDir = updated.position.clone().sub(enemy.position).normalize();
-              updated.velocity = bounceDir.multiplyScalar(15);
-
-              // Reset target after hit
-              updated.target = undefined;
-            }
-          });
-        }
-
+                      // Immediately retarget next frame
+                      updated.target = undefined;
+                      updated.targetId = undefined;
+                    }
+                  });
+                }
 
       // ELECTRO BUG: Orbit and shoot lightning
       else if (summon.type === "electrobug") {
