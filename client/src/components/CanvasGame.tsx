@@ -1223,7 +1223,7 @@ export default function CanvasGame() {
       />
       <Darkness />
       
-      <LevelUpScreen />
+      
     </>
   );
 
