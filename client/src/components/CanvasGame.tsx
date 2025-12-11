@@ -12,7 +12,7 @@ import { useInventory } from "../lib/stores/useInventory";
 import { useSpellSlots } from "../lib/stores/useSpellSlots";
 import { useProjectiles } from "../lib/stores/useProjectiles";
 import { useXP } from "../lib/stores/useXP";
-
+import { useSummons } from "../lib/stores/useSummons";
 
 import swordSrc from "/images/sword.png";
 import GameUI from "./GameUI"  
@@ -158,6 +158,8 @@ export default function CanvasGame() {
     position,
     hearts,
     maxHearts,
+    maxAmmo,
+    heartsPerLevel,
     invincibilityTimer,
     speed,
     firerate,
@@ -186,7 +188,7 @@ export default function CanvasGame() {
   const { currentRoom, changeRoom } = useDungeon();
   const { playHit, playSuccess } = useAudio();
   const { items, addItem } = useInventory();
-
+  const { summons, updateSummons, updateStatusEffects, electroMage, electroShotCounter, handleEnemyKilledBySummon } = useSummons();
   const fireTimer = useRef(0);
   const canFire = useRef(true);
   const isMouseDown = useRef(false);
@@ -282,7 +284,19 @@ export default function CanvasGame() {
       if (phase === "playing") {
         updateReload(delta);
         updateInvincibility(delta);
-        updateFreshClip(delta);
+
+
+        updateSummons(delta, position, enemies);
+        updateStatusEffects(delta, enemies, (enemyId, damage) => {
+          const enemy = enemies.find(e => e.id === enemyId);
+          if (enemy) {
+            enemy.health -= damage;
+            if (enemy.health <= 0) {
+              handleEnemyKilledBySummon();
+            }
+          }
+        });
+        
         damagedThisFrameRef.current = false;
 
         if (ammo === 0 && !isReloading) {
@@ -391,6 +405,39 @@ export default function CanvasGame() {
               }
 
               playHit();
+
+              const summonState = useSummons.getState();
+                if (summonState.electroMage) {
+                  const newCounter = summonState.electroShotCounter + 1;
+                  useSummons.setState({ electroShotCounter: newCounter });
+
+                  if (newCounter >= 2) {
+                    useSummons.setState({ electroShotCounter: 0 });
+
+                    // Strike nearest enemy with lightning
+                    if (enemies.length > 0) {
+                      const nearest = enemies.reduce((acc, e) => {
+                        const d = position.distanceTo(e.position);
+                        return d < acc.dist ? { enemy: e, dist: d } : acc;
+                      }, { enemy: null as any, dist: Infinity });
+
+                      if (nearest.enemy && nearest.dist < 150) {
+                        let damage = 22;
+                        if (summonState.electroMastery) {
+                          damage += 12;
+                        }
+                        nearest.enemy.health -= damage;
+
+                        // Energized: 20% chance to refill 3 ammo
+                        if (summonState.energized && Math.random() < 0.2) {
+                          usePlayer.setState({ ammo: Math.min(ammo + 3, maxAmmo) });
+                        }
+                      }
+                    }
+                  }
+                }
+
+                
               fireTimer.current = firerate;
               canFire.current = false;
             }
@@ -625,6 +672,8 @@ export default function CanvasGame() {
 
       enemies.forEach(enemy => drawEnemy(ctx, enemy));
       drawPlayer(ctx);
+      drawSummons(ctx); 
+      drawStatusEffects(ctx); 
       drawProjectilesAndTrails(ctx, phase !== "playing", position);
       drawXPOrbs(ctx);
       drawXPBar(ctx);
@@ -1281,6 +1330,201 @@ export default function CanvasGame() {
       healthBarHeight
     );
   };
+
+  const drawSummons = (ctx: CanvasRenderingContext2D) => {
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
+
+    summons.forEach(summon => {
+      const screenX = centerX + ((summon.position.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((summon.position.z - position.z) * TILE_SIZE) / 2;
+
+      ctx.save();
+      ctx.translate(screenX, screenY);
+      ctx.rotate(summon.rotation);
+
+      // Draw based on type
+      if (summon.type === "ghost") {
+        // Ghost body
+        ctx.fillStyle = summon.color;
+        ctx.globalAlpha = 0.8;
+        ctx.beginPath();
+        ctx.arc(0, 0, summon.size, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Ghost tail
+        ctx.fillStyle = summon.color;
+        ctx.globalAlpha = 0.6;
+        for (let i = 0; i < 3; i++) {
+          ctx.beginPath();
+          ctx.arc(0, summon.size + i * 4, summon.size - i * 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Eyes
+        ctx.fillStyle = "#000000";
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        ctx.arc(-4, -2, 2, 0, Math.PI * 2);
+        ctx.arc(4, -2, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      else if (summon.type === "scythe") {
+        // Scythe blade
+        ctx.fillStyle = summon.color;
+        ctx.beginPath();
+        ctx.moveTo(-5, -summon.size);
+        ctx.quadraticCurveTo(0, -summon.size/2, 5, 0);
+        ctx.lineTo(-5, 0);
+        ctx.closePath();
+        ctx.fill();
+
+        // Handle
+        ctx.strokeStyle = "#8b4513";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, summon.size);
+        ctx.stroke();
+
+        // Glow
+        ctx.strokeStyle = summon.color;
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.arc(0, -summon.size/2, summon.size/2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      else if (summon.type === "spear") {
+        // Spear head
+        ctx.fillStyle = summon.color;
+        ctx.beginPath();
+        ctx.moveTo(0, -summon.size);
+        ctx.lineTo(5, -summon.size + 8);
+        ctx.lineTo(2, -summon.size + 10);
+        ctx.lineTo(0, -summon.size + 5);
+        ctx.lineTo(-2, -summon.size + 10);
+        ctx.lineTo(-5, -summon.size + 8);
+        ctx.closePath();
+        ctx.fill();
+
+        // Shaft
+        ctx.fillStyle = "#8b4513";
+        ctx.fillRect(-2, -summon.size + 10, 4, summon.size);
+
+        // Glow
+        ctx.fillStyle = summon.color;
+        ctx.globalAlpha = 0.3;
+        ctx.beginPath();
+        ctx.arc(0, -summon.size/2, 8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      else if (summon.type === "dagger") {
+        // Dagger blade
+        ctx.fillStyle = summon.color;
+        ctx.beginPath();
+        ctx.moveTo(0, -summon.size);
+        ctx.lineTo(3, -5);
+        ctx.lineTo(-3, -5);
+        ctx.closePath();
+        ctx.fill();
+
+        // Handle
+        ctx.fillStyle = "#4a4a4a";
+        ctx.fillRect(-2, -5, 4, 8);
+
+        // Pommel
+        ctx.fillStyle = summon.color;
+        ctx.beginPath();
+        ctx.arc(0, 4, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Trail effect
+        if (summon.velocity.length() > 10) {
+          ctx.strokeStyle = summon.color;
+          ctx.globalAlpha = 0.3;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          const vel = summon.velocity.clone().normalize().multiplyScalar(-15);
+          ctx.moveTo(0, 0);
+          ctx.lineTo(vel.x, vel.z);
+          ctx.stroke();
+        }
+      }
+      else if (summon.type === "electrobug") {
+        // Bug body
+        ctx.fillStyle = summon.color;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, summon.size, summon.size * 0.7, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Wings
+        ctx.fillStyle = "rgba(0, 255, 255, 0.3)";
+        ctx.beginPath();
+        ctx.ellipse(-8, -2, 6, 3, -0.3, 0, Math.PI * 2);
+        ctx.ellipse(8, -2, 6, 3, 0.3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Antennae
+        ctx.strokeStyle = summon.color;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-3, -summon.size);
+        ctx.lineTo(-5, -summon.size - 5);
+        ctx.moveTo(3, -summon.size);
+        ctx.lineTo(5, -summon.size - 5);
+        ctx.stroke();
+
+        // Electric glow
+        ctx.fillStyle = summon.color;
+        ctx.globalAlpha = 0.2;
+        ctx.beginPath();
+        ctx.arc(0, 0, summon.size * 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    });
+  };
+
+  const drawStatusEffects = (ctx: CanvasRenderingContext2D) => {
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
+    const { statusEffects } = useSummons.getState();
+
+    statusEffects.forEach(effect => {
+      const enemy = enemies.find(e => e.id === effect.enemyId);
+      if (!enemy) return;
+
+      const screenX = centerX + ((enemy.position.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2;
+
+      if (effect.type === "burn") {
+        // Flame particles
+        ctx.fillStyle = "#ff6600";
+        ctx.globalAlpha = 0.8;
+        for (let i = 0; i < 3; i++) {
+          const angle = (Date.now() / 200 + i) % (Math.PI * 2);
+          const x = screenX + Math.cos(angle) * 15;
+          const y = screenY + Math.sin(angle) * 15 - 10;
+          ctx.beginPath();
+          ctx.arc(x, y, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (effect.type === "curse") {
+        // Dark aura
+        ctx.strokeStyle = "#9900ff";
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.6;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, 20 + Math.sin(Date.now() / 200) * 3, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    });
+
+    ctx.globalAlpha = 1;
+  };
+
 
   return (
     <>

@@ -223,7 +223,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
           spawnTimer = 0;
           for (let i = 0; i < currentConfig.count; i++) {
             const angle = Math.random() * Math.PI * 2;
-            const distance = 120 + Math.random() * 5;
+            const distance = 20 + Math.random() * 5;
             const spawnPos = new THREE.Vector3(
               playerPos.x + Math.cos(angle) * distance,
               0,

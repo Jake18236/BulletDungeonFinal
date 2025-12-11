@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { CANVAS_WIDTH, CANVAS_HEIGHT, TILE_SIZE } from "../components/CanvasGame"
 import { usePlayer } from "./usePlayer";
 import * as THREE from "three";
+import { Enemy } from "./useEnemies";
+import { useSummons } from "./useSummons";
 
 export interface Projectile {
   id: string;
@@ -12,16 +14,16 @@ export interface Projectile {
   maxRange: number;
   distanceTraveled: number;
   rotationY: number;
-  
-  
+
   currentLength: number; 
   jitterOffset: THREE.Vector3;
+
   // Visual
   color: string;
   size: number;
   trailColor: string;
-  trailLength: number;            // how many points to keep
-  trailHistory: THREE.Vector3[];  // actual saved positions
+  trailLength: number;
+  trailHistory: THREE.Vector3[];
 
   // Special effects
   homing: boolean;
@@ -34,6 +36,11 @@ export interface Projectile {
 
   // Slot reference
   slotId: number;
+
+  // ADD THESE NEW FIELDS:
+  isSummonProjectile?: boolean;
+  burn?: { damage: number; duration: number };
+  triggerOnHit?: boolean;
 }
 
 interface TrailGhost {
@@ -86,7 +93,27 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
   projectiles: [],
   trailGhosts: [],
 
-  addProjectile: (config) => {
+  addProjectile: (config: {
+    position: THREE.Vector3;
+    direction: THREE.Vector3;
+    slotId: number;
+    trailLength: number;
+    damage: number;
+    speed: number;
+    range: number;
+
+    homing: boolean;
+    piercing: number;
+    bouncing: number;
+
+    explosive?: { radius: number; damage: number };
+    chainLightning?: { chains: number; range: number };
+
+    // ADD THESE:
+    isSummonProjectile?: boolean;
+    burn?: { damage: number; duration: number };
+    triggerOnHit?: boolean;
+  }) => {
     const projectile: Projectile = {
       id: Math.random().toString(36).substring(2, 11),
       position: config.position.clone(),
@@ -96,12 +123,12 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       maxRange: config.range,
       distanceTraveled: 0,
       rotationY: Math.atan2(config.direction.x, config.direction.z),
-      currentLength: 0, // Will be updated every frame
-      jitterOffset: new THREE.Vector3(), // Initial offset
+      currentLength: 0,
+      jitterOffset: new THREE.Vector3(),
       color: getProjectileColor(config),
       size: 10,
       trailColor: getTrailColor(config),
-      trailLength: 100,
+      trailLength: config.trailLength,
       trailHistory: [],
 
       homing: config.homing,
@@ -119,6 +146,11 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
         : undefined,
 
       slotId: config.slotId,
+
+      // ADD THESE:
+      isSummonProjectile: config.isSummonProjectile,
+      burn: config.burn,
+      triggerOnHit: config.triggerOnHit,
     };
 
     set((state) => ({
@@ -224,11 +256,20 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
             onHit(enemy.id, finalDamage, proj.velocity.clone().normalize().multiplyScalar(8 * ps.knockbackMultiplier));
             proj.piercedEnemies.add(enemy.id);
 
+            if (proj.burn) {
+              const { applyStatusEffect } = useSummons.getState();
+              applyStatusEffect(enemy.id, "burn", proj.burn.damage, proj.burn.duration);
+            }
+
             // Check if enemy will die from this hit
             const willDie = enemy.health - finalDamage <= 0;
 
             // REAPER ROUNDS: Don't count killed enemies against pierce limit
             const shouldCountAsPierce = !willDie || !ps.pierceKilledEnemies;
+            if (willDie && proj.isSummonProjectile) {
+              const { handleEnemyKilledBySummon } = useSummons.getState();
+              handleEnemyKilledBySummon();
+            }
 
             // Explosive effect
             if (proj.explosive) {
