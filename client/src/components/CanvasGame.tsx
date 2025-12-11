@@ -282,6 +282,7 @@ export default function CanvasGame() {
       if (phase === "playing") {
         updateReload(delta);
         updateInvincibility(delta);
+        updateFreshClip(delta);
         damagedThisFrameRef.current = false;
 
         if (ammo === 0 && !isReloading) {
@@ -305,18 +306,63 @@ export default function CanvasGame() {
               const centerX = CANVAS_WIDTH / 2;
               const centerY = CANVAS_HEIGHT / 2;
 
-              const stats = getSlotStats(activeSlotId);
-              const ps = usePlayer.getState();
+              // Get combined stats
+              const slotStats = getSlotStats(activeSlotId);
+              const playerStats = usePlayer.getState().getProjectileStats();
 
+              const stats = {
+                damage: slotStats.damage + playerStats.damage - 100,
+                speed: slotStats.speed * (playerStats.speed / 80),
+                range: slotStats.range * (playerStats.range / 50),
+                projectileCount: Math.max(slotStats.projectileCount, playerStats.projectileCount),
+                homing: slotStats.homing || playerStats.homing,
+                piercing: Math.max(slotStats.piercing, playerStats.piercing),
+                bouncing: Math.max(slotStats.bouncing, playerStats.bouncing),
+                explosive: slotStats.explosive || playerStats.explosive,
+                chainLightning: slotStats.chainLightning || playerStats.chainLightning,
+                accuracy: Math.min(slotStats.accuracy, playerStats.accuracy),
+                trailLength: slotStats.trailLength,
+              };
+
+              const ps = usePlayer.getState();
               const baseAngle = Math.atan2(
                 mouseRef.current.y - centerY,
                 mouseRef.current.x - centerX
               );
-              const handOffset = 8;
-              const barrelLength = 28;
-              const totalOffsetPixels = handOffset + barrelLength;
-              const totalOffset = totalOffsetPixels / (TILE_SIZE / 2);
 
+              // Helper function to fire a projectile in a direction
+              const fireProjectileInDirection = (angle: number, damageMultiplier: number = 1) => {
+                const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+                const handOffset = 8;
+                const barrelLength = 28;
+                const totalOffsetPixels = handOffset + barrelLength;
+                const totalOffset = totalOffsetPixels / (TILE_SIZE / 2);
+
+                const barrelPosition = ps.position.clone().add(
+                  new THREE.Vector3(
+                    Math.cos(angle) * totalOffset,
+                    0,
+                    Math.sin(angle) * totalOffset
+                  )
+                );
+
+                addProjectile({
+                  position: barrelPosition,
+                  direction,
+                  slotId: activeSlotId,
+                  damage: stats.damage * damageMultiplier,
+                  speed: stats.speed,
+                  range: stats.range,
+                  trailLength: stats.trailLength,
+                  homing: stats.homing,
+                  piercing: stats.piercing,
+                  bouncing: stats.bouncing,
+                  explosive: stats.explosive,
+                  chainLightning: stats.chainLightning,
+                });
+              };
+
+              // Normal projectiles
               const spreadAngle = stats.projectileCount > 1 ? 0.2 : 0;
               for (let i = 0; i < stats.projectileCount; i++) {
                 let angle = baseAngle;
@@ -328,39 +374,29 @@ export default function CanvasGame() {
                 const inaccuracy = (1 - stats.accuracy);
                 angle += (Math.random() - 0.5) * inaccuracy;
 
-                const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+                fireProjectileInDirection(angle);
+              }
 
-                const barrelPosition = ps.position.clone().add(
-                  new THREE.Vector3(
-                    Math.cos(baseAngle) * totalOffset,
-                    0,
-                    Math.sin(baseAngle) * totalOffset
-                  )
-                );
+              // Split Fire: fire behind
+              if (ps.splitFire) {
+                fireProjectileInDirection(baseAngle + Math.PI);
+              }
 
-                addProjectile({
-                  position: barrelPosition,
-                  direction,
-                  slotId: activeSlotId,
-                  damage: stats.damage,
-                  speed: stats.speed,
-                  range: stats.range,
-                  trailLength: stats.trailLength,
-                  homing: stats.homing,
-                  piercing: stats.piercing,
-                  bouncing: stats.bouncing,
-                  explosive: stats.explosive,
-                  chainLightning: stats.chainLightning,
-                });
+              // Fan Fire: on last ammo, fire 10 bullets in a circle
+              if (ps.fanFire && ammo === 1) {
+                for (let i = 0; i < 10; i++) {
+                  const fanAngle = (i / 10) * Math.PI * 2;
+                  fireProjectileInDirection(fanAngle, 0.15);
+                }
               }
 
               playHit();
-
               fireTimer.current = firerate;
               canFire.current = false;
             }
           }
         }
+
 
         let moveX = 0;
         let moveZ = 0;
@@ -370,7 +406,8 @@ export default function CanvasGame() {
         if (keysPressed.current.has("KeyA") || keysPressed.current.has("ArrowLeft")) moveX -= 1;
         if (keysPressed.current.has("KeyD") || keysPressed.current.has("ArrowRight")) moveX += 1;
 
-        if (moveX !== 0 || moveZ !== 0) {
+          if (moveX !== 0 || moveZ !== 0) { 
+            usePlayer.getState().setMoving(true);
           const len = Math.sqrt(moveX ** 2 + moveZ ** 2);
           const speedModifier = isFiring && !isReloading ? 0.4 : 1;
 
@@ -392,6 +429,8 @@ export default function CanvasGame() {
 
           const bounced = bounceAgainstBounds(newPos, new THREE.Vector3(0,0,0), ROOM_SIZE, 1);
           usePlayer.setState({ position: bounced.position });
+        } else {
+          usePlayer.getState().setMoving(false);
         }
 
         updateProjectiles(
@@ -408,6 +447,35 @@ export default function CanvasGame() {
               playHit();
               if (enemy.health <= 0) {
                 playSuccess();
+                addXPOrb(enemy.position.clone(), 25);
+
+                // ADD THESE SPECIAL EFFECTS:
+                const ps = usePlayer.getState();
+
+                // Kill Clip: add stack
+                ps.addKillClipStack();
+
+                // Splinter Bullets: explode into 3 bullets
+                if (ps.splinterBullets) {
+                  for (let i = 0; i < 3; i++) {
+                    const angle = (i / 3) * Math.PI * 2;
+                    const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+
+                    addProjectile({
+                      position: enemy.position.clone(),
+                      direction,
+                      slotId: activeSlotId,
+                      damage: ps.baseDamage * 0.1,
+                      speed: ps.baseProjectileSpeed * 0.8,
+                      range: ps.baseProjectileRange * 0.5,
+                      trailLength: 50,
+                      homing: false,
+                      piercing: 0,
+                      bouncing: 0,
+                    });
+                  }
+                }
+
                 removeEnemy(enemyId);
               }
             }
@@ -548,6 +616,7 @@ export default function CanvasGame() {
         updateXPOrbs(delta, position);
         updateEnemies(aliveEnemies);
         updateCooldowns(delta);
+        
 
         useEnemies.getState().updateAutoSpawn(delta, player.position);
 
@@ -561,6 +630,7 @@ export default function CanvasGame() {
       drawXPBar(ctx);
       drawReloadIndicator(ctx);
       drawCustomCursor(ctx);
+      drawWeapon(ctx, "revolver")
 
       animationFrameRef.current = requestAnimationFrame(gameLoop);
     };
@@ -1023,7 +1093,7 @@ export default function CanvasGame() {
     const SEGMENT_DIST = 0.02; // minimal distance to add a new trail segment
     const SPEED_TO_LENGTH = 2;
     const JITTER_AMPLITUDE = 1;
-    const HEAD_SCALE = 3;
+    const HEAD_SCALE = 1;
 
     const worldToScreen = (pos: THREE.Vector3) => ({
       x: centerX + (pos.x - playerPos.x) * TILE_SIZE / 2,
@@ -1223,7 +1293,7 @@ export default function CanvasGame() {
       />
       <Darkness />
       
-      
+      <LevelUpScreen />
     </>
   );
 
