@@ -48,6 +48,16 @@ interface PlayerState {
   killClipStacks: number;
   lastMovementTime: number;
 
+  muzzleFlashTimer: number;
+  fanFireActive: boolean;
+  fanFireIndex: number;
+  fanFireTimer: number;
+
+
+  startFanFire: () => void;
+  updateFanFire: (delta: number, fireCallback: () => void) => void;
+  fireMuzzleFlash: () => void;
+  updateMuzzleFlash: (delta: number) => void;
   setFiring: (val: boolean) => void;
   setMoving: (val: boolean) => void;
   fireShot: () => boolean;
@@ -120,6 +130,50 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   killClipStacks: 0,
   lastMovementTime: 0,
 
+  muzzleFlashTimer: 0,
+  fanFireActive: false,
+  fanFireIndex: 0,
+  fanFireTimer: 0,
+
+  startFanFire: () => set({
+    fanFireActive: true,
+    fanFireIndex: 0,
+    fanFireTimer: 0,
+  }),
+  updateFanFire: (delta, fireCallback) => set((state) => {
+    if (!state.fanFireActive) return {};
+
+    const newTimer = state.fanFireTimer + delta;
+    const intervalTime = state.reloadTime / 10; // 10 shots spread across reload time
+
+    if (newTimer >= intervalTime && state.fanFireIndex < 10) {
+      // Fire one bullet
+      fireCallback();
+
+      return {
+        fanFireTimer: 0,
+        fanFireIndex: state.fanFireIndex + 1,
+      };
+    }
+
+    if (state.fanFireIndex >= 10) {
+      return {
+        fanFireActive: false,
+        fanFireIndex: 0,
+        fanFireTimer: 0,
+      };
+    }
+
+    return { fanFireTimer: newTimer };
+  }),
+
+  fireMuzzleFlash: () => set({ muzzleFlashTimer: 0.1 }),
+
+  updateMuzzleFlash: (delta) => set((state) => {
+    if (state.muzzleFlashTimer <= 0) return {};
+    return { muzzleFlashTimer: Math.max(state.muzzleFlashTimer - delta, 0) };
+  }),
+  
   setFiring: (val) => set({ isFiring: val }),
 
   setMoving: (val) => {
@@ -255,11 +309,11 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     ammo: 6,
     maxAmmo: 6,
     isReloading: false,
-    reloadTime: 1.5,
+    reloadTime: 1.1,
     reloadProgress: 0,
     isFiring: false,
     isMoving: false,
-    baseDamage: 100,
+    baseDamage: 13,
     baseProjectileSpeed: 80,
     baseProjectileRange: 50,
     projectileCount: 1,
@@ -283,5 +337,9 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     killClip: false,
     killClipStacks: 0,
     lastMovementTime: 0,
+    muzzleFlashTimer: 0,
+    fanFireActive: false,
+    fanFireIndex: 0,
+    fanFireTimer: 0,
   })
 }));

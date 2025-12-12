@@ -471,364 +471,273 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
   // GHOST FRIEND TREE
   // ============================================================================
 
-  ghost_friend: {
-    id: "ghost_friend",
-    name: "Ghost Friend",
-    description: "Summon a Ghost Friend that orbits and shoots piercing projectiles for 8 damage",
-    icon: "👻",
-    category: "summon",
-    tier: 1,
-    apply: () => {
-      const { addSummon } = useSummons.getState();
-      addSummon("ghost");
-    },
+ghost_friend: {
+  id: "ghost_friend",
+  name: "Ghost Friend",
+  description: "Summon a Ghost Friend that fires piercing projectiles for 8 damage",
+  icon: "👻",
+  category: "summon",
+  tier: 1,
+  apply: () => {
+    const { addSummon } = useSummons.getState();
+    addSummon("ghost");
   },
+},
 
-  best_friends: {
-    id: "best_friends",
-    name: "Best Friends",
-    description: "Fire Rate +10%. Ghost's attack speed scales with your Fire Rate",
-    icon: "💕",
-    category: "summon",
-    tier: 2,
-    requires: ["ghost_friend"],
-    apply: () => {
-      const player = usePlayer.getState();
-      usePlayer.setState({ firerate: player.firerate * 0.9 });
-      useSummons.setState({ ghostFireRateBonus: 0.5 }); // Ghost attacks 50% faster per fire rate upgrade
-    },
+best_friends: {
+  id: "best_friends",
+  name: "Best Friends",
+  description: "Fire Rate +10%. Ghost attacks 50% faster",
+  icon: "💕",
+  category: "summon",
+  tier: 2,
+  requires: ["ghost_friend"],
+  apply: () => {
+    const player = usePlayer.getState();
+    usePlayer.setState({ firerate: player.firerate * 0.9 });
+    useSummons.setState({ ghostFireRate: 0.5 * 0.5 }); // 50% faster = half the time
   },
+},
 
-  ghost_wizard: {
-    id: "ghost_wizard",
-    name: "Ghost Wizard",
-    description: "Ghost's projectiles inflict Burn for 6 damage/s and trigger on-hit effects",
-    icon: "🔮",
-    category: "summon",
-    tier: 3,
-    requires: ["best_friends"],
-    apply: () => {
-      useSummons.setState({
-        ghostBurn: true,
-        ghostTriggerOnHit: true,
-      });
-    },
+ghost_wizard: {
+  id: "ghost_wizard",
+  name: "Ghost Wizard",
+  description: "Ghost projectiles inflict Burn for 6 damage/s",
+  icon: "🔮",
+  category: "summon",
+  tier: 3,
+  requires: ["best_friends"],
+  apply: () => {
+    useSummons.setState({ ghostBurn: true });
   },
+},
 
-  vengeful_ghost: {
-    id: "vengeful_ghost",
-    name: "Vengeful Ghost",
-    description: "Ghost shoots 2 additional projectiles",
-    icon: "😈",
-    category: "summon",
-    tier: 4,
-    requires: ["ghost_wizard"],
-    apply: () => {
-      const state = useSummons.getState();
-      useSummons.setState({ ghostProjectiles: state.ghostProjectiles + 2 });
-    },
+vengeful_ghost: {
+  id: "vengeful_ghost",
+  name: "Vengeful Ghost",
+  description: "Ghost shoots 2 additional projectiles (total 3)",
+  icon: "😈",
+  category: "summon",
+  tier: 4,
+  requires: ["ghost_wizard"],
+  apply: () => {
+    useSummons.setState({ ghostProjectiles: 3 });
   },
+},
 
-  // ============================================================================
-  // MAGIC SCYTHE TREE
-  // ============================================================================
-
-  magic_scythe: {
-    id: "magic_scythe",
-    name: "Magic Scythe",
-    description: "Summon a Magic Scythe that orbits and deals 40 damage",
-    icon: "🗡️",
-    category: "summon",
-    tier: 1,
-    apply: () => {
-      const { addSummon } = useSummons.getState();
-      addSummon("scythe");
-    },
+// Magic Scythe Tree:
+magic_scythe: {
+  id: "magic_scythe",
+  name: "Magic Scythe",
+  description: "Summon a Magic Scythe that orbits and deals 40 damage on contact",
+  icon: "🗡️",
+  category: "summon",
+  tier: 1,
+  apply: () => {
+    const { addSummon } = useSummons.getState();
+    addSummon("scythe");
   },
+},
 
-  shadowblade: {
-    id: "shadowblade",
-    name: "Shadowblade",
-    description: "Scythe inflicts Curse: enemies take 200% bullet damage after 1s. Curse +15%",
-    icon: "⚫",
-    category: "summon",
-    tier: 2,
-    requires: ["magic_scythe"],
-    apply: () => {
-      useSummons.setState({
-        scytheCurse: true,
-        curseDamageBonus: 0.15,
-      });
-    },
+shadowblade: {
+  id: "shadowblade",
+  name: "Shadowblade",
+  description: "Scythe inflicts Curse: 200% bullet damage after 1s. Curse +15%",
+  icon: "⚫",
+  category: "summon",
+  tier: 2,
+  requires: ["magic_scythe"],
+  apply: () => {
+    useSummons.setState({
+      scytheCurse: true,
+      curseDamageBonus: 0.15,
+    });
   },
+},
 
-  windcutter: {
-    id: "windcutter",
-    name: "Windcutter",
-    description: "Move Speed +10%. Scythe damage scales with Move Speed",
-    icon: "💨",
-    category: "summon",
-    tier: 3,
-    requires: ["shadowblade"],
-    apply: () => {
-      const player = usePlayer.getState();
-      usePlayer.setState({ speed: player.speed * 1.1 });
-      useSummons.setState({ scytheSpeedBonus: true });
-    },
+windcutter: {
+  id: "windcutter",
+  name: "Windcutter",
+  description: "Move Speed +10%. Scythe damage scales with Move Speed",
+  icon: "💨",
+  category: "summon",
+  tier: 3,
+  requires: ["shadowblade"],
+  apply: () => {
+    const player = usePlayer.getState();
+    usePlayer.setState({ speed: player.speed * 1.1 });
+    useSummons.setState({ scytheSpeedBonus: true });
   },
+},
 
-  scythe_mastery: {
-    id: "scythe_mastery",
-    name: "Scythe Mastery",
-    description: "Bullet Damage +10%. Scythe damage scales with Bullet Damage",
-    icon: "⚔️",
-    category: "summon",
-    tier: 4,
-    requires: ["windcutter"],
-    apply: () => {
-      const player = usePlayer.getState();
-      usePlayer.setState({ baseDamage: player.baseDamage * 1.1 });
-      useSummons.setState({ scytheDamageBonus: true });
-    },
+scythe_mastery: {
+  id: "scythe_mastery",
+  name: "Scythe Mastery",
+  description: "Bullet Damage +10%. Scythe damage scales with Bullet Damage",
+  icon: "⚔️",
+  category: "summon",
+  tier: 4,
+  requires: ["windcutter"],
+  apply: () => {
+    const player = usePlayer.getState();
+    usePlayer.setState({ baseDamage: player.baseDamage * 1.1 });
+    useSummons.setState({ scytheDamageBonus: true });
   },
+},
 
-  // ============================================================================
-  // MAGIC SPEAR TREE
-  // ============================================================================
-
-  magic_spear: {
-    id: "magic_spear",
-    name: "Magic Spear",
-    description: "Summon 2 Magic Spears that orbit and deal 20 damage",
-    icon: "🔱",
-    category: "summon",
-    tier: 1,
-    apply: () => {
-      const { addSummon } = useSummons.getState();
-      addSummon("spear");
-    },
+// Magic Spear Tree:
+magic_spear: {
+  id: "magic_spear",
+  name: "Magic Spear",
+  description: "Summon 2 Magic Spears that orbit and deal 20 damage",
+  icon: "🔱",
+  category: "summon",
+  tier: 1,
+  apply: () => {
+    const { addSummon } = useSummons.getState();
+    addSummon("spear");
   },
+},
 
-  holy_spear: {
-    id: "holy_spear",
-    name: "Holy Spear",
-    description: "Spear deals +10 damage for every Max HP you have",
-    icon: "✨",
-    category: "summon",
-    tier: 2,
-    requires: ["magic_spear"],
-    apply: () => {
-      useSummons.setState({ spearHolyBonus: true });
-    },
+holy_spear: {
+  id: "holy_spear",
+  name: "Holy Spear",
+  description: "Spear deals +10 damage for every Max HP you have",
+  icon: "✨",
+  category: "summon",
+  tier: 2,
+  requires: ["magic_spear"],
+  apply: () => {
+    useSummons.setState({ spearHolyBonus: true });
   },
+},
 
-  soul_drain: {
-    id: "soul_drain",
-    name: "Soul Drain",
-    description: "Every 500th enemy killed by a summon drops a Heart",
-    icon: "💜",
-    category: "summon",
-    tier: 3,
-    requires: ["holy_spear"],
-    apply: () => {
-      useSummons.setState({ soulDrain: true });
-    },
+soul_drain: {
+  id: "soul_drain",
+  name: "Soul Drain",
+  description: "Every 500th enemy killed by a summon drops a Heart",
+  icon: "💜",
+  category: "summon",
+  tier: 3,
+  requires: ["holy_spear"],
+  apply: () => {
+    useSummons.setState({ soulDrain: true });
   },
+},
 
-  soul_knight: {
-    id: "soul_knight",
-    name: "Soul Knight",
-    description: "Spear gains +15 damage for every Soul Heart collected",
-    icon: "🛡️",
-    category: "summon",
-    tier: 4,
-    requires: ["soul_drain"],
-    apply: () => {
-      useSummons.setState({ soulKnight: true });
-    },
+soul_knight: {
+  id: "soul_knight",
+  name: "Soul Knight",
+  description: "Spear gains +15 damage for every Soul Heart",
+  icon: "🛡️",
+  category: "summon",
+  tier: 4,
+  requires: ["soul_drain"],
+  apply: () => {
+    useSummons.setState({ soulKnight: true });
   },
+},
 
-  // ============================================================================
-  // TRAINER TREE
-  // ============================================================================
-
-  trainer: {
-    id: "trainer",
-    name: "Trainer",
-    description: "Summon Damage +30%",
-    icon: "🎓",
-    category: "summon",
-    tier: 1,
-    apply: () => {
-      const state = useSummons.getState();
-      useSummons.setState({ summonDamageMultiplier: state.summonDamageMultiplier * 1.3 });
-    },
+// Electro Bug Tree:
+electro_bug: {
+  id: "electro_bug",
+  name: "Electro Bug",
+  description: "Summon an Electro Bug that strikes 2 nearby enemies with Lightning",
+  icon: "🐛",
+  category: "summon",
+  tier: 1,
+  apply: () => {
+    const { addSummon } = useSummons.getState();
+    addSummon("electrobug");
   },
-
-  pulsing_summons: {
-    id: "pulsing_summons",
-    name: "Pulsing Summons",
-    description: "Summon Damage +20%. Summons deal 50 damage to nearby enemies every 2s",
-    icon: "💥",
-    category: "summon",
-    tier: 2,
-    requires: ["trainer"],
-    apply: () => {
-      const state = useSummons.getState();
-      useSummons.setState({
-        summonDamageMultiplier: state.summonDamageMultiplier * 1.2,
-        pulsingSummons: true,
-        pulseTimer: 2.0,
-      });
-    },
+},
+energized: {
+  id: "energized",
+  name: "Energized",
+  description: "Lightning strikes have 20% chance to refill 3 ammo",
+  icon: "⚡",
+  category: "summon",
+  tier: 2,
+  requires: ["electro_bug"],
+  apply: () => {
+    useSummons.setState({ energized: true });
   },
+},
 
-  feed_the_beasts: {
-    id: "feed_the_beasts",
-    name: "Feed the Beasts",
-    description: "Summon Damage +1% for every 15 enemies killed",
-    icon: "🍖",
-    category: "summon",
-    tier: 3,
-    requires: ["pulsing_summons"],
-    apply: () => {
-      useSummons.setState({ feedTheBeasts: true });
-    },
+electro_mastery: {
+  id: "electro_mastery",
+  name: "Electro Mastery",
+  description: "All Lightning damage +12",
+  icon: "🌩️",
+  category: "summon",
+  tier: 3,
+  requires: ["energized"],
+  apply: () => {
+    useSummons.setState({ electroMastery: true });
   },
+},
 
-  bloodsuckers: {
-    id: "bloodsuckers",
-    name: "Bloodsuckers",
-    description: "Summon Damage +10%. Every 500th summon kill heals 1 heart",
-    icon: "🩸",
-    category: "summon",
-    tier: 4,
-    requires: ["feed_the_beasts"],
-    apply: () => {
-      const state = useSummons.getState();
-      useSummons.setState({
-        summonDamageMultiplier: state.summonDamageMultiplier * 1.1,
-        bloodsuckers: true,
-      });
-    },
+// Trainer Tree (general summon buffs):
+trainer: {
+  id: "trainer",
+  name: "Trainer",
+  description: "Summon Damage +30%",
+  icon: "🎓",
+  category: "summon",
+  tier: 1,
+  apply: () => {
+    const state = useSummons.getState();
+    useSummons.setState({ summonDamageMultiplier: state.summonDamageMultiplier * 1.3 });
   },
+},
 
-  // ============================================================================
-  // MAGIC DAGGER TREE
-  // ============================================================================
-
-  magic_dagger: {
-    id: "magic_dagger",
-    name: "Magic Dagger",
-    description: "Summon a spinning Dagger that homes in on enemies for 30 damage",
-    icon: "🗡️",
-    category: "summon",
-    tier: 1,
-    apply: () => {
-      const { addSummon } = useSummons.getState();
-      addSummon("dagger");
-    },
+pulsing_summons: {
+  id: "pulsing_summons",
+  name: "Pulsing Summons",
+  description: "Summon Damage +20%. Summons pulse 50 damage every 2s",
+  icon: "💥",
+  category: "summon",
+  tier: 2,
+  requires: ["trainer"],
+  apply: () => {
+    const state = useSummons.getState();
+    useSummons.setState({
+      summonDamageMultiplier: state.summonDamageMultiplier * 1.2,
+      pulsingSummons: true,
+      pulseTimer: 2.0,
+    });
   },
+},
 
-  sharpen: {
-    id: "sharpen",
-    name: "Sharpen",
-    description: "Summon Damage +40%",
-    icon: "🔪",
-    category: "summon",
-    tier: 2,
-    requires: ["magic_dagger"],
-    apply: () => {
-      const state = useSummons.getState();
-      useSummons.setState({ summonDamageMultiplier: state.summonDamageMultiplier * 1.4 });
-    },
+feed_the_beasts: {
+  id: "feed_the_beasts",
+  name: "Feed the Beasts",
+  description: "Summon Damage +1% for every 15 enemies killed",
+  icon: "🍖",
+  category: "summon",
+  tier: 3,
+  requires: ["pulsing_summons"],
+  apply: () => {
+    useSummons.setState({ feedTheBeasts: true });
   },
+},
 
-  speedburn: {
-    id: "speedburn",
-    name: "Speedburn",
-    description: "Bullet Speed +30%. Dagger burns enemies for 12 damage over 4s",
-    icon: "🔥",
-    category: "summon",
-    tier: 3,
-    requires: ["sharpen"],
-    apply: () => {
-      const player = usePlayer.getState();
-      usePlayer.setState({ baseProjectileSpeed: player.baseProjectileSpeed * 1.3 });
-      useSummons.setState({ daggerBurn: true });
-    },
+bloodsuckers: {
+  id: "bloodsuckers",
+  name: "Bloodsuckers",
+  description: "Summon Damage +10%. Every 500th summon kill heals 1 heart",
+  icon: "🩸",
+  category: "summon",
+  tier: 4,
+  requires: ["feed_the_beasts"],
+  apply: () => {
+    const state = useSummons.getState();
+    useSummons.setState({
+      summonDamageMultiplier: state.summonDamageMultiplier * 1.1,
+      bloodsuckers: true,
+    });
   },
-
-  dual_wield: {
-    id: "dual_wield",
-    name: "Dual Wield",
-    description: "Summons a second dagger",
-    icon: "⚔️",
-    category: "summon",
-    tier: 4,
-    requires: ["speedburn"],
-    apply: () => {
-      const { addSummon } = useSummons.getState();
-      addSummon("dagger");
-      useSummons.setState({ daggerCount: 2 });
-    },
-  },
-
-  // ============================================================================
-  // ELECTROMANCY TREE
-  // ============================================================================
-
-  electro_mage: {
-    id: "electro_mage",
-    name: "Electro Mage",
-    description: "Every 2nd shot calls Lightning to strike a nearby enemy for 22 damage",
-    icon: "⚡",
-    category: "summon",
-    tier: 1,
-    apply: () => {
-      useSummons.setState({ electroMage: true });
-    },
-  },
-
-  electro_bug: {
-    id: "electro_bug",
-    name: "Electro Bug",
-    description: "Summon an Electro Bug that strikes 2 nearby enemies with Lightning",
-    icon: "🐛",
-    category: "summon",
-    tier: 2,
-    requires: ["electro_mage"],
-    apply: () => {
-      const { addSummon } = useSummons.getState();
-      addSummon("electrobug");
-    },
-  },
-
-  energized: {
-    id: "energized",
-    name: "Energized",
-    description: "Lightning strikes have 20% chance to refill 3 ammo",
-    icon: "⚡",
-    category: "summon",
-    tier: 3,
-    requires: ["electro_bug"],
-    apply: () => {
-      useSummons.setState({ energized: true });
-    },
-  },
-
-  electro_mastery: {
-    id: "electro_mastery",
-    name: "Electro Mastery",
-    description: "All Lightning damage +12. Area of effect +75%",
-    icon: "🌩️",
-    category: "summon",
-    tier: 4,
-    requires: ["energized"],
-    apply: () => {
-      useSummons.setState({ electroMastery: true });
-    },
-  },
+},
 };
 
 const generateRandomUpgrades = (takenUpgrades: Set<string>): Upgrade[] => {

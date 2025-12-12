@@ -52,8 +52,8 @@ export default function Darkness() {
         x: centerX,
         y: centerY,
         innerRadius: 200,  // Fully visible
-        middleRadius: 300, // Dimmed
-        outerRadius: 400,  // Dark edge
+        middleRadius: 600, // Dimmed
+        outerRadius: 800,  // Dark edge
         intensity: 1,
       });
 

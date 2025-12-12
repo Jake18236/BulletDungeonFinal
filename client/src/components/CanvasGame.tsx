@@ -13,7 +13,7 @@ import { useSpellSlots } from "../lib/stores/useSpellSlots";
 import { useProjectiles } from "../lib/stores/useProjectiles";
 import { useXP } from "../lib/stores/useXP";
 import { useSummons } from "../lib/stores/useSummons";
-
+import { useVisualEffects } from "../lib/stores/useVisualEffects";
 import swordSrc from "/images/sword.png";
 import GameUI from "./GameUI"  
 import { any } from "zod";
@@ -152,7 +152,7 @@ export default function CanvasGame() {
   const lastTimeRef = useRef<number>(0);
   const damagedThisFrameRef = useRef<boolean>(false);
   const terrainRef = useRef<TerrainObstacle[]>([]);
-
+  const { particles, damageNumbers, impactEffects, addImpact, addExplosion, addDamageNumber, updateEffects } = useVisualEffects();
   const { phase, end } = useGame();
   const {
     position,
@@ -174,6 +174,11 @@ export default function CanvasGame() {
     updateReload,
     loseHeart,
     updateInvincibility,
+    muzzleFlashTimer,
+      updateMuzzleFlash,
+      updateFanFire,
+      startFanFire,
+      fireMuzzleFlash,
   } = usePlayer();
   const { slots, activeSlotId, getSlotStats, startCooldown, updateCooldowns } = useSpellSlots();
   const { projectiles, addProjectile, updateProjectiles } = useProjectiles();
@@ -284,9 +289,35 @@ export default function CanvasGame() {
       if (phase === "playing") {
         updateReload(delta);
         updateInvincibility(delta);
+        
+        updateMuzzleFlash(delta);
 
+        updateSummons(delta, position, enemies, addProjectile, playHit);
 
-        updateSummons(delta, position, enemies);
+        updateFanFire(delta, () => {
+          const fanIndex = usePlayer.getState().fanFireIndex;
+          const angle = (fanIndex / 10) * Math.PI * 2;
+          const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+
+          const ps = usePlayer.getState();
+          const stats = getSlotStats(activeSlotId);
+
+          addProjectile({
+            position: ps.position.clone(),
+            direction,
+            slotId: activeSlotId,
+            damage: stats.damage * 0.15,
+            speed: stats.speed,
+            range: stats.range,
+            trailLength: stats.trailLength,
+            homing: false,
+            piercing: 0,
+            bouncing: 0,
+          });
+
+          playHit();
+        });
+        
         updateStatusEffects(delta, enemies, (enemyId, damage) => {
           const enemy = enemies.find(e => e.id === enemyId);
           if (enemy) {
@@ -296,6 +327,8 @@ export default function CanvasGame() {
             }
           }
         });
+
+        updateEffects(delta);
         
         damagedThisFrameRef.current = false;
 
@@ -398,11 +431,9 @@ export default function CanvasGame() {
 
               // Fan Fire: on last ammo, fire 10 bullets in a circle
               if (ps.fanFire && ammo === 1) {
-                for (let i = 0; i < 10; i++) {
-                  const fanAngle = (i / 10) * Math.PI * 2;
-                  fireProjectileInDirection(fanAngle, 0.15);
-                }
+                ps.startFanFire();
               }
+              ps.fireMuzzleFlash();
 
               playHit();
 
@@ -489,39 +520,26 @@ export default function CanvasGame() {
             const enemy = enemies.find((e) => e.id === enemyId);
             if (enemy) {
               enemy.health -= damage;
+
+              // ADD VISUAL EFFECTS:
+              const { addImpact, addDamageNumber } = useVisualEffects.getState();
+
+              // Impact effect at hit location
+              addImpact(enemy.position.clone(), "#ffffff");
+
+              // Damage number
+              addDamageNumber(enemy.position.x, enemy.position.z, damage);
+
               if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
               enemy.velocity.add(knockback);
               playHit();
+
               if (enemy.health <= 0) {
                 playSuccess();
-                addXPOrb(enemy.position.clone(), 25);
 
-                // ADD THESE SPECIAL EFFECTS:
-                const ps = usePlayer.getState();
-
-                // Kill Clip: add stack
-                ps.addKillClipStack();
-
-                // Splinter Bullets: explode into 3 bullets
-                if (ps.splinterBullets) {
-                  for (let i = 0; i < 3; i++) {
-                    const angle = (i / 3) * Math.PI * 2;
-                    const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
-
-                    addProjectile({
-                      position: enemy.position.clone(),
-                      direction,
-                      slotId: activeSlotId,
-                      damage: ps.baseDamage * 0.1,
-                      speed: ps.baseProjectileSpeed * 0.8,
-                      range: ps.baseProjectileRange * 0.5,
-                      trailLength: 50,
-                      homing: false,
-                      piercing: 0,
-                      bouncing: 0,
-                    });
-                  }
-                }
+                // ADD EXPLOSION EFFECT:
+                const { addExplosion } = useVisualEffects.getState();
+                addExplosion(enemy.position.clone(), 25); // 25 particles
 
                 removeEnemy(enemyId);
               }
@@ -557,10 +575,7 @@ export default function CanvasGame() {
             }
           } 
 
-          if (enemy.attackCooldown > 0) {
-            enemy.attackCooldown -= delta;
-            if (enemy.attackCooldown <= 0) enemy.canAttack = true;
-          }
+          
 
           if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
 
@@ -617,7 +632,7 @@ export default function CanvasGame() {
           }
         }
 
-        const PLAYER_RADIUS = 1.1;
+        const PLAYER_RADIUS = 0.8;
         const ENEMY_RADIUS = 0.7;
         const DAMPING = 1.5;
 
@@ -632,6 +647,11 @@ export default function CanvasGame() {
             if (enemy.canAttack && invincibilityTimer <= 0 && !damagedThisFrameRef.current) {
               loseHeart();
               playHit();
+
+              // ADD IMPACT ON PLAYER:
+              const { addImpact } = useVisualEffects.getState();
+              addImpact(position.clone(), "#ff4444");
+
               enemy.canAttack = false;
               enemy.attackCooldown = enemy.maxAttackCooldown;
               damagedThisFrameRef.current = true;
@@ -672,15 +692,18 @@ export default function CanvasGame() {
 
       enemies.forEach(enemy => drawEnemy(ctx, enemy));
       drawPlayer(ctx);
-      drawSummons(ctx); 
-      drawStatusEffects(ctx); 
-      drawProjectilesAndTrails(ctx, phase !== "playing", position);
+      drawSummons(ctx);
+      drawStatusEffects(ctx);
+      drawImpactEffects(ctx); // ADD - behind projectiles
+      drawProjectilesAndTrails(ctx, phase !== "playing", position); // Enhanced version
+      drawParticles(ctx); // ADD - in front of everything
       drawXPOrbs(ctx);
+      drawDamageNumbers(ctx); // ADD - on top
       drawXPBar(ctx);
       drawReloadIndicator(ctx);
       drawCustomCursor(ctx);
-      drawWeapon(ctx, "revolver")
-
+      drawWeapon(ctx, "revolver");
+      
       animationFrameRef.current = requestAnimationFrame(gameLoop);
     };
 
@@ -922,29 +945,70 @@ export default function CanvasGame() {
     const centerY = CANVAS_HEIGHT / 2;
 
     if (isReloading) {
-      const radius = 30;
-      const barHeight = 6;
-      const barY = centerY - 50;
+      const radius = 40;
+      const barHeight = 8;
+      const barY = centerY - 60;
 
       // Background bar
-      ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+      ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
       ctx.fillRect(centerX - radius, barY, radius * 2, barHeight);
 
-      // Progress bar
-      const progress = reloadProgress / 2.0; // 2 second reload time
-      ctx.fillStyle = "#ffaa00";
-      ctx.fillRect(centerX - radius, barY, radius * 2 * progress, barHeight);
+      // Progress bar with color gradient
+      const progress = reloadProgress / reloadTime;
+      const barWidth = radius * 2 * progress;
 
-      // Border
-      ctx.strokeStyle = "#ffffff";
+      const gradient = ctx.createLinearGradient(
+        centerX - radius, barY,
+        centerX + radius, barY
+      );
+      gradient.addColorStop(0, "#ff8800");
+      gradient.addColorStop(0.5, "#ffaa00");
+      gradient.addColorStop(1, "#ffcc00");
+
+      ctx.fillStyle = gradient;
+      ctx.fillRect(centerX - radius, barY, barWidth, barHeight);
+
+      // Border with glow
+      ctx.strokeStyle = "#ffaa00";
       ctx.lineWidth = 2;
       ctx.strokeRect(centerX - radius, barY, radius * 2, barHeight);
 
-      // Text
+      // Outer glow
+      ctx.strokeStyle = "rgba(255, 170, 0, 0.3)";
+      ctx.lineWidth = 4;
+      ctx.strokeRect(centerX - radius - 1, barY - 1, radius * 2 + 2, barHeight + 2);
+
+      // Text with animation
+      const textScale = 1 + Math.sin(progress * Math.PI * 4) * 0.1;
+      ctx.save();
+      ctx.translate(centerX, barY - 12);
+      ctx.scale(textScale, textScale);
+
       ctx.fillStyle = "#ffffff";
-      ctx.font = "14px monospace";
+      ctx.font = "bold 16px monospace";
       ctx.textAlign = "center";
-      ctx.fillText("RELOADING...", centerX, barY - 8);
+      ctx.fillText("RELOADING", 0, 0);
+
+      ctx.restore();
+
+      // Spinning chamber indicator
+      const spinAngle = progress * Math.PI * 4;
+      ctx.save();
+      ctx.translate(centerX, barY + barHeight + 15);
+      ctx.rotate(spinAngle);
+
+      for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2;
+        const x = Math.cos(angle) * 8;
+        const y = Math.sin(angle) * 8;
+
+        ctx.fillStyle = i < Math.floor(progress * 6) ? "#00ff00" : "#333333";
+        ctx.beginPath();
+        ctx.arc(x, y, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
     }
   };
 
@@ -988,52 +1052,120 @@ export default function CanvasGame() {
     const mouseAngle = Math.atan2(dy, dx);
 
     ctx.save();
-    
+    ctx.translate(centerX, centerY);
 
     if (type === "revolver") {
-      ctx.rotate(mouseAngle);
+      // -----------------------------
+      // Cowboy-style spin reload
+      // -----------------------------
+      let gunRotation = mouseAngle;
+      let cylinderRotation = 0;
 
-      // Offset to position gun in hand (8 pixels from player center)
-      const handOffset = 8;
-      ctx.translate(handOffset, 0);
-
-      // Determine if gun should flip (when pointing left)
-      const flipGun = Math.abs(mouseAngle) > Math.PI / 2;
-
-      if (flipGun) {
-        ctx.scale(1, -1); // Flip vertically when pointing left
+      if (isReloading) {
+        const p = reloadProgress / reloadTime; // 0 → 1 over 1.1s
+        const spins = 2; // number of full spins during reload
+        gunRotation += spins * 2 * Math.PI * p; // spin the gun in place
+        cylinderRotation = spins * 2 * Math.PI * p * 1.2; // cylinder spins slightly faster
       }
 
-      // Barrel (long rectangle)
+      // Apply rotation for the gun
+      ctx.rotate(gunRotation);
+
+      // Optional hand offset
+      ctx.translate(8, 0);
+
+      // Flip gun if aiming backward
+      const flipGun = Math.abs(mouseAngle) > Math.PI / 2;
+      if (flipGun) ctx.scale(1, -1);
+
+      // ===========================
+      // MUZZLE FLASH
+      // ===========================
+      if (muzzleFlashTimer > 0) {
+        const flashAlpha = muzzleFlashTimer / 0.1;
+        const flashSize = 15 + (1 - flashAlpha) * 10;
+
+        ctx.save();
+        ctx.globalAlpha = flashAlpha * 0.8;
+
+        const gradient = ctx.createRadialGradient(28, 0, 0, 28, 0, flashSize);
+        gradient.addColorStop(0, "#ffffff");
+        gradient.addColorStop(0.3, "#ffff88");
+        gradient.addColorStop(0.6, "#ff8800");
+        gradient.addColorStop(1, "rgba(255, 136, 0, 0)");
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(28, 0, flashSize, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Flash rays
+        for (let i = 0; i < 6; i++) {
+          const rayAngle = (i / 6) * Math.PI * 2 + Date.now() * 0.01;
+          const rayLength = flashSize * 1.5;
+
+          ctx.strokeStyle = `rgba(255, 255, 136, ${flashAlpha * 0.6})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(28, 0);
+          ctx.lineTo(
+            28 + Math.cos(rayAngle) * rayLength,
+            Math.sin(rayAngle) * rayLength
+          );
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      }
+
+      // ===========================
+      // BARREL
+      // ===========================
       ctx.fillStyle = "#2a2a2a";
       ctx.fillRect(0, -3, 28, 6);
 
-      // Barrel top highlight
       ctx.fillStyle = "#404040";
       ctx.fillRect(0, -3, 28, 2);
 
-      // Cylinder (revolver chamber)
+      // ===========================
+      // CYLINDER
+      // ===========================
+      ctx.save();
+      ctx.translate(8, 0);
+      ctx.rotate(cylinderRotation);
+
       ctx.fillStyle = "#3a3a3a";
       ctx.beginPath();
-      ctx.arc(8, 0, 5, 0, Math.PI * 2);
+      ctx.arc(0, 0, 5, 0, Math.PI * 2);
       ctx.fill();
 
-      // Cylinder detail (chamber divisions)
       ctx.strokeStyle = "#2a2a2a";
       ctx.lineWidth = 1;
       for (let i = 0; i < 6; i++) {
         const angle = (i / 6) * Math.PI * 2;
         ctx.beginPath();
-        ctx.moveTo(8, 0);
-        ctx.lineTo(8 + Math.cos(angle) * 5, Math.sin(angle) * 5);
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(angle) * 5, Math.sin(angle) * 5);
         ctx.stroke();
-      }
 
-      // Frame (connects barrel to grip)
+        if (i < ammo) {
+          ctx.fillStyle = "#aa8844";
+          ctx.beginPath();
+          ctx.arc(Math.cos(angle) * 3, Math.sin(angle) * 3, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+
+      // ===========================
+      // FRAME
+      // ===========================
       ctx.fillStyle = "#333333";
       ctx.fillRect(6, -4, 8, 8);
 
-      // Grip (angled down and back)
+      // ===========================
+      // GRIP
+      // ===========================
       ctx.fillStyle = "#4a3020";
       ctx.beginPath();
       ctx.moveTo(6, 1);
@@ -1045,7 +1177,6 @@ export default function CanvasGame() {
       ctx.closePath();
       ctx.fill();
 
-      // Grip texture (wood grain lines)
       ctx.strokeStyle = "#3a2010";
       ctx.lineWidth = 1;
       for (let i = 0; i < 4; i++) {
@@ -1055,199 +1186,273 @@ export default function CanvasGame() {
         ctx.stroke();
       }
 
-      // Trigger guard
+      // ===========================
+      // TRIGGER GUARD & TRIGGER
+      // ===========================
       ctx.strokeStyle = "#2a2a2a";
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(8, 4, 4, Math.PI * 0.2, Math.PI * 0.8);
       ctx.stroke();
 
-      // Trigger
       ctx.fillStyle = "#333333";
       ctx.beginPath();
       ctx.arc(8, 5, 1.5, 0, Math.PI * 2);
       ctx.fill();
 
-      // Hammer (at back of gun)
+      // ===========================
+      // HAMMER
+      // ===========================
+      const hammerAngle = isFiring ? -0.3 : 0;
+      ctx.save();
+      ctx.translate(2, -4);
+      ctx.rotate(hammerAngle);
+
       ctx.fillStyle = "#2a2a2a";
       ctx.beginPath();
-      ctx.moveTo(2, -4);
-      ctx.lineTo(4, -6);
-      ctx.lineTo(6, -6);
-      ctx.lineTo(6, -4);
+      ctx.moveTo(0, 0);
+      ctx.lineTo(2, -2);
+      ctx.lineTo(4, -2);
+      ctx.lineTo(4, 0);
       ctx.closePath();
       ctx.fill();
+      ctx.restore();
 
-      // Muzzle (front of barrel)
+      // ===========================
+      // MUZZLE
+      // ===========================
       ctx.fillStyle = "#1a1a1a";
       ctx.beginPath();
       ctx.arc(28, 0, 3, 0, Math.PI * 2);
       ctx.fill();
 
-      // Muzzle opening
       ctx.fillStyle = "#000000";
       ctx.beginPath();
       ctx.arc(28, 0, 2, 0, Math.PI * 2);
       ctx.fill();
 
-      // Front sight
+      // ===========================
+      // FRONT SIGHT
+      // ===========================
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(26, -5, 2, 3);
-      ctx.translate(centerX, centerY);
-    } else if (type === "sword") {
-      ctx.rotate(mouseAngle);
-
-      // Blade
-      ctx.fillStyle = "#cccccc";
-      ctx.beginPath();
-      ctx.moveTo(0, -3);
-      ctx.lineTo(40, 0);
-      ctx.lineTo(0, 3);
-      ctx.closePath();
-      ctx.fill();
-
-      // Blade edge highlight
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(0, -2);
-      ctx.lineTo(40, 0);
-      ctx.stroke();
-
-      // Hilt/handle
-      ctx.fillStyle = "#8b4513";
-      ctx.fillRect(-8, -4, 8, 8);
-
-      // Handle detail
-      ctx.fillStyle = "#a0522d";
-      ctx.fillRect(-7, -3, 1, 6);
-      ctx.fillRect(-5, -3, 1, 6);
-      ctx.fillRect(-3, -3, 1, 6);
     }
 
     ctx.restore();
   };
 
+  
   const drawProjectilesAndTrails = (
     ctx: CanvasRenderingContext2D,
     isPaused: boolean,
     playerPos: THREE.Vector3
   ) => {
-    const { projectiles, trailGhosts } = useProjectiles.getState();
+    const { projectiles } = useProjectiles.getState();
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
-
-    const MIN_TAIL_LEN = 5;
-    const MAX_TAIL_LEN = 120;
-    const SEGMENT_DIST = 0.02; // minimal distance to add a new trail segment
-    const SPEED_TO_LENGTH = 2;
-    const JITTER_AMPLITUDE = 1;
-    const HEAD_SCALE = 1;
 
     const worldToScreen = (pos: THREE.Vector3) => ({
       x: centerX + (pos.x - playerPos.x) * TILE_SIZE / 2,
       y: centerY + (pos.z - playerPos.z) * TILE_SIZE / 2,
     });
 
-    const seedFromId = (id: string) => {
-      let h = 2166136261 >>> 0;
-      for (let i = 0; i < id.length; i++) {
-        h ^= id.charCodeAt(i);
-        h = Math.imul(h, 16777619) >>> 0;
-      }
-      return h / 0xffffffff;
-    };
-
     ctx.save();
-    ctx.lineJoin = "round";
     ctx.lineCap = "round";
+    ctx.lineJoin = "round";
 
-    const now = performance.now() / 1000;
+    // Draw trails FIRST (behind projectiles)
+    projectiles.forEach(proj => {
+      if (!proj.trailHistory || proj.trailHistory.length < 2) return;
 
-    const updateTrail = (p: Projectile) => {
-      if (!p.trailHistory) p.trailHistory = [];
+      const headScreen = worldToScreen(proj.position);
 
-      const last = p.trailHistory[0] ?? p.position.clone();
-      const dist = last.distanceTo(p.position);
+      // Create gradient for trail (20MTD style)
+      const trailLength = Math.min(proj.trailHistory.length, 30);
 
-      if (dist >= SEGMENT_DIST) {
-        const steps = Math.floor(dist / SEGMENT_DIST);
-        for (let i = 1; i <= steps; i++) {
-          const interp = last.clone().lerp(p.position, i / steps);
-          p.trailHistory.unshift(interp);
-        }
+      for (let i = 0; i < trailLength - 1; i++) {
+        const point1 = proj.trailHistory[i];
+        const point2 = proj.trailHistory[i + 1];
+
+        if (!point1 || !point2) continue;
+
+        const screen1 = worldToScreen(point1);
+        const screen2 = worldToScreen(point2);
+
+        // Calculate alpha based on position in trail
+        const alpha = 1 - (i / trailLength);
+
+        // Width tapers from head to tail
+        const width = (8 * alpha) + 1;
+
+        // Draw segment with glow
+        ctx.strokeStyle = proj.color;
+        ctx.lineWidth = width;
+        ctx.globalAlpha = alpha * 0.8;
+
+        ctx.beginPath();
+        ctx.moveTo(screen1.x, screen1.y);
+        ctx.lineTo(screen2.x, screen2.y);
+        ctx.stroke();
+
+        // Outer glow
+        ctx.strokeStyle = proj.color;
+        ctx.lineWidth = width + 4;
+        ctx.globalAlpha = alpha * 0.2;
+        ctx.stroke();
       }
-
-      if (p.trailHistory.length > p.trailLength) {
-        p.trailHistory.length = p.trailLength;
-      }
-    };
-
-    const drawTrail = (trail: THREE.Vector3[], size: number, color: string) => {
-      if (trail.length < 2) return;
-
-      const headScreen = worldToScreen(trail[0]);
-      const tailScreen = worldToScreen(trail[trail.length - 1]);
-      const dx = headScreen.x - tailScreen.x;
-      const dy = headScreen.y - tailScreen.y;
-      const dist = Math.hypot(dx, dy);
-      const targetLen = Math.min(MAX_TAIL_LEN, Math.max(MIN_TAIL_LEN, dist));
-
-      const angle = Math.atan2(dy, dx);
-      const cosA = Math.cos(angle);
-      const sinA = Math.sin(angle);
-
-      const jitterX = Math.sin(now * 2.0) * JITTER_AMPLITUDE * 0.6;
-      const jitterY = Math.cos(now * 2.0) * JITTER_AMPLITUDE * 0.6;
-
-      const headRadius = Math.max(1, (size * HEAD_SCALE) / 2);
-      const tailWidth = 0.6;
-
-      const leftTail = { x: 0, y: -tailWidth * 0.5 };
-      const rightTail = { x: 0, y: tailWidth * 0.5 };
-      const leftHead = { x: targetLen, y: -headRadius * 2 };
-      const rightHead = { x: targetLen, y: headRadius };
-
-      const wobble = (xLocal: number) => Math.sin(xLocal / targetLen * Math.PI * 2 + now * 40) * (JITTER_AMPLITUDE * 0.25);
-
-      const localToScreen = (lx: number, ly: number) => ({
-        x: tailScreen.x + (lx * cosA - ly * sinA) + jitterX + wobble(lx),
-        y: tailScreen.y + (lx * sinA + ly * cosA) + jitterY + wobble(lx),
-      });
-
-      const pA = localToScreen(leftTail.x, leftTail.y);
-      const pB = localToScreen(leftHead.x, leftHead.y);
-      const pC = localToScreen(rightHead.x, rightHead.y);
-      const pD = localToScreen(rightTail.x, rightTail.y);
-
-      ctx.beginPath();
-      ctx.moveTo(pA.x, pA.y);
-      ctx.quadraticCurveTo(pB.x, pB.y, (pB.x + pC.x) / 2, (pB.y + pC.y) / 2);
-      ctx.lineTo(pC.x, pC.y);
-      ctx.quadraticCurveTo(pD.x, pD.y, pA.x, pA.y);
-      ctx.closePath();
-      ctx.fillStyle = color;
-      ctx.fill();
-
-      ctx.beginPath();
-      ctx.arc(headScreen.x, headScreen.y, headRadius, 0, Math.PI * 2);
-      ctx.fillStyle = color;
-      ctx.fill();
-      ctx.lineWidth = 0.5;
-      ctx.strokeStyle = color;
-      ctx.stroke();
-    };
-
-    // --- Update and draw all projectiles ---
-    projectiles.forEach((p) => {
-      if (!(p as any)._seed) (p as any)._seed = seedFromId(p.id || Math.random().toString());
-
-      if (!isPaused) updateTrail(p);
-      drawTrail(p.trailHistory, p.size, p.color);
     });
 
-    // --- Draw ghost trails ---
-    trailGhosts.forEach((g) => drawTrail(g.trail, g.size, g.color));
+    ctx.globalAlpha = 1;
+
+    // Draw projectile heads (bright dots)
+    projectiles.forEach(proj => {
+      const screen = worldToScreen(proj.position);
+
+      // Outer glow
+      const gradient = ctx.createRadialGradient(
+        screen.x, screen.y, 0,
+        screen.x, screen.y, 12
+      );
+      gradient.addColorStop(0, proj.color);
+      gradient.addColorStop(0.5, proj.color + "66");
+      gradient.addColorStop(1, proj.color + "00");
+
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(screen.x, screen.y, 12, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Core
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.arc(screen.x, screen.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Inner glow
+      ctx.fillStyle = proj.color;
+      ctx.globalAlpha = 0.8;
+      ctx.beginPath();
+      ctx.arc(screen.x, screen.y, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+
+    ctx.restore();
+  };
+
+  // 5. ADD NEW DRAWING FUNCTIONS (before return statement):
+
+  const drawParticles = (ctx: CanvasRenderingContext2D) => {
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
+
+    ctx.save();
+
+    particles.forEach(particle => {
+      const screenX = centerX + ((particle.position.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((particle.position.z - position.z) * TILE_SIZE) / 2;
+
+      ctx.globalAlpha = particle.alpha;
+
+      if (particle.type === "spark") {
+        // Bright yellow/white sparks
+        ctx.fillStyle = particle.color;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, particle.size, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Glow
+        ctx.fillStyle = particle.color;
+        ctx.globalAlpha = particle.alpha * 0.3;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, particle.size * 2, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // Impact and explosion particles
+        const gradient = ctx.createRadialGradient(
+          screenX, screenY, 0,
+          screenX, screenY, particle.size
+        );
+        gradient.addColorStop(0, particle.color);
+        gradient.addColorStop(0.7, particle.color + "aa");
+        gradient.addColorStop(1, particle.color + "00");
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, particle.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    });
+
+    ctx.restore();
+  };
+
+  const drawImpactEffects = (ctx: CanvasRenderingContext2D) => {
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
+
+    ctx.save();
+
+    impactEffects.forEach(impact => {
+      const screenX = centerX + ((impact.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((impact.y - position.z) * TILE_SIZE) / 2;
+
+      const lifePercent = impact.life / impact.maxLife;
+      const alpha = 1 - lifePercent;
+      const size = impact.size * (1 + lifePercent * 2);
+
+      // Flash circle
+      const gradient = ctx.createRadialGradient(
+        screenX, screenY, 0,
+        screenX, screenY, size
+      );
+      gradient.addColorStop(0, impact.color + "ff");
+      gradient.addColorStop(0.3, impact.color + "88");
+      gradient.addColorStop(1, impact.color + "00");
+      gradient.addColorStop(1, impact.color + "bb");
+
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(screenX, screenY, size, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    ctx.restore();
+  };
+
+  const drawDamageNumbers = (ctx: CanvasRenderingContext2D) => {
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    damageNumbers.forEach(dmg => {
+      const screenX = centerX + ((dmg.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((dmg.y - position.z) * TILE_SIZE) / 2;
+
+      const lifePercent = dmg.life / dmg.maxLife;
+      const alpha = lifePercent < 0.7 ? 1 : (1 - (lifePercent - 0.7) / 0.3);
+
+      ctx.globalAlpha = alpha;
+
+      // Scale and positioning
+      const scale = dmg.scale;
+      const fontSize = 15 * scale;
+
+      ctx.font = `bold ${fontSize}px monospace`;
+
+      // Outline
+      ctx.strokeStyle = "#000000";
+      ctx.lineWidth = 3;
+      ctx.strokeText(dmg.damage.toString(), screenX, screenY);
+
+      // White text
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(dmg.damage.toString(), screenX, screenY);
+    });
 
     ctx.restore();
   };
@@ -1339,159 +1544,216 @@ export default function CanvasGame() {
       const screenX = centerX + ((summon.position.x - position.x) * TILE_SIZE) / 2;
       const screenY = centerY + ((summon.position.z - position.z) * TILE_SIZE) / 2;
 
-
       ctx.save();
       ctx.translate(screenX, screenY);
       ctx.rotate(summon.rotation);
 
-      // Draw based on type
       if (summon.type === "ghost") {
-        // Ghost body
-        ctx.fillStyle = summon.color;
-        ctx.globalAlpha = 0.8;
+        // Semi-transparent ghostly body
+        ctx.globalAlpha = 0.7;
+
+        // Main body
+        ctx.fillStyle = "#88ccff";
         ctx.beginPath();
-        ctx.arc(0, 0, summon.size, 0, Math.PI * 2);
+        ctx.arc(0, 0, 12, 0, Math.PI * 2);
         ctx.fill();
 
-        // Ghost tail
-        ctx.fillStyle = summon.color;
-        ctx.globalAlpha = 0.6;
-        for (let i = 0; i < 3; i++) {
-          ctx.beginPath();
-          ctx.arc(0, summon.size + i * 4, summon.size - i * 2, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        // Glow
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = "#88ccff";
+        ctx.beginPath();
+        ctx.arc(0, 0, 18, 0, Math.PI * 2);
+        ctx.fill();
 
         // Eyes
-        ctx.fillStyle = "#000000";
         ctx.globalAlpha = 1;
+        ctx.fillStyle = "#000000";
         ctx.beginPath();
         ctx.arc(-4, -2, 2, 0, Math.PI * 2);
         ctx.arc(4, -2, 2, 0, Math.PI * 2);
         ctx.fill();
+
+        // Wavy tail
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = "#88ccff";
+        for (let i = 0; i < 3; i++) {
+          ctx.beginPath();
+          ctx.arc(0, 12 + i * 4, 10 - i * 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
-      if (summon.type === "scythe") {
-        // Scythe blade
-        ctx.fillStyle = summon.color;
+      else if (summon.type === "scythe") {
+        // Large spinning scythe blade
+        ctx.fillStyle = "#ff4444";
+        ctx.strokeStyle = "#aa0000";
+        ctx.lineWidth = 3;
+
+        // Curved blade
         ctx.beginPath();
-        ctx.moveTo(-5, -summon.size);
-        ctx.quadraticCurveTo(0, -summon.size/2, 5, 0);
-        ctx.lineTo(-5, 0);
+        ctx.moveTo(-10, -25);
+        ctx.quadraticCurveTo(5, -20, 10, -5);
+        ctx.lineTo(5, 0);
+        ctx.lineTo(-10, 0);
         ctx.closePath();
         ctx.fill();
+        ctx.stroke();
 
         // Handle
         ctx.strokeStyle = "#8b4513";
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 4;
         ctx.beginPath();
         ctx.moveTo(0, 0);
-        ctx.lineTo(0, summon.size);
+        ctx.lineTo(0, 25);
         ctx.stroke();
 
-        // Glow
-        ctx.strokeStyle = summon.color;
-        ctx.lineWidth = 2;
-        ctx.globalAlpha = 0.5;
+        // Glow effect
+        ctx.globalAlpha = 0.4;
+        ctx.strokeStyle = "#ff6666";
+        ctx.lineWidth = 6;
         ctx.beginPath();
-        ctx.arc(0, -summon.size/2, summon.size/2, 0, Math.PI * 2);
+        ctx.arc(0, -12, 15, 0, Math.PI * 2);
         ctx.stroke();
       }
-      if (summon.type === "spear") {
-        // Spear head
-        ctx.fillStyle = summon.color;
+      else if (summon.type === "spear") {
+        // Sharp spear
+        ctx.fillStyle = "#ffaa00";
+        ctx.strokeStyle = "#cc8800";
+        ctx.lineWidth = 2;
+
+        // Spearhead
         ctx.beginPath();
-        ctx.moveTo(0, -summon.size);
-        ctx.lineTo(5, -summon.size + 8);
-        ctx.lineTo(2, -summon.size + 10);
-        ctx.lineTo(0, -summon.size + 5);
-        ctx.lineTo(-2, -summon.size + 10);
-        ctx.lineTo(-5, -summon.size + 8);
+        ctx.moveTo(0, -25);
+        ctx.lineTo(5, -15);
+        ctx.lineTo(2, -12);
+        ctx.lineTo(0, -18);
+        ctx.lineTo(-2, -12);
+        ctx.lineTo(-5, -15);
         ctx.closePath();
         ctx.fill();
+        ctx.stroke();
 
         // Shaft
         ctx.fillStyle = "#8b4513";
-        ctx.fillRect(-2, -summon.size + 10, 4, summon.size);
+        ctx.fillRect(-2, -12, 4, 30);
 
         // Glow
-        ctx.fillStyle = summon.color;
-        ctx.globalAlpha = 0.3;
+        ctx.globalAlpha = 0.4;
+        ctx.fillStyle = "#ffaa00";
         ctx.beginPath();
-        ctx.arc(0, -summon.size/2, 8, 0, Math.PI * 2);
+        ctx.arc(0, -15, 10, 0, Math.PI * 2);
         ctx.fill();
       }
-      if (summon.type === "dagger") {
-        
-
-        
+      else if (summon.type === "dagger") {
+        // Fast spinning dagger
+        ctx.fillStyle = "#ff00ff";
+        ctx.strokeStyle = "#cc00cc";
+        ctx.lineWidth = 2;
 
         // Blade
-        ctx.fillStyle = summon.color;
         ctx.beginPath();
-        ctx.moveTo(0, -summon.size);
-        ctx.lineTo(3, -5);
-        ctx.lineTo(-3, -5);
+        ctx.moveTo(0, -15);
+        ctx.lineTo(4, -3);
+        ctx.lineTo(-4, -3);
         ctx.closePath();
         ctx.fill();
+        ctx.stroke();
 
         // Handle
         ctx.fillStyle = "#4a4a4a";
-        ctx.fillRect(-2, -5, 4, 8);
+        ctx.fillRect(-2, -3, 4, 8);
 
         // Pommel
-        ctx.fillStyle = summon.color;
+        ctx.fillStyle = "#ff00ff";
         ctx.beginPath();
-        ctx.arc(0, 4, 3, 0, Math.PI * 2);
+        ctx.arc(0, 6, 3, 0, Math.PI * 2);
         ctx.fill();
 
-        // Trail
-        if (summon.velocity.length() > 10) {
-          ctx.strokeStyle = summon.color;
+        // Motion blur if moving fast
+        if (summon.velocity && summon.velocity.length() > 10) {
           ctx.globalAlpha = 0.3;
-          ctx.lineWidth = 30;
+          ctx.strokeStyle = "#ff00ff";
+          ctx.lineWidth = 4;
+          const vel = summon.velocity.clone().normalize().multiplyScalar(-15);
           ctx.beginPath();
-          const trail = summon.velocity.clone().normalize().multiplyScalar(-15);
           ctx.moveTo(0, 0);
-          ctx.lineTo(trail.x, trail.z);
+          ctx.lineTo(vel.x, vel.z);
           ctx.stroke();
         }
-
-        ctx.restore();
       }
+      else if (summon.type === "electrobug") {
+        // Small electric bug
+        ctx.fillStyle = "#00ffff";
 
-      if (summon.type === "electrobug") {
-        // Bug body
-        ctx.fillStyle = summon.color;
+        // Body
         ctx.beginPath();
-        ctx.ellipse(0, 0, summon.size, summon.size * 0.7, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 0, 8, 6, 0, 0, Math.PI * 2);
         ctx.fill();
 
         // Wings
-        ctx.fillStyle = "rgba(0, 255, 255, 0.3)";
+        ctx.globalAlpha = 0.4;
+        ctx.fillStyle = "#00ffff";
         ctx.beginPath();
-        ctx.ellipse(-8, -2, 6, 3, -0.3, 0, Math.PI * 2);
-        ctx.ellipse(8, -2, 6, 3, 0.3, 0, Math.PI * 2);
+        ctx.ellipse(-6, -2, 5, 3, -0.3, 0, Math.PI * 2);
+        ctx.ellipse(6, -2, 5, 3, 0.3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Electric glow
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = "#00ffff";
+        ctx.beginPath();
+        ctx.arc(0, 0, 12, 0, Math.PI * 2);
         ctx.fill();
 
         // Antennae
-        ctx.strokeStyle = summon.color;
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = "#00ffff";
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(-3, -summon.size);
-        ctx.lineTo(-5, -summon.size - 5);
-        ctx.moveTo(3, -summon.size);
-        ctx.lineTo(5, -summon.size - 5);
+        ctx.moveTo(-3, -6);
+        ctx.lineTo(-5, -10);
+        ctx.moveTo(3, -6);
+        ctx.lineTo(5, -10);
         ctx.stroke();
-
-        // Electric glow
-        ctx.fillStyle = summon.color;
-        ctx.globalAlpha = 0.2;
-        ctx.beginPath();
-        ctx.arc(0, 0, summon.size * 1.5, 0, Math.PI * 2);
-        ctx.fill();
       }
 
       ctx.restore();
+    });
+  };
+  const drawLightningStrikes = (ctx: CanvasRenderingContext2D) => {
+    // This would show visual feedback for Electro Mage
+    // You can implement this as a temporary flash effect
+
+    // Example: Track recent strikes
+    const { recentStrikes } = useSummons.getState();
+
+    if (!recentStrikes) return;
+
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
+
+    recentStrikes.forEach(strike => {
+      if (strike.life < 0.2) {
+        const screenX = centerX + ((strike.x - position.x) * TILE_SIZE) / 2;
+        const screenY = centerY + ((strike.z - position.z) * TILE_SIZE) / 2;
+
+        const alpha = 1 - (strike.life / 0.2);
+
+        // Lightning bolt
+        ctx.strokeStyle = `rgba(0, 255, 255, ${alpha})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(screenX, screenY - 100);
+        ctx.lineTo(screenX - 5, screenY - 50);
+        ctx.lineTo(screenX + 5, screenY - 50);
+        ctx.lineTo(screenX, screenY);
+        ctx.stroke();
+
+        // Flash
+        ctx.fillStyle = `rgba(0, 255, 255, ${alpha * 0.3})`;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, 30, 0, Math.PI * 2);
+        ctx.fill();
+      }
     });
   };
 

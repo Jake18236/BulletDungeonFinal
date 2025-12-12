@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import * as THREE from "three";
 import { useXP } from "./useXP";
+import { useVisualEffects } from "./useVisualEffects";
 
 export interface XPOrb {
   id: string;
@@ -126,6 +127,34 @@ export const useEnemies = create<EnemiesState>((set, get) => {
 
           if (distance < COLLECT_RANGE) {
             addXP(orb.value);
+
+            // ADD VISUAL POP EFFECT
+            // Create particles at collection point
+            for (let i = 0; i < 8; i++) {
+              const angle = (i / 8) * Math.PI * 2;
+              const speed = 20 + Math.random() * 10;
+
+              // Note: You'll need to import useVisualEffects in useEnemies
+              const { particles } = useVisualEffects.getState();
+              useVisualEffects.setState({
+                particles: [...particles, {
+                  id: `xp_collect_${Date.now()}_${i}`,
+                  position: orb.position.clone(),
+                  velocity: new THREE.Vector3(
+                    Math.cos(angle) * speed,
+                    0,
+                    Math.sin(angle) * speed
+                  ),
+                  life: 0,
+                  maxLife: 0.4,
+                  size: 3,
+                  color: "#2bcf8e",
+                  alpha: 1,
+                  type: "spark" as const,
+                }]
+              });
+            }
+
             continue;
           }
 
@@ -162,8 +191,8 @@ export const useEnemies = create<EnemiesState>((set, get) => {
 
       const baseStats: Partial<Enemy> =
         chosenType === "sentry"
-          ? { health: 80, maxHealth: 80, attack: 1, speed: 0, detectionRange: 12, attackRange: 1.8, maxAttackCooldown: 1.5 }
-          : { health: 450, maxHealth: 450, attack: 1, speed: 3, detectionRange: 70000, attackRange: 1.4, maxAttackCooldown: 1.0 };
+          ? { health: 25, maxHealth: 25, attack: 1, speed: 0, detectionRange: 12, attackRange: 1.8, maxAttackCooldown: 1.5 }
+          : { health: 25, maxHealth: 25, attack: 1, speed: 3, detectionRange: 70000, attackRange: 1.4, maxAttackCooldown: 1.0 };
 
       const defaultPosition = new THREE.Vector3(0, 0, 0);
 

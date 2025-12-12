@@ -52,21 +52,6 @@ export default function Enemy({ enemy }: EnemyProps) {
           // advance patrol index
           enemy.currentPatrolIndex = ((enemy.currentPatrolIndex ?? 0) + 1) % enemy.patrolPoints.length;
         }
-      } else {
-        // Default small wander
-        const direction = patrolTarget.clone().sub(enemy.position)
-          .normalize()
-          .multiplyScalar(enemy.speed * 0.5 * delta);
-
-        enemy.position.add(direction);
-
-        if (enemy.position.distanceTo(patrolTarget) < 1) {
-          patrolTarget.set(
-            (Math.random() - 0.5) * 10,
-            0,
-            (Math.random() - 0.5) * 10
-          );
-        }
       }
     }
 
@@ -85,10 +70,7 @@ export default function Enemy({ enemy }: EnemyProps) {
       <meshLambertMaterial map={woodTexture} color="#ff4444" />
 
       {/* Health bar */}
-      <mesh position={[0, 1.2, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[1, 0.1]} />
-        <meshBasicMaterial color="#ff0000" />
-      </mesh>
+      
       <mesh
         position={[0, 1.21, 0]}
         rotation={[-Math.PI / 2, 0, 0]}

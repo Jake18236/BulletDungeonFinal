@@ -4,6 +4,7 @@ import { usePlayer } from "./usePlayer";
 import * as THREE from "three";
 import { Enemy } from "./useEnemies";
 import { useSummons } from "./useSummons";
+import { useVisualEffects } from "./useVisualEffects";
 
 export interface Projectile {
   id: string;
@@ -165,9 +166,13 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
     roomBounds: number,
     onHit: (enemyId: string, damage: number, knockback: THREE.Vector3) => void,
     isPaused: boolean,
+    isFiring: boolean,
+    isReloading: boolean,
+    isMoving: boolean,
   ) => {
     const updated: Projectile[] = [];
     const { trailGhosts } = get();
+    const { addImpact, addDamageNumber } = useVisualEffects.getState();
 
     for (const proj of get().projectiles) {
       // Initialize trail if missing
@@ -251,9 +256,16 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
             if (ps.instantKillThreshold > 0 && healthPercent < ps.instantKillThreshold) {
               finalDamage = enemy.health; // Instant kill
             }
-
+            // SPLINTER BULLETS: 20% chance to deal 2x damage
             // Hit the enemy
             onHit(enemy.id, finalDamage, proj.velocity.clone().normalize().multiplyScalar(8 * ps.knockbackMultiplier));
+            proj.piercedEnemies.add(enemy.id);
+
+            // ADD VISUAL EFFECTS HERE:
+            
+            addImpact(enemy.position.clone(), proj.color);
+            
+
             proj.piercedEnemies.add(enemy.id);
 
             if (proj.burn) {
