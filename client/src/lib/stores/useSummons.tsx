@@ -26,11 +26,19 @@ export interface Summon {
   color: string;
   size: number;
 
-  // Behavior
+  // Behavior (existing...)
   orbitRadius?: number;
   orbitSpeed?: number;
   orbitAngle?: number;
   homingStrength?: number;
+
+  // Dagger steering
+  targetId?: string;                       
+  lastHitEnemyId?: string;                 
+  hitCooldowns?: Record<string, number>;  
+  maxSpeed?: number;                       
+  turnSpeed?: number;                      
+  targetRadius?: number;                   
 
   // Special effects
   piercing?: boolean;
@@ -197,7 +205,13 @@ export const useSummons = create<SummonState>((set, get) => ({
         size: 45,
         homingStrength: 8,
         burn: state.daggerBurn,
-      },
+
+        // steering / bookkeeping defaults
+        maxSpeed: 20,          // units/sec
+        turnSpeed: 220,        // steering limit magnitude (tune to taste)
+        hitCooldowns: {},      // per-enemy cooldown map
+      } as Partial<Summon>,
+
       electrobug: {
         damage: 22,
         attackSpeed: 2.0,
@@ -407,79 +421,117 @@ export const useSummons = create<SummonState>((set, get) => ({
           }
         });
       }
-                if (summon.type === "dagger") {
-                  const playerPos = usePlayer.getState().position;
-                  const MAX_SPEED = 20;       // constant dagger speed
-                  const TURN_RATE = 5;       // how fast dagger steers
-                  const TARGET_RADIUS = 700;  // max distance from player to select enemy
-                  const HIT_COOLDOWN = 1000;  // ms an enemy cannot be retargeted
+                  // -------------------- DAGGER (20MTD-style steering, single-hit-per-pass) --------------------
+      // -------------------- DAGGER (20MTD-style: velocity interpolation, pass-through single-hit) --------------------
+      if (summon.type === "dagger") {
+        // playerPos argument is passed into updateSummons; fallback to store just in case
+        const playerCenter = playerPos || usePlayer.getState().position;
+        const now = Date.now();
 
-                  const now = Date.now();
+        // initialize bookkeeping containers if missing
+        if (!updated.hitCooldowns) updated.hitCooldowns = updated.hitCooldowns || {};
+        if (updated.maxSpeed === undefined) updated.maxSpeed = summon.maxSpeed ?? 80;
+        if (updated.trackingFactor === undefined) updated.trackingFactor = summon.trackingFactor ?? 8;
+        if (!updated.velocity) updated.velocity = updated.velocity || new THREE.Vector3();
 
-                  // Track recently hit enemies
-                  if (!updated.hitCooldowns) updated.hitCooldowns = new Map<string, number>();
+        const MAX_SPEED = updated.maxSpeed!;
+        const TRACKING = updated.trackingFactor!; // lerp factor multiplier
+        const TARGET_RADIUS = 200;                // only consider enemies within 200 units of player
+        const HIT_COOLDOWN_MS = 600;              // after hitting, dagger won't hit same enemy for this ms
+        const HIT_RADIUS = 10;                    // distance threshold to count a hit
 
-                  // Filter valid targets: within 200 units of player & not on cooldown
-                  const validTargets = enemies.filter(e => 
-                    e.health > 0 &&
-                    e.position.distanceTo(playerPos) <= TARGET_RADIUS &&
-                    (!updated.hitCooldowns.has(e.id) || now - updated.hitCooldowns.get(e.id)! > HIT_COOLDOWN)
-                  );
+        // Build list of candidate enemies: alive and within player radius
+        const candidates = enemies.filter(e => e.health > 0 && e.position.distanceTo(playerCenter) <= TARGET_RADIUS);
 
-                  // Select target if none or previous target is gone
-                  if (!updated.target || !validTargets.includes(enemies.find(e => e.id === updated.targetId)!)) {
-                    if (validTargets.length > 0) {
-                      // Pick the target minimizing travel time (distance / speed)
-                      let best = validTargets[0];
-                      let bestTime = updated.position.distanceTo(best.position) / MAX_SPEED;
-                      validTargets.forEach(e => {
-                        const t = updated.position.distanceTo(e.position) / MAX_SPEED;
-                        if (t < bestTime) {
-                          bestTime = t;
-                          best = e;
-                        }
-                      });
-                      updated.target = best.position.clone();
-                      updated.targetId = best.id;
-                    } else {
-                      // No valid target: hover near player
-                      updated.target = playerPos.clone().add(new THREE.Vector3(Math.random() * 20 - 10, 0, Math.random() * 20 - 10));
-                      updated.targetId = undefined;
-                    }
-                  }
+        // Resolve current target object (if we have a targetId that still exists in candidates)
+        let currentTargetObj = candidates.find(e => e.id === updated.targetId);
 
-                  // Steering
-                  if (updated.target) {
-                    const desiredDir = updated.target.clone().sub(updated.position).normalize().multiplyScalar(MAX_SPEED);
-                    updated.velocity.lerp(desiredDir, delta * TURN_RATE);
-                  }
+        // If no valid current target, pick the candidate minimizing travel time (distance / speed), skipping recently-hit enemies
+        if (!currentTargetObj) {
+          let best: any = null;
+          let bestTime = Infinity;
+          for (const e of candidates) {
+            // skip enemy this dagger has recently hit
+            const cd = updated.hitCooldowns![e.id];
+            if (cd && now < cd) continue;
 
-                  // Apply velocity
-                  updated.position.add(updated.velocity.clone().multiplyScalar(delta));
+            const travelTime = updated.position.distanceTo(e.position) / MAX_SPEED;
+            if (travelTime < bestTime) {
+              bestTime = travelTime;
+              best = e;
+            }
+          }
 
-                  // Rotation for visuals
-                  updated.rotation = Math.atan2(updated.velocity.z, updated.velocity.x);
+          if (best) {
+            currentTargetObj = best;
+            updated.targetId = best.id;
+            updated.target = best.position.clone();
+          } else {
+            // no valid target — hover near player at a stable offset so multiple daggers don't stack
+            
+            
+            updated.targetId = undefined;
+          }
+        }
 
-                  // Check hits
-                  enemies.forEach(enemy => {
-                    if (updated.position.distanceTo(enemy.position) < 1) {
-                      // Damage enemy
-                      enemy.health -= summon.damage * state.summonDamageMultiplier;
+        // Compute desired velocity = direction_to_target * MAX_SPEED
+        if (updated.target) {
+          const desiredDir = updated.target.clone().sub(updated.position);
+          const dist = desiredDir.length();
+          if (dist > 0.001) {
+            desiredDir.normalize().multiplyScalar(MAX_SPEED);
 
-                      // Burn effect
-                      if (summon.burn) {
-                        get().applyStatusEffect(enemy.id, "burn", 12, 4);
-                      }
+            // velocity interpolation (lerp) toward desired velocity: the core of the 20MTD feel
+            // scale factor: TRACKING * delta
+            const lerpFactor = Math.min(1, TRACKING * delta); // clamp to [0,1] for stability
+            updated.velocity.lerp(desiredDir, lerpFactor);
+          }
+        }
 
-                      // Mark enemy as recently hit
-                      updated.hitCooldowns.set(enemy.id, now);
+        // Enforce constant max speed (direction is preserved)
+        if (updated.velocity.length() > 0.001) {
+          updated.velocity.setLength(MAX_SPEED);
+        }
 
-                      // Immediately retarget next frame
-                      updated.target = undefined;
-                      updated.targetId = undefined;
-                    }
-                  });
-                }
+        // Advance position
+        updated.position.add(updated.velocity.clone().multiplyScalar(delta));
+
+        // Rotation (visual only)
+        updated.rotation = Math.atan2(updated.velocity.z, updated.velocity.x);
+
+        // HIT DETECTION: dagger passes through enemies and only damages each enemy once per hitCooldown window
+        for (const enemy of enemies) {
+          if (enemy.health <= 0) continue;
+
+          const d = updated.position.distanceTo(enemy.position);
+          if (d <= HIT_RADIUS) {
+            const cd = updated.hitCooldowns![enemy.id];
+            if (cd && now < cd) {
+              // still on per-enemy cooldown for this dagger; skip
+              continue;
+            }
+
+            // apply damage & effects
+            const damage = (summon.damage || 0) * (get().summonDamageMultiplier || 1);
+            enemy.health -= damage;
+
+            if (summon.burn) {
+              get().applyStatusEffect(enemy.id, "burn", 12, 4);
+            }
+
+            // set per-enemy cooldown so dagger won't repeatedly tick same enemy
+            updated.hitCooldowns![enemy.id] = now + HIT_COOLDOWN_MS;
+
+            // immediately clear target so next frame we pick a new candidate
+            updated.target = undefined;
+            updated.targetId = undefined;
+
+            // DO NOT mutate velocity — dagger continues through the enemy
+          }
+        }
+      }
+
+
 
       // ELECTRO BUG: Orbit and shoot lightning
       else if (summon.type === "electrobug") {
