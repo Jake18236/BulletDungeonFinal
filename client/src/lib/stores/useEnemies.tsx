@@ -134,7 +134,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
               const angle = (i / 8) * Math.PI * 2;
               const speed = 20 + Math.random() * 10;
 
-              // Note: You'll need to import useVisualEffects in useEnemies
+              
               const { particles } = useVisualEffects.getState();
               useVisualEffects.setState({
                 particles: [...particles, {
@@ -252,7 +252,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
           spawnTimer = 0;
           for (let i = 0; i < currentConfig.count; i++) {
             const angle = Math.random() * Math.PI * 2;
-            const distance = 20 + Math.random() * 5;
+            const distance = 40 + Math.random() * 5;
             const spawnPos = new THREE.Vector3(
               playerPos.x + Math.cos(angle) * distance,
               0,

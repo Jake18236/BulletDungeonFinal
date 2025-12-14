@@ -1,4 +1,3 @@
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import Matter from "matter-js";
@@ -19,6 +18,7 @@ import GameUI from "./GameUI"
 import { any } from "zod";
 import { LevelUpScreen } from "./GameUI";
 import Darkness from "./Darkness";
+
 
 const TILE_SIZE = 50;
 const CANVAS_WIDTH = 1490;
@@ -702,7 +702,7 @@ export default function CanvasGame() {
       drawXPBar(ctx);
       drawReloadIndicator(ctx);
       drawCustomCursor(ctx);
-      drawWeapon(ctx, "revolver");
+      drawWeapon(ctx, "revolver", phase !== "playing");
       
       animationFrameRef.current = requestAnimationFrame(gameLoop);
     };
@@ -1043,7 +1043,7 @@ export default function CanvasGame() {
     animateSwing();
   }, []);
 
-  const drawWeapon = (ctx: CanvasRenderingContext2D, type: string) => {
+  const drawWeapon = (ctx: CanvasRenderingContext2D, type: string, isPaused: boolean) => {
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
 
@@ -1068,16 +1068,16 @@ export default function CanvasGame() {
         cylinderRotation = spins * 2 * Math.PI * p * 1.2; // cylinder spins slightly faster
       }
 
-      // Apply rotation for the gun
+      if (!isPaused) {
       ctx.rotate(gunRotation);
-
+      
       // Optional hand offset
       ctx.translate(8, 0);
-
+      
       // Flip gun if aiming backward
       const flipGun = Math.abs(mouseAngle) > Math.PI / 2;
       if (flipGun) ctx.scale(1, -1);
-
+      }
       // ===========================
       // MUZZLE FLASH
       // ===========================
@@ -1719,6 +1719,7 @@ export default function CanvasGame() {
       ctx.restore();
     });
   };
+  
   const drawLightningStrikes = (ctx: CanvasRenderingContext2D) => {
     // This would show visual feedback for Electro Mage
     // You can implement this as a temporary flash effect

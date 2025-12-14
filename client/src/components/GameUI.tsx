@@ -353,8 +353,7 @@ export default function GameUI() {
         </Card>
       </div>
 
-      {/* LEVEL UP SCREEN */}
-      <LevelUpScreen />
+      
     </>
   );
 }

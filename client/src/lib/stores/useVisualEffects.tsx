@@ -57,7 +57,7 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
     const particles: Particle[] = [];
 
     // Create 8-12 impact particles
-    const count = 8 + Math.floor(Math.random() * 5);
+    const count = 2 + Math.floor(Math.random() * 5);
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2 + Math.random() * 0.3;
       const speed = 15 + Math.random() * 10;
@@ -96,13 +96,13 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
     }));
   },
 
-  addExplosion: (position, count = 20) => {
+  addExplosion: (position, count = 5) => {
     const particles: Particle[] = [];
 
     // Create explosion particles
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = 20 + Math.random() * 30;
+      const speed = 1 + Math.random() * 10;
 
       // Red explosion particles
       const colors = ["#ff4444", "#ff6666", "#ff8888", "#ffaa44"];
@@ -117,8 +117,8 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
           Math.sin(angle) * speed
         ),
         life: 0,
-        maxLife: 0.5 + Math.random() * 0.3,
-        size: 3 + Math.random() * 4,
+        maxLife: 0.3 + Math.random() * 0.3,
+        size: 6 + Math.random() * 8,
         color,
         alpha: 1,
         gravity: true,

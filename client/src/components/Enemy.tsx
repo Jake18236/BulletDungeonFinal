@@ -69,7 +69,7 @@ export default function Enemy({ enemy }: EnemyProps) {
       <boxGeometry args={[0.8, 1, 0.8]} />
       <meshLambertMaterial map={woodTexture} color="#ff4444" />
 
-      {/* Health bar */}
+      
       
       <mesh
         position={[0, 1.21, 0]}

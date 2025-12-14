@@ -714,7 +714,7 @@ feed_the_beasts: {
   name: "Feed the Beasts",
   description: "Summon Damage +1% for every 15 enemies killed",
   icon: "🍖",
-  category: "summon",
+  category: "summon", 
   tier: 3,
   requires: ["pulsing_summons"],
   apply: () => {
