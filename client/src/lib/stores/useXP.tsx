@@ -417,57 +417,6 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
   },
 
   // ============================================================================
-  // BASIC UPGRADES (always available)
-  // ============================================================================
-
-  health: {
-    id: "health",
-    name: "Max Health +1",
-    description: "Increase maximum health by 1 heart. Current health restored.",
-    icon: "❤️",
-    category: "basic",
-    tier: 1,
-    apply: () => {
-      const player = usePlayer.getState();
-      usePlayer.setState({
-        maxHearts: player.maxHearts + 1,
-        hearts: player.hearts + 1,
-      });
-    },
-  },
-
-  speed: {
-    id: "speed",
-    name: "Movement Speed",
-    description: "Increase movement speed by 15%",
-    icon: "⚡",
-    category: "basic",
-    tier: 1,
-    apply: () => {
-      const player = usePlayer.getState();
-      usePlayer.setState({ speed: player.speed * 1.15 });
-    },
-  },
-
-  ammo: {
-    id: "ammo",
-    name: "Extended Magazine",
-    description: "Increase maximum ammo capacity by 2 rounds",
-    icon: "🎯",
-    category: "basic",
-    tier: 1,
-    apply: () => {
-      const player = usePlayer.getState();
-      usePlayer.setState({
-        maxAmmo: player.maxAmmo + 2,
-        ammo: player.ammo + 2,
-      });
-    },
-  },
-
-  // Add these to your ALL_UPGRADES object in useXP.tsx
-
-  // ============================================================================
   // GHOST FRIEND TREE
   // ============================================================================
 

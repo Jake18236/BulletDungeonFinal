@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import Matter from "matter-js";
@@ -217,8 +218,12 @@ export default function CanvasGame() {
       if (e.code === "KeyC") {
         setShowCardManager((prev) => !prev);
       }
+    
+    if (e.code === "KeyB") {
+      const spawnPos = position.clone().add(new THREE.Vector3(20, 0, 0));
+      useEnemies.getState().spawnDeerBoss(spawnPos);
+    }
     };
-
     const handleKeyUp = (e: KeyboardEvent) => {
       keysPressed.current.delete(e.code);
     };
@@ -547,70 +552,188 @@ export default function CanvasGame() {
           },
         );
 
-        const updatedEnemies = enemies.map((enemy) => {
-          const dx = position.x - enemy.position.x;
-          const dz = position.z - enemy.position.z;
-          const distance = Math.sqrt(dx * dx + dz * dz);
+      // MODIFY YOUR EXISTING ENEMY UPDATE LOOP IN CanvasGame.tsx
+      // Find where you have: const updatedEnemies = enemies.map((enemy) => {
+      // Replace the ENTIRE map function with this:
 
-          if (distance <= enemy.detectionRange) {
-            const dirX = dx / distance;
-            const dirZ = dz / distance;
+      const updatedEnemies = enemies.map((enemy) => {
+        // ========================================================================
+        // DEER BOSS BEHAVIOR
+        // ========================================================================
+        if (enemy.isBoss && enemy.bossType === "deer") {
+          const updated = { ...enemy };
 
-            const moveAmount = enemy.speed * delta;
-            const newEnemyPos = new THREE.Vector3(
-              enemy.position.x + dirX * moveAmount,
-              0,
-              enemy.position.z + dirZ * moveAmount,
-            );
+          // Phase 2 transition at 50% HP
+          if (!updated.isEnraged && updated.health < updated.maxHealth * 0.5) {
+            updated.isEnraged = true;
+            updated.maxDashCooldown = 2.0;
+            updated.speed *= 1.3;
+            updated.maxWindUpTime = 0.5;
+          }
 
-            const enemyTerrainCheck = checkTerrainCollision(
-              newEnemyPos,
-              terrainRef.current,
-              0.7,
-            );
+          // Direction to player
+          const dirToPlayer = new THREE.Vector3()
+            .subVectors(position, updated.position)
+            .normalize();
+          const distanceToPlayer = updated.position.distanceTo(position);
 
-            if (!enemyTerrainCheck.collision) {
-              enemy.position.x = newEnemyPos.x;
-              enemy.position.z = newEnemyPos.z;
+          // Always face player
+          updated.rotationY = Math.atan2(dirToPlayer.x, dirToPlayer.z);
+
+          // STATE MACHINE
+          if (updated.attackState === "chasing") {
+            // Move toward player
+            const moveAmount = updated.speed * delta;
+            updated.position.add(dirToPlayer.clone().multiplyScalar(moveAmount));
+
+            // Check dash trigger
+            updated.dashCooldown! -= delta;
+            if (updated.dashCooldown! <= 0 && distanceToPlayer < 18 && distanceToPlayer > 5) {
+              updated.attackState = "winding_up";
+              updated.windUpTimer = 0;
+              updated.clawWindUp = 0;
+              updated.dashDirection = dirToPlayer.clone();
             }
-          } 
 
-          
+            // Projectile attack cooldown
+            updated.projectileCooldown! -= delta;
+            if (updated.projectileCooldown! <= 0 && distanceToPlayer > 15) {
+              updated.attackState = "projectile_attack";
+              updated.projectileCooldown = updated.maxProjectileCooldown!;
+            }
+          }
 
-          if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
+          else if (updated.attackState === "winding_up") {
+            updated.windUpTimer! += delta;
+            updated.clawWindUp = Math.min(updated.windUpTimer! / updated.maxWindUpTime!, 1);
+            updated.clawGlowIntensity = updated.clawWindUp;
+            updated.position.add(dirToPlayer.clone().multiplyScalar(-2 * delta));
 
-          const velNewPos = new THREE.Vector3(
-            enemy.position.x + enemy.velocity.x * delta,
+            if (updated.windUpTimer! >= updated.maxWindUpTime!) {
+              updated.attackState = "dashing";
+              updated.isDashing = true;
+              updated.velocity = updated.dashDirection!.clone().multiplyScalar(120);
+              playHit();
+            }
+          }
+
+          else if (updated.attackState === "dashing") {
+            const dashMove = updated.velocity.clone().multiplyScalar(delta);
+            updated.position.add(dashMove);
+            updated.velocity.multiplyScalar(0.92);
+
+            if (updated.velocity.length() < 10) {
+              updated.attackState = "recovering";
+              updated.isDashing = false;
+            }
+          }
+
+          else if (updated.attackState === "recovering") {
+            updated.clawGlowIntensity = Math.max(updated.clawGlowIntensity! - delta * 3, 0);
+            updated.clawWindUp = Math.max(updated.clawWindUp! - delta * 3, 0);
+            updated.windUpTimer! -= delta * 2;
+
+            if (updated.windUpTimer! <= 0) {
+              updated.attackState = "chasing";
+              updated.dashCooldown = updated.maxDashCooldown;
+              updated.velocity.set(0, 0, 0);
+            }
+          }
+
+          else if (updated.attackState === "projectile_attack") {
+            const projectileCount = updated.isEnraged ? 16 : 12;
+
+            for (let i = 0; i < projectileCount; i++) {
+              const angle = (i / projectileCount) * Math.PI * 2;
+              const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+
+              addProjectile({
+                position: updated.position.clone().add(direction.clone().multiplyScalar(2)),
+                direction,
+                slotId: 0,
+                damage: 1,
+                speed: 40,
+                range: 80,
+                trailLength: 15,
+                homing: false,
+                piercing: 0,
+                bouncing: 0,
+              });
+            }
+
+            playHit();
+            updated.attackState = "recovering";
+            updated.windUpTimer = 0.3;
+          }
+
+          return updated;
+        }
+
+        // ========================================================================
+        // NORMAL ENEMY BEHAVIOR (your existing code)
+        // ========================================================================
+        const dx = position.x - enemy.position.x;
+        const dz = position.z - enemy.position.z;
+        const distance = Math.sqrt(dx * dx + dz * dz);
+
+        if (distance <= enemy.detectionRange) {
+          const dirX = dx / distance;
+          const dirZ = dz / distance;
+
+          const moveAmount = enemy.speed * delta;
+          const newEnemyPos = new THREE.Vector3(
+            enemy.position.x + dirX * moveAmount,
             0,
-            enemy.position.z + enemy.velocity.z * delta,
+            enemy.position.z + dirZ * moveAmount,
           );
 
-          const velTerrainCheck = checkTerrainCollision(
-            velNewPos,
+          const enemyTerrainCheck = checkTerrainCollision(
+            newEnemyPos,
             terrainRef.current,
             0.7,
           );
 
-          if (!velTerrainCheck.collision) {
-            enemy.position.x = velNewPos.x;
-            enemy.position.z = velNewPos.z;
-          } else {
-            enemy.velocity.multiplyScalar(-0.5);
+          if (!enemyTerrainCheck.collision) {
+            enemy.position.x = newEnemyPos.x;
+            enemy.position.z = newEnemyPos.z;
           }
+        } 
 
-          enemy.velocity.multiplyScalar(Math.max(0, 1 - 6 * delta));
+        if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
 
-          const bouncedEnemy = bounceAgainstBounds(
-            enemy.position,
-            enemy.velocity,
-            ROOM_SIZE,
-            0.6,
-          );
-          enemy.position.copy(bouncedEnemy.position);
-          enemy.velocity.copy(bouncedEnemy.velocity);
+        const velNewPos = new THREE.Vector3(
+          enemy.position.x + enemy.velocity.x * delta,
+          0,
+          enemy.position.z + enemy.velocity.z * delta,
+        );
 
-          return enemy;
-        });
+        const velTerrainCheck = checkTerrainCollision(
+          velNewPos,
+          terrainRef.current,
+          0.7,
+        );
+
+        if (!velTerrainCheck.collision) {
+          enemy.position.x = velNewPos.x;
+          enemy.position.z = velNewPos.z;
+        } else {
+          enemy.velocity.multiplyScalar(-0.5);
+        }
+
+        enemy.velocity.multiplyScalar(Math.max(0, 1 - 6 * delta));
+
+        const bouncedEnemy = bounceAgainstBounds(
+          enemy.position,
+          enemy.velocity,
+          ROOM_SIZE,
+          0.6,
+        );
+        enemy.position.copy(bouncedEnemy.position);
+        enemy.velocity.copy(bouncedEnemy.velocity);
+
+        return enemy;
+      });
+          
 
         for (let i = 0; i < updatedEnemies.length; i++) {
           for (let j = i + 1; j < updatedEnemies.length; j++) {
@@ -1489,52 +1612,218 @@ export default function CanvasGame() {
   };
 
   const drawEnemy = (ctx: CanvasRenderingContext2D, enemy: any) => {
-    // --- SAFETY CHECKS (fixes your crash) ---
     if (!enemy || !enemy.position) return;
     if (enemy.position.x == null || enemy.position.z == null) return;
 
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
 
-    const screenX = centerX + ((enemy.position.x - position.x) * TILE_SIZE) / 2;
-    const screenY = centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2;
+    const screenX =
+      centerX + ((enemy.position.x - position.x) * TILE_SIZE) / 2;
+    const screenY =
+      centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2;
 
-    // Body shadow
-    ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+    const clamp = (v: number, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+    const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
+
+    // Animation inputs
+    const wind = easeOut(
+      typeof enemy.clawWindUp === "number"
+        ? clamp(enemy.clawWindUp)
+        : enemy.attackState === "winding_up"
+        ? 1
+        : 0
+    );
+
+    const dash = easeOut(
+      typeof enemy.dashProgress === "number"
+        ? clamp(enemy.dashProgress)
+        : enemy.isDashing
+        ? 1
+        : 0
+    );
+
+    // ================================================================
+    // SKELETON BOSS
+    // ================================================================
+    if (enemy.isBoss && enemy.bossType === "deer") {
+      const baseRadius = 24;
+      const radius = enemy.isEnraged ? baseRadius * 1.15 : baseRadius;
+      const bob = Math.sin(Date.now() / 120) * 1.2;
+
+      const smearStrength = Math.max(wind, dash);
+      const smearLen = 52 * smearStrength;
+
+      ctx.save();
+      ctx.translate(screenX, screenY + bob);
+      ctx.rotate(enemy.rotationY ?? 0);
+
+      // ---------------- Shadow ----------------
+      ctx.fillStyle = "rgba(0,0,0,0.5)";
+      ctx.beginPath();
+      ctx.ellipse(0, 7, radius * 1.15, radius * 0.55, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // ---------------- Smear (charge motion) ----------------
+      if (smearLen > 1) {
+        for (let i = 4; i >= 1; i--) {
+          const t = i / 4;
+          ctx.globalAlpha = 0.2 * (1 - t);
+          ctx.beginPath();
+          ctx.ellipse(
+            -smearLen * t,
+            0,
+            radius + smearLen * 0.15 * t,
+            radius * (0.85 - 0.1 * t),
+            0,
+            0,
+            Math.PI * 2
+          );
+          ctx.fillStyle = "#d6d6d6";
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      // ---------------- Skull ----------------
+      ctx.fillStyle = enemy.isEnraged ? "#e6e6e6" : "#f2f2f2";
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "#444";
+      ctx.stroke();
+
+      // ---------------- Cracks ----------------
+      ctx.strokeStyle = "#666";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(-6, -6);
+      ctx.lineTo(-12, -12);
+      ctx.moveTo(4, -10);
+      ctx.lineTo(8, -18);
+      ctx.stroke();
+
+      // ---------------- Eye sockets ----------------
+      ctx.fillStyle = enemy.isEnraged ? "#ff2a2a" : "#000";
+      ctx.beginPath();
+      ctx.arc(-7, -4, 4, 0, Math.PI * 2);
+      ctx.arc(7, -4, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // ---------------- Nasal cavity ----------------
+      ctx.beginPath();
+      ctx.moveTo(0, -2);
+      ctx.lineTo(-2, 4);
+      ctx.lineTo(2, 4);
+      ctx.closePath();
+      ctx.fill();
+
+      // ---------------- Jaw notch ----------------
+      ctx.strokeStyle = "#555";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-8, 10);
+      ctx.lineTo(8, 10);
+      ctx.stroke();
+
+      ctx.restore();
+
+      // ---------------- Impact flash ----------------
+      if (dash > 0.6) {
+        const t = clamp((dash - 0.6) / 0.4);
+        ctx.save();
+        ctx.globalAlpha = Math.sin(t * Math.PI) * 0.8;
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.ellipse(
+          screenX + Math.cos(enemy.rotationY ?? 0) * radius * 1.4,
+          screenY + Math.sin(enemy.rotationY ?? 0) * radius * 1.4,
+          18 * t,
+          12 * t,
+          0,
+          0,
+          Math.PI * 2
+        );
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // ---------------- Health Bar ----------------
+      const barW = 80;
+      const barH = 8;
+      const barY = screenY - radius - 30;
+      const hpPct = Math.max(0, enemy.health / enemy.maxHealth);
+
+      ctx.fillStyle = "rgba(0,0,0,0.7)";
+      ctx.fillRect(screenX - barW / 2 - 2, barY - 2, barW + 4, barH + 4);
+
+      ctx.fillStyle = "#ff0000";
+      ctx.fillRect(screenX - barW / 2, barY, barW, barH);
+
+      ctx.fillStyle =
+        hpPct > 0.5 ? "#00ff00" : hpPct > 0.25 ? "#ffaa00" : "#ff4444";
+      ctx.fillRect(screenX - barW / 2, barY, barW * hpPct, barH);
+
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(screenX - barW / 2, barY, barW, barH);
+
+      ctx.font = "bold 14px monospace";
+      ctx.fillStyle = "#fff";
+      ctx.textAlign = "center";
+      ctx.fillText("SKELETON COLOSSUS", screenX, barY - 10);
+
+      return;
+    }
+
+    // ================================================================
+    // NORMAL SKELETON ENEMY
+    // ================================================================
+    const r = 13;
+    const bob = Math.sin(Date.now() / 120) * 0.8;
+
+    ctx.save();
+    ctx.translate(screenX, screenY + bob);
+
+    // shadow
+    ctx.fillStyle = "rgba(0,0,0,0.45)";
     ctx.beginPath();
-    ctx.ellipse(screenX, screenY + 18, 12, 6, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 4, r * 1.1, r * 0.55, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Body
-    ctx.fillStyle = "#ff4444";
-    ctx.fillRect(screenX - 12, screenY - 12, 36, 36);
+    // skull
+    ctx.fillStyle = "#f0f0f0";
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
 
-    // Eyes
-    ctx.fillStyle = "#aa2222";
-    ctx.fillRect(screenX - 8, screenY - 8, 12, 12);
-    ctx.fillRect(screenX + 2, screenY + 2, 12, 12);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#444";
+    ctx.stroke();
 
-    // Healthbar
-    const healthBarWidth = 50;
-    const healthBarHeight = 6;
+    // eyes
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.arc(-4, -3, 2.5, 0, Math.PI * 2);
+    ctx.arc(4, -3, 2.5, 0, Math.PI * 2);
+    ctx.fill();
 
-    ctx.fillStyle = "#ff0000";
-    ctx.fillRect(
-      screenX - healthBarWidth / 2,
-      screenY - 22,
-      healthBarWidth,
-      healthBarHeight
-    );
+    // jaw line
+    ctx.strokeStyle = "#666";
+    ctx.beginPath();
+    ctx.moveTo(-6, 6);
+    ctx.lineTo(6, 6);
+    ctx.stroke();
 
-    ctx.fillStyle = "#00ff00";
-    const pct = Math.max(0, enemy.health / enemy.maxHealth); // another safety guard
-    ctx.fillRect(
-      screenX - healthBarWidth / 2,
-      screenY - 22,
-      pct * healthBarWidth,
-      healthBarHeight
-    );
+    ctx.restore();
+
+    
+
+    
   };
+
 
   const drawSummons = (ctx: CanvasRenderingContext2D) => {
     const centerX = CANVAS_WIDTH / 2;
