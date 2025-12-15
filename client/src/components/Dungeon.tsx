@@ -8,7 +8,7 @@ export default function Dungeon() {
   const grassTexture = useTexture("/textures/grass.png");
   const asphaltTexture = useTexture("/textures/asphalt.png");
   
-  // Configure textures for pixel art
+  
   grassTexture.magFilter = THREE.NearestFilter;
   grassTexture.minFilter = THREE.NearestFilter;
   grassTexture.wrapS = grassTexture.wrapT = THREE.RepeatWrapping;
@@ -24,7 +24,7 @@ export default function Dungeon() {
     const elements = [];
     const roomSize = 40;
     
-    // Floor
+   
     elements.push(
       <mesh key="floor" position={[0, -0.5, 0]} receiveShadow>
         <boxGeometry args={[roomSize * 2, 1, roomSize * 2]} />
@@ -32,7 +32,7 @@ export default function Dungeon() {
       </mesh>
     );
     
-    // Walls
+ 
     const wallPositions: { pos: [number, number, number]; rot: [number, number, number]; args: [number, number, number]; }[] = [
       { pos: [0, 2, roomSize], rot: [0, 0, 0], args: [roomSize * 2, 4, 1] }, // North
       { pos: [0, 2, -roomSize], rot: [0, 0, 0], args: [roomSize * 2, 4, 1] }, // South  

@@ -36,12 +36,12 @@ export default function Enemy({ enemy }: EnemyProps) {
     enemy.position.add(enemy.velocity.clone().multiplyScalar(delta));
     enemy.velocity.multiplyScalar(0.8); // friction
 
-    // Patrol behavior
+    
     if (enemy.state === "patrolling") {
       if (enemy.type === "sentry") {
-        // Sentry: stay in place (maybe rotate/look) - no position change
+        
       } else if (enemy.type === "patroller" && enemy.patrolPoints && enemy.patrolPoints.length > 0) {
-        // Move towards current patrol point
+        
         const target = enemy.patrolPoints[enemy.currentPatrolIndex ?? 0];
         const dir = target.clone().sub(enemy.position);
         const dist = dir.length();

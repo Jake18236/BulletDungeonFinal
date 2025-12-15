@@ -40,7 +40,7 @@ interface TerrainObstacle {
   type: "rock" | "pillar" | "wall";
 }
 
-// Generate cave-like terrain for a room
+
 function generateRoomTerrain(roomX: number, roomY: number): TerrainObstacle[] {
   const obstacles: TerrainObstacle[] = [];
   const seed = roomX * 1000 + roomY;
@@ -526,13 +526,8 @@ export default function CanvasGame() {
             if (enemy) {
               enemy.health -= damage;
 
-              // ADD VISUAL EFFECTS:
               const { addImpact, addDamageNumber } = useVisualEffects.getState();
-
-              // Impact effect at hit location
               addImpact(enemy.position.clone(), "#ffffff");
-
-              // Damage number
               addDamageNumber(enemy.position.x, enemy.position.z, damage);
 
               if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
@@ -544,22 +539,38 @@ export default function CanvasGame() {
 
                 // ADD EXPLOSION EFFECT:
                 const { addExplosion } = useVisualEffects.getState();
-                addExplosion(enemy.position.clone(), 25); // 25 particles
+                addExplosion(enemy.position.clone(), 25); 
 
                 removeEnemy(enemyId);
+                // Splinter Bullets
+                const ps = usePlayer.getState();
+                if (ps.splinterBullets) {
+                  for (let i = 0; i < 3; i++) {
+                    const angle = (i / 3) * Math.PI * 2 + Math.random() * 0.3;
+                    const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+                    const slotStats = getSlotStats(activeSlotId);
+
+                    addProjectile({
+                      position: enemy.position.clone(),
+                      direction,
+                      slotId: activeSlotId,
+                      damage: slotStats.damage * 0.1,
+                      speed: slotStats.speed * 0.8,
+                      range: slotStats.range * 0.5,
+                      trailLength: slotStats.trailLength,
+                      homing: false,
+                      piercing: 0,
+                      bouncing: 0,
+                    });
+                  }
+                }
               }
             }
           },
         );
 
-      // MODIFY YOUR EXISTING ENEMY UPDATE LOOP IN CanvasGame.tsx
-      // Find where you have: const updatedEnemies = enemies.map((enemy) => {
-      // Replace the ENTIRE map function with this:
-
       const updatedEnemies = enemies.map((enemy) => {
-        // ========================================================================
-        // DEER BOSS BEHAVIOR
-        // ========================================================================
+  
         if (enemy.isBoss && enemy.bossType === "deer") {
           const updated = { ...enemy };
 
@@ -570,23 +581,19 @@ export default function CanvasGame() {
             updated.speed *= 1.3;
             updated.maxWindUpTime = 0.5;
           }
-
-          // Direction to player
           const dirToPlayer = new THREE.Vector3()
             .subVectors(position, updated.position)
             .normalize();
           const distanceToPlayer = updated.position.distanceTo(position);
 
-          // Always face player
+          
           updated.rotationY = Math.atan2(dirToPlayer.x, dirToPlayer.z);
-
-          // STATE MACHINE
           if (updated.attackState === "chasing") {
-            // Move toward player
+            
             const moveAmount = updated.speed * delta;
             updated.position.add(dirToPlayer.clone().multiplyScalar(moveAmount));
 
-            // Check dash trigger
+            // dash trigger
             updated.dashCooldown! -= delta;
             if (updated.dashCooldown! <= 0 && distanceToPlayer < 18 && distanceToPlayer > 5) {
               updated.attackState = "winding_up";
@@ -668,10 +675,6 @@ export default function CanvasGame() {
 
           return updated;
         }
-
-        // ========================================================================
-        // NORMAL ENEMY BEHAVIOR (your existing code)
-        // ========================================================================
         const dx = position.x - enemy.position.x;
         const dz = position.z - enemy.position.z;
         const distance = Math.sqrt(dx * dx + dz * dz);
@@ -1030,8 +1033,6 @@ export default function CanvasGame() {
     });
   };
 
-
-  // Add this function to draw XP bar at top of screen:
   const drawXPBar = (ctx: CanvasRenderingContext2D) => {
     const barWidth = 400;
     const barHeight = 20;
@@ -1185,10 +1186,10 @@ export default function CanvasGame() {
       let cylinderRotation = 0;
 
       if (isReloading) {
-        const p = reloadProgress / reloadTime; // 0 → 1 over 1.1s
-        const spins = 2; // number of full spins during reload
-        gunRotation += spins * 2 * Math.PI * p; // spin the gun in place
-        cylinderRotation = spins * 2 * Math.PI * p * 1.2; // cylinder spins slightly faster
+        const p = reloadProgress / reloadTime; 
+        const spins = 2; 
+        gunRotation += spins * 2 * Math.PI * p; 
+        cylinderRotation = spins * 2 * Math.PI * p * 1.2; 
       }
 
       if (!isPaused) {
@@ -1389,7 +1390,7 @@ export default function CanvasGame() {
 
       const headScreen = worldToScreen(proj.position);
 
-      // Create gradient for trail (20MTD style)
+      
       const trailLength = Math.min(proj.trailHistory.length, 30);
 
       for (let i = 0; i < trailLength - 1; i++) {
@@ -1462,8 +1463,6 @@ export default function CanvasGame() {
 
     ctx.restore();
   };
-
-  // 5. ADD NEW DRAWING FUNCTIONS (before return statement):
 
   const drawParticles = (ctx: CanvasRenderingContext2D) => {
     const centerX = CANVAS_WIDTH / 2;
@@ -2010,10 +2009,6 @@ export default function CanvasGame() {
   };
   
   const drawLightningStrikes = (ctx: CanvasRenderingContext2D) => {
-    // This would show visual feedback for Electro Mage
-    // You can implement this as a temporary flash effect
-
-    // Example: Track recent strikes
     const { recentStrikes } = useSummons.getState();
 
     if (!recentStrikes) return;

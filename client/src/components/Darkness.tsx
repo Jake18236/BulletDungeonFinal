@@ -31,23 +31,22 @@ export default function Darkness() {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      // Clear canvas
+      
       ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-      // Create darkness base layer
+      
       ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-      // Use destination-out to "cut holes" in the darkness
+     
       ctx.globalCompositeOperation = "destination-out";
 
       const centerX = CANVAS_WIDTH / 2;
       const centerY = CANVAS_HEIGHT / 2;
 
-      // Collect all light sources
+      
       const lights: LightSource[] = [];
 
-      // 1. PLAYER LIGHT (main light source)
       lights.push({
         x: centerX,
         y: centerY,
@@ -57,7 +56,7 @@ export default function Darkness() {
         intensity: 1,
       });
 
-      // 2. FIRING LIGHT (when player shoots)
+      
       if (isFiring) {
         lights.push({
           x: centerX,
@@ -69,7 +68,7 @@ export default function Darkness() {
         });
       }
 
-      // 3. XP ORB LIGHTS
+      //XP ORB LIGHTS
       xpOrbs.forEach((orb) => {
         const screenX = centerX + ((orb.position.x - playerPosition.x) * TILE_SIZE) / 2;
         const screenY = centerY + ((orb.position.z - playerPosition.z) * TILE_SIZE) / 2;
@@ -104,11 +103,6 @@ export default function Darkness() {
         );
 
         const intensity = light.intensity ?? 1.0;
-
-        // Three-zone gradient:
-        // Inner: fully transparent (fully bright)
-        // Middle: partially transparent (dimmed)
-        // Outer: fade to opaque (darkness)
 
         const innerStop = light.innerRadius / light.outerRadius;
         const middleStop = light.middleRadius / light.outerRadius;

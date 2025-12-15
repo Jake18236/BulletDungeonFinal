@@ -24,7 +24,7 @@ export default function Game() {
   useFrame((state, delta) => {
     
 
-    // Enemy AI and room transitions only
+    
     const updatedEnemies = enemies.map(enemy => {
       if (!enemy.velocity) enemy.velocity = new THREE.Vector3();
       enemy.position.add(enemy.velocity.clone().multiplyScalar(delta));

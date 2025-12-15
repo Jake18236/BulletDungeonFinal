@@ -12,10 +12,6 @@ import Inventory from "./Inventory";
 import Minimap from "./Minimap";
 import { Volume2, VolumeX } from "lucide-react";
 
-/* -------------------------------------------------------------------------- */
-/*                              LEVEL UP SCREEN                               */
-/* -------------------------------------------------------------------------- */
-
 export function LevelUpScreen() {
   const { showLevelUpScreen, availableUpgrades, selectUpgrade, level } = useXP();
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -23,7 +19,7 @@ export function LevelUpScreen() {
   const [animationPhase, setAnimationPhase] = useState<"beam" | "dropdown" | "ready">("beam");
   const [beamProgress, setBeamProgress] = useState(0);
 
-  // Reset when showing
+  
   useEffect(() => {
     if (showLevelUpScreen) {
       setAnimationPhase("beam");
@@ -50,7 +46,7 @@ export function LevelUpScreen() {
     }
   }, [animationPhase]);
 
-  // Dropdown animation → ready
+  // Dropdown animation
   useEffect(() => {
     if (animationPhase === "dropdown") {
       const timeout = setTimeout(() => setAnimationPhase("ready"), 600);
@@ -253,10 +249,6 @@ export function LevelUpScreen() {
     </div>
   );
 }
-
-/* -------------------------------------------------------------------------- */
-/*                                 GAME UI                                    */
-/* -------------------------------------------------------------------------- */
 
 export default function GameUI() {
   const { phase, start, restart } = useGame();
