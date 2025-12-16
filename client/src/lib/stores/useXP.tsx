@@ -30,7 +30,7 @@ interface XPState {
   reset: () => void;
 }
 
-// Calculate XP needed for next level (exponential curve)
+// Calculate XP needed (exponential curve)
 const calculateXPForLevel = (level: number): number => {
   return Math.floor(10 + level * 15 + Math.pow(level, 1.5) * 5);
 };
@@ -419,7 +419,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
 
 ghost_friend: {
   id: "ghost_friend",
-  name: "Ghost Friend",
+  name: "Ghost Friend (broken currently)",
   description: "Summon a Ghost Friend that fires piercing projectiles for 8 damage",
   icon: "👻",
   category: "summon",
@@ -474,7 +474,7 @@ vengeful_ghost: {
 // Magic Scythe Tree:
 magic_scythe: {
   id: "magic_scythe",
-  name: "Magic Scythe",
+  name: "Magic Scythe (broken currently)",
   description: "Summon a Magic Scythe that orbits and deals 40 damage on contact",
   icon: "🗡️",
   category: "summon",
@@ -534,7 +534,7 @@ scythe_mastery: {
 // Magic Spear Tree:
 magic_spear: {
   id: "magic_spear",
-  name: "Magic Spear",
+  name: "Magic Spear (broken currently)",
   description: "Summon 2 Magic Spears that orbit and deal 20 damage",
   icon: "🔱",
   category: "summon",
@@ -587,7 +587,7 @@ soul_knight: {
 // Electro Bug Tree:
 electro_bug: {
   id: "electro_bug",
-  name: "Electro Bug",
+  name: "Electro Bug (broken currently)",
   description: "Summon an Electro Bug that strikes 2 nearby enemies with Lightning",
   icon: "🐛",
   category: "summon",
@@ -626,7 +626,7 @@ electro_mastery: {
 // Trainer Tree (general summon buffs):
 trainer: {
   id: "trainer",
-  name: "Trainer",
+  name: "Trainer (broken currently)",
   description: "Summon Damage +30%",
   icon: "🎓",
   category: "summon",
@@ -705,7 +705,7 @@ const generateRandomUpgrades = (takenUpgrades: Set<string>): Upgrade[] => {
 
   // Shuffle and pick 3
   const shuffled = [...available].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, 5);
+  return shuffled.slice(0, 9);
 };
 
 export const useXP = create<XPState>((set, get) => ({

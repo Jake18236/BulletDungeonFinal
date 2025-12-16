@@ -72,9 +72,9 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
         ),
         life: 0,
         maxLife: 0.3 + Math.random() * 0.2,
-        size: 2 + Math.random() * 3,
+        size: 4 + Math.random() * 3,
         color,
-        alpha: 1,
+        alpha: 2,
         type: "impact",
       });
     }

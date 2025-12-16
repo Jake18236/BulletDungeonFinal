@@ -220,7 +220,9 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
         continue;
       }
 
-      
+      // ========================================
+      // WALL BOUNCING FIRST
+      // ========================================
       if (proj.bouncesLeft > 0) {
         let hitWall = false;
         let hitPosition = proj.position.clone();

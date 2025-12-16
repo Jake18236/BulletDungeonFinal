@@ -559,7 +559,7 @@ export default function CanvasGame() {
                       range: slotStats.range * 0.5,
                       trailLength: slotStats.trailLength,
                       homing: false,
-                      piercing: 0,
+                      piercing: 2,
                       bouncing: 0,
                     });
                   }
@@ -570,11 +570,12 @@ export default function CanvasGame() {
         );
 
       const updatedEnemies = enemies.map((enemy) => {
-  
+      // BOSS LOGIC
+        // #########################################################################
         if (enemy.isBoss && enemy.bossType === "deer") {
           const updated = { ...enemy };
 
-          // Phase 2 transition at 50% HP
+          // Phase 2 at 50% HP
           if (!updated.isEnraged && updated.health < updated.maxHealth * 0.5) {
             updated.isEnraged = true;
             updated.maxDashCooldown = 2.0;
@@ -595,7 +596,7 @@ export default function CanvasGame() {
 
             // dash trigger
             updated.dashCooldown! -= delta;
-            if (updated.dashCooldown! <= 0 && distanceToPlayer < 18 && distanceToPlayer > 5) {
+            if (updated.dashCooldown! <= 0 && distanceToPlayer < 30 && distanceToPlayer > 8) {
               updated.attackState = "winding_up";
               updated.windUpTimer = 0;
               updated.clawWindUp = 0;
@@ -619,7 +620,7 @@ export default function CanvasGame() {
             if (updated.windUpTimer! >= updated.maxWindUpTime!) {
               updated.attackState = "dashing";
               updated.isDashing = true;
-              updated.velocity = updated.dashDirection!.clone().multiplyScalar(120);
+              updated.velocity = updated.dashDirection!.clone().multiplyScalar(180);
               playHit();
             }
           }
@@ -627,7 +628,7 @@ export default function CanvasGame() {
           else if (updated.attackState === "dashing") {
             const dashMove = updated.velocity.clone().multiplyScalar(delta);
             updated.position.add(dashMove);
-            updated.velocity.multiplyScalar(0.92);
+            updated.velocity.multiplyScalar(0.52);
 
             if (updated.velocity.length() < 10) {
               updated.attackState = "recovering";
@@ -777,8 +778,11 @@ export default function CanvasGame() {
               // ADD IMPACT ON PLAYER:
               const { addImpact } = useVisualEffects.getState();
               addImpact(position.clone(), "#ff4444");
-
-              enemy.canAttack = false;
+              addImpact(position.clone(), "#ff4444");
+              addImpact(position.clone(), "#ff3244");
+              addImpact(position.clone(), "#ff3444");
+              addImpact(position.clone(), "#ff4444");
+              
               enemy.attackCooldown = enemy.maxAttackCooldown;
               damagedThisFrameRef.current = true;
             }
@@ -1131,9 +1135,9 @@ export default function CanvasGame() {
 
     // Text
     ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 14px monospace";
+    ctx.font = "bold 44px monospace";
     ctx.textAlign = "center";
-    ctx.fillText("blue XP", barX + barWidth / 2, barY + barHeight + 20);
+    ctx.fillText("XP", barX + barWidth / 2, barY + barHeight + 20);
   };
 
   const drawReloadIndicator = (ctx: CanvasRenderingContext2D) => {
@@ -1251,9 +1255,7 @@ export default function CanvasGame() {
     ctx.translate(centerX, centerY);
 
     if (type === "revolver") {
-      // -----------------------------
-      // Cowboy-style spin reload
-      // -----------------------------
+      
       let gunRotation = mouseAngle;
       let cylinderRotation = 0;
 
@@ -1437,7 +1439,6 @@ export default function CanvasGame() {
     ctx.restore();
   };
 
-  
   const drawProjectilesAndTrails = (
     ctx: CanvasRenderingContext2D,
     isPaused: boolean,
@@ -1650,8 +1651,6 @@ export default function CanvasGame() {
 
     ctx.restore();
   };
-
-
 
   const drawPlayer = (ctx: CanvasRenderingContext2D) => {
     const centerX = CANVAS_WIDTH / 2;
@@ -1894,7 +1893,6 @@ export default function CanvasGame() {
 
     
   };
-
 
   const drawSummons = (ctx: CanvasRenderingContext2D) => {
     const centerX = CANVAS_WIDTH / 2;

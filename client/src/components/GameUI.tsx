@@ -18,20 +18,19 @@ export function LevelUpScreen() {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [animationPhase, setAnimationPhase] = useState<"beam" | "dropdown" | "ready">("beam");
   const [beamProgress, setBeamProgress] = useState(0);
-
   
   useEffect(() => {
     if (showLevelUpScreen) {
+      // Force immediate state reset
       setAnimationPhase("beam");
       setBeamProgress(0);
       setSelectedIndex(0);
       setHoveredIndex(null);
     }
   }, [showLevelUpScreen]);
-
   // Beam animation
   useEffect(() => {
-    if (animationPhase === "beam") {
+    if (animationPhase === "beam" && showLevelUpScreen) {
       const interval = setInterval(() => {
         setBeamProgress(prev => {
           if (prev >= 1) {
@@ -44,9 +43,9 @@ export function LevelUpScreen() {
       }, 20);
       return () => clearInterval(interval);
     }
-  }, [animationPhase]);
+  }, [animationPhase, showLevelUpScreen]);
 
-  // Dropdown animation
+  // Dropdown animation → ready
   useEffect(() => {
     if (animationPhase === "dropdown") {
       const timeout = setTimeout(() => setAnimationPhase("ready"), 600);
@@ -95,125 +94,126 @@ export function LevelUpScreen() {
         </div>
       )}
 
-      {/* Main upgrade container - DROPS DOWN FROM TOP */}
-      <div
-        className="absolute left-1/2 w-full max-w-3xl px-4 pointer-events-auto"
-        style={{
-          top: animationPhase === "beam" ? "-100%" : "50%",
-          transform: "translate(-50%, -50%)",
-          transition: animationPhase === "dropdown" || animationPhase === "ready" 
-            ? "top 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)" 
-            : "none",
-        }}
-      >
-        {/* Level text - FADES IN AFTER DROPDOWN */}
-        <div className="text-center mb-4">
-          <h1
-            className="text-5xl font-pixel bold text-red-500 drop-shadow-lg mb-2"
-            style={{
-              transform: animationPhase === "ready" ? "translateY(0) scale(1)" : "translateY(-50px) scale(0.8)",
-              opacity: animationPhase === "ready" ? 1 : 0,
-              transition: "all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s",
-            }}
-          >
-            Choose an Upgrade
-          </h1>
-          <p
-            className="text-xl text-gray-300 font-bold"
-            style={{
-              transform: animationPhase === "ready" ? "translateY(0)" : "translateY(-30px)",
-              opacity: animationPhase === "ready" ? 1 : 0,
-              transition: "all 0.4s ease-out 0.2s",
-            }}
-          >
-            Level {level}
-          </p>
-        </div>
-
-        {/* Upgrade icons - STAGGERED CASCADE */}
-        <div className="flex justify-center gap-6 mb-4">
-          {availableUpgrades.map((upgrade, i) => {
-            const isSelected = i === selectedIndex;
-            const isHovered = i === hoveredIndex;
-            const isReady = animationPhase === "ready";
-            return (
-              <div
-                key={upgrade.id}
-                onClick={() => isReady && setSelectedIndex(i)}
-                onMouseEnter={() => setHoveredIndex(i)}
-                onMouseLeave={() => setHoveredIndex(null)}
-                className="relative hex-border cursor-pointer"
-                style={{
-                  width: "70px",
-                  height: "70px",
-                  borderColor: isSelected ? "#fbbf24" : "white",
-                  borderWidth: "3px",
-                  background: isSelected ? "#fbbf24" : "white",
-                  pointerEvents: "auto", // allow hover immediately
-                  transform: `translateY(${isReady ? "0" : "-100px"}) scale(${isHovered ? "1.1" : "1"})`,
-                  opacity: isReady ? 1 : 0,
-                  transition: `
-                    opacity 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${0.3 + i * 0.1}s,
-                    transform 0.2s ease-out
-                  `,
-                  filter: isHovered
-                    ? "drop-shadow(0 0 15px rgba(251, 191, 36, 0.8))"
-                    : isSelected
-                    ? "drop-shadow(0 0 10px rgba(251, 191, 36, 0.5))"
-                    : "none",
-                }}
-
-              >
-                <div className="hex-inner flex items-center justify-center bg-black text-white text-3xl">
-                  {upgrade.icon}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Upgrade description - SCALES UP */}
+      {/* FIXED: Only render main content after beam completes */}
+      {animationPhase !== "beam" && (
         <div
-          className="bg-black border-2 rounded-lg text-center mb-3"
+          className="absolute left-1/2 w-full max-w-3xl px-4 pointer-events-auto"
           style={{
-            width: "600px",
-            margin: "0 auto",
-            height: "200px",
-            overflow: "hidden",
-            borderColor: "white",
-            padding: "1rem",
-            transform: animationPhase === "ready" ? "translateY(0) scale(1)" : "translateY(30px) scale(0.95)",
-            opacity: animationPhase === "ready" ? 1 : 0,
-            transition: "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.5s",
+            top: animationPhase === "dropdown" ? "-100%" : "50%",
+            transform: "translate(-50%, -50%)",
+            transition: animationPhase === "dropdown" || animationPhase === "ready" 
+              ? "top 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)" 
+              : "none",
           }}
         >
-          <h2 className="text-2xl font-bold text-white mb-2">{displayedUpgrade.name}</h2>
-          <p className="text-gray-300 text-base">{displayedUpgrade.description}</p>
-        </div>
+          {/* Level text */}
+          <div className="text-center mb-4">
+            <h1
+              className="text-5xl font-pixel bold text-red-500 drop-shadow-lg mb-2"
+              style={{
+                transform: animationPhase === "ready" ? "translateY(0) scale(1)" : "translateY(-50px) scale(0.8)",
+                opacity: animationPhase === "ready" ? 1 : 0,
+                transition: "all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s",
+              }}
+            >
+              Choose an Upgrade
+            </h1>
+            <p
+              className="text-xl text-gray-300 font-bold"
+              style={{
+                transform: animationPhase === "ready" ? "translateY(0)" : "translateY(-30px)",
+                opacity: animationPhase === "ready" ? 1 : 0,
+                transition: "all 0.4s ease-out 0.2s",
+              }}
+            >
+              Level {level}
+            </p>
+          </div>
 
-        {/* Choose button - FINAL ENTRANCE WITH GLOW */}
-        <div className="flex justify-center">
-          <button
-            onClick={() => animationPhase === "ready" && selectUpgrade(displayedUpgrade)}
-            disabled={animationPhase !== "ready"}
-            className="bg-gray-800 hover:bg-gray-700 disabled:bg-gray-900 border-2 border-red-500 text-white font-bold text-lg py-2 px-6 rounded-lg pointer-events-auto"
+          {/* Upgrade icons */}
+          <div className="flex justify-center gap-6 mb-4">
+            {availableUpgrades.map((upgrade, i) => {
+              const isSelected = i === selectedIndex;
+              const isHovered = i === hoveredIndex;
+              const isReady = animationPhase === "ready";
+              return (
+                <div
+                  key={upgrade.id}
+                  onClick={() => isReady && setSelectedIndex(i)}
+                  onMouseEnter={() => setHoveredIndex(i)}
+                  onMouseLeave={() => setHoveredIndex(null)}
+                  className="relative hex-border cursor-pointer"
+                  style={{
+                    width: "70px",
+                    height: "70px",
+                    borderColor: isSelected ? "#fbbf24" : "white",
+                    borderWidth: "3px",
+                    background: isSelected ? "#fbbf24" : "white",
+                    pointerEvents: isReady ? "auto" : "none",
+                    transform: `translateY(${isReady ? "0" : "-100px"}) scale(${isHovered ? "1.1" : "1"})`,
+                    opacity: isReady ? 1 : 0,
+                    transition: `
+                      opacity 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${0.3 + i * 0.1}s,
+                      transform 0.2s ease-out
+                    `,
+                    filter: isHovered
+                      ? "drop-shadow(0 0 15px rgba(251, 191, 36, 0.8))"
+                      : isSelected
+                      ? "drop-shadow(0 0 10px rgba(251, 191, 36, 0.5))"
+                      : "none",
+                  }}
+                >
+                  <div className="hex-inner flex items-center justify-center bg-black text-white text-3xl">
+                    {upgrade.icon}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Upgrade description */}
+          <div
+            className="bg-black border-2 rounded-lg text-center mb-3"
             style={{
-              transform: animationPhase === "ready" ? "translateY(0) scale(1)" : "translateY(20px) scale(0.9)",
+              width: "600px",
+              margin: "0 auto",
+              height: "200px",
+              overflow: "hidden",
+              borderColor: "white",
+              padding: "1rem",
+              transform: animationPhase === "ready" ? "translateY(0) scale(1)" : "translateY(30px) scale(0.95)",
               opacity: animationPhase === "ready" ? 1 : 0,
-              transition: `
-                opacity 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.6s,
-                transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
-                box-shadow 0.2s ease-out
-              `,
-              boxShadow: animationPhase === "ready"
-                ? "0 0 20px rgba(239, 68, 68, 0.4)"
-                : "none",
+              transition: "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.5s",
             }}
           >
-            CHOOSE
-          </button>
+            <h2 className="text-2xl font-bold text-white mb-2">{displayedUpgrade.name}</h2>
+            <p className="text-gray-300 text-base">{displayedUpgrade.description}</p>
+          </div>
+
+          {/* Choose button */}
+          <div className="flex justify-center">
+            <button
+              onClick={() => animationPhase === "ready" && selectUpgrade(displayedUpgrade)}
+              disabled={animationPhase !== "ready"}
+              className="bg-gray-800 hover:bg-gray-700 disabled:bg-gray-900 border-2 border-red-500 text-white font-bold text-lg py-2 px-6 rounded-lg pointer-events-auto"
+              style={{
+                transform: animationPhase === "ready" ? "translateY(0) scale(1)" : "translateY(20px) scale(0.9)",
+                opacity: animationPhase === "ready" ? 1 : 0,
+                transition: `
+                  opacity 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.6s,
+                  transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+                  box-shadow 0.2s ease-out
+                `,
+                boxShadow: animationPhase === "ready"
+                  ? "0 0 20px rgba(239, 68, 68, 0.4)"
+                  : "none",
+              }}
+            >
+              CHOOSE
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Hexagon styles */}
       <style jsx>{`
@@ -270,12 +270,12 @@ export default function GameUI() {
       <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-90 z-50">
         <Card className="w-96 bg-gray-900 text-white border-gray-700">
           <CardContent className="p-8 text-center">
-            <h1 className="text-4xl font-bold mb-4 text-blue-400">Dungeon Crawler</h1>
+            <h1 className="text-4xl font-bold mb-4 text-blue-400">Bullet Dungeon Game Thing</h1>
             <p className="text-gray-300 mb-6">
-              Navigate the procedurally generated dungeon, fight enemies, and collect treasures!
+              Currently incomplete start screen.
             </p>
             <Button onClick={handleStart} className="bg-blue-600 hover:bg-blue-700 text-lg px-8 py-3">
-              Start Adventure
+              Start Game!
             </Button>
           </CardContent>
         </Card>
@@ -298,7 +298,7 @@ export default function GameUI() {
       </div>
     );
   }
-
+// hud
   return (
     <>
       {/* HUD */}
@@ -307,12 +307,12 @@ export default function GameUI() {
           <CardContent className="p-4">
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">Hearts:</span>
+                <span className="text-3xl font-bold">Hearts:</span>
                 <div className="flex gap-1">
                   {Array.from({ length: maxHearts }).map((_, i) => (
                     <div
                       key={i}
-                      className={`w-6 h-6 rounded-full border-2 ${
+                      className={`w-12 h-12 rounded-full border-2 ${
                         i < hearts
                           ? "bg-red-500 border-red-600"
                           : "bg-gray-800 border-gray-600"
@@ -327,10 +327,7 @@ export default function GameUI() {
       </div>
 
 
-      {/* Minimap */}
-      <div className="fixed bottom-4 right-4 z-40">
-        <Minimap />
-      </div>
+      
 
       {/* Instructions */}
       <div className="fixed bottom-4 left-4 z-40">
