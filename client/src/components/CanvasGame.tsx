@@ -869,11 +869,18 @@ export default function CanvasGame() {
 
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
+
     const floorSize = ROOM_SIZE * TILE_SIZE;
+
     const offsetX = (-position.x * TILE_SIZE) / 2;
     const offsetZ = (-position.z * TILE_SIZE) / 2;
 
-    ctx.fillStyle = "#2a2a2a";
+    // ============================================
+    // DARK STONE FLOOR (20MTD Style - OPTIMIZED)
+    // ============================================
+
+    // Base dark floor color
+    ctx.fillStyle = "#1a1a1c";
     ctx.fillRect(
       centerX - floorSize / 2 + offsetX,
       centerY - floorSize / 2 + offsetZ,
@@ -881,22 +888,73 @@ export default function CanvasGame() {
       floorSize,
     );
 
-    ctx.strokeStyle = "#333333";
+    // Seeded random for consistent pattern
+    const seed = currentRoom.x * 1000 + currentRoom.y;
+    const seededRandom = (n: number) => {
+      const x = Math.sin(seed + n) * 1000;
+      return x - Math.floor(x);
+    };
+
+    // Draw subtle stone pattern (MUCH fewer tiles)
+    const stoneSize = 80; // Larger tiles = less drawing
+    const rows = Math.ceil(floorSize / stoneSize) + 1;
+    const cols = Math.ceil(floorSize / stoneSize) + 1;
+
+    ctx.strokeStyle = "#0f0f10";
     ctx.lineWidth = 1;
-    for (let i = -ROOM_SIZE; i <= ROOM_SIZE; i += 2) {
-      const x = centerX + (i * TILE_SIZE) / 2 + offsetX;
-      const y = centerY + (i * TILE_SIZE) / 2 + offsetZ;
 
-      ctx.beginPath();
-      ctx.moveTo(x, centerY - floorSize / 2 + offsetZ);
-      ctx.lineTo(x, centerY + floorSize / 2 + offsetZ);
-      ctx.stroke();
-
+    // Draw stone tile lines
+    for (let row = 0; row <= rows; row++) {
+      const y = centerY - floorSize / 2 + offsetZ + row * stoneSize;
       ctx.beginPath();
       ctx.moveTo(centerX - floorSize / 2 + offsetX, y);
       ctx.lineTo(centerX + floorSize / 2 + offsetX, y);
       ctx.stroke();
     }
+
+    for (let col = 0; col <= cols; col++) {
+      const x = centerX - floorSize / 2 + offsetX + col * stoneSize;
+      ctx.beginPath();
+      ctx.moveTo(x, centerY - floorSize / 2 + offsetZ);
+      ctx.lineTo(x, centerY + floorSize / 2 + offsetZ);
+      ctx.stroke();
+    }
+
+    // Add occasional dark spots (very few)
+    ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+    for (let i = 0; i < 20; i++) {
+      if (seededRandom(i * 123) > 0.7) {
+        const x = centerX - floorSize / 2 + offsetX + seededRandom(i * 234) * floorSize;
+        const y = centerY - floorSize / 2 + offsetZ + seededRandom(i * 345) * floorSize;
+        ctx.beginPath();
+        ctx.arc(x, y, 2 + seededRandom(i) * 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Add subtle vignette (simple gradient)
+    const gradient = ctx.createRadialGradient(
+      centerX,
+      centerY,
+      floorSize * 0.3,
+      centerX,
+      centerY,
+      floorSize * 0.7
+    );
+    gradient.addColorStop(0, "rgba(0, 0, 0, 0)");
+    gradient.addColorStop(1, "rgba(0, 0, 0, 0.4)");
+
+    ctx.fillStyle = gradient;
+    ctx.fillRect(
+      centerX - floorSize / 2 + offsetX,
+      centerY - floorSize / 2 + offsetZ,
+      floorSize,
+      floorSize,
+    );
+
+    // ============================================
+    // TERRAIN OBSTACLES
+    // ============================================
 
     terrainRef.current.forEach((obstacle) => {
       const screenX = centerX + ((obstacle.x - position.x) * TILE_SIZE) / 2;
@@ -905,29 +963,38 @@ export default function CanvasGame() {
       const h = (obstacle.height * TILE_SIZE) / 2;
 
       if (obstacle.type === "rock") {
-        ctx.fillStyle = "#505050ff";
+        // Dark rock
+        ctx.fillStyle = "#2a2a2c";
         ctx.fillRect(screenX - w / 2, screenY - h / 2, w, h);
-        ctx.fillStyle = "#484542ff";
+
+        // Simple texture
+        ctx.fillStyle = "#1f1f21";
         ctx.fillRect(screenX - w / 2 + 2, screenY - h / 2 + 2, w / 3, h / 3);
-        ctx.fillRect(screenX + w / 6, screenY + h / 6, w / 4, h / 4);
+
+        // Outline
+        ctx.strokeStyle = "#0f0f10";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(screenX - w / 2, screenY - h / 2, w, h);
       } else if (obstacle.type === "pillar") {
-        ctx.fillStyle = "#5a5a5a";
+        // Dark pillar
+        ctx.fillStyle = "#3a3a3c";
         ctx.beginPath();
         ctx.arc(screenX, screenY, w / 2, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.fillStyle = "rgba(0, 0, 0, 0.52)";
+        // Shadow
+        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
         ctx.beginPath();
         ctx.ellipse(screenX + 2, screenY + 2, w / 2 - 1, w / 3, 0, 0, Math.PI * 2);
         ctx.fill();
       }
-
-      ctx.strokeStyle = "#1a1a1a";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(screenX - w / 2, screenY - h / 2, w, h);
     });
 
-    ctx.fillStyle = "#555555";
+    // ============================================
+    // WALLS
+    // ============================================
+
+    ctx.fillStyle = "#2a2a2c";
     const wallThickness = 20;
 
     if (!currentRoom.exits.includes("north")) {
@@ -963,8 +1030,13 @@ export default function CanvasGame() {
       );
     }
 
-    ctx.fillStyle = "#00ff00";
+    // ============================================
+    // EXITS (Glowing cyan)
+    // ============================================
+
+    ctx.fillStyle = "#00ffcc";
     const exitSize = 60;
+
     currentRoom.exits.forEach((exit) => {
       switch (exit) {
         case "north":

@@ -174,7 +174,6 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
       });
     },
   },
-
   // Tier 3
   splinter: {
     id: "splinter",
@@ -325,7 +324,6 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
       usePlayer.setState({ splitFire: true });
     },
   },
-
   // Tier 3
   fusillade: {
     id: "fusillade",
@@ -401,7 +399,6 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
       });
     },
   },
-
   // Tier 3
   kill_clip: {
     id: "kill_clip",
@@ -708,7 +705,7 @@ const generateRandomUpgrades = (takenUpgrades: Set<string>): Upgrade[] => {
 
   // Shuffle and pick 3
   const shuffled = [...available].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, 10);
+  return shuffled.slice(0, 5);
 };
 
 export const useXP = create<XPState>((set, get) => ({

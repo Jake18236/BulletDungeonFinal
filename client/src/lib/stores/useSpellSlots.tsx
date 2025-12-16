@@ -83,7 +83,7 @@ const BASE_DAMAGE = 100;
 const BASE_SPEED = 30;
 const BASE_RANGE = 50;
 const BASE_RELOAD = 0.9; // seconds
-const BASE_ACCURACY = 1.0;
+const BASE_ACCURACY = 1.1;
 
 // Card definitionsff
 export const CARD_LIBRARY: Record<CardType, Omit<Card, "id">> = {

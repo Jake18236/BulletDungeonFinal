@@ -159,145 +159,182 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
     }));
   },
 
-  updateProjectiles: (
-    delta: number,
-    enemies: Enemy[],
-    playerPos: THREE.Vector3,
-    roomBounds: number,
-    onHit: (enemyId: string, damage: number, knockback: THREE.Vector3) => void,
-    isPaused: boolean,
-    isFiring: boolean,
-    isReloading: boolean,
-    isMoving: boolean,
-  ) => {
+  updateProjectiles: (delta, enemies, playerPos, roomBounds, onHit) => {
     const updated: Projectile[] = [];
     const { trailGhosts } = get();
-    const { addImpact, addDamageNumber } = useVisualEffects.getState();
 
     for (const proj of get().projectiles) {
-      // Initialize trail if missing
+      // --- Move projectile ---
+      const move = proj.velocity.clone().multiplyScalar(delta);
+      proj.position.add(move);
+      proj.distanceTraveled += move.length();
+
+      // --- Update trail history ---
       if (!proj.trailHistory) proj.trailHistory = [];
 
-      if (!isPaused) {
-        // --- Record previous head position for trail ---
-        const prevPos = proj.position.clone();
-        proj.trailHistory.unshift(prevPos);
+      const lastPos = proj.trailHistory[0] ?? proj.position.clone();
+      const dist = proj.position.distanceTo(lastPos);
+      if (dist > 0.05) {
+        const steps = Math.ceil(dist / 0.05);
+        for (let s = 1; s <= steps; s++) {
+          const interpolated = lastPos.clone().lerp(proj.position, s / steps);
+          proj.trailHistory.unshift(interpolated);
+        }
+      } else {
+        proj.trailHistory.unshift(proj.position.clone());
+      }
 
-        if (proj.trailHistory.length > proj.trailLength) {
-          proj.trailHistory.length = proj.trailLength;
+      if (proj.trailHistory.length > proj.trailLength) {
+        proj.trailHistory = proj.trailHistory.slice(0, proj.trailLength);
+      }
+
+      // --- Homing ---
+      if (proj.homing && enemies.length > 0) {
+        const nearest = enemies.reduce(
+          (acc, e) => {
+            if (proj.piercedEnemies.has(e.id)) return acc;
+            const d = proj.position.distanceTo(e.position);
+            return d < acc.dist ? { enemy: e, dist: d } : acc;
+          },
+          { enemy: null as any, dist: Infinity }
+        );
+        if (nearest.enemy && nearest.dist < 15) {
+          const dir = nearest.enemy.position.clone().sub(proj.position).normalize();
+          proj.velocity.lerp(dir.multiplyScalar(proj.speed), 5 * delta);
+          proj.velocity.normalize().multiplyScalar(proj.speed);
+          proj.rotationY = Math.atan2(proj.velocity.x, proj.velocity.z);
+        }
+      }
+
+      // --- Check range ---
+      if (proj.distanceTraveled > proj.maxRange) {
+        if (proj.trailHistory.length > 1) {
+          trailGhosts.push({
+            id: proj.id,
+            life: 0.2,
+            trail: [...proj.trailHistory],
+            color: proj.color,
+            size: proj.size,
+          });
+        }
+        continue;
+      }
+
+      
+      if (proj.bouncesLeft > 0) {
+        let hitWall = false;
+        let hitPosition = proj.position.clone();
+
+        if (Math.abs(proj.position.x) > roomBounds) {
+          proj.velocity.x *= -1;
+          proj.bouncesLeft--;
+          hitWall = true;
+          hitPosition.x = Math.sign(proj.position.x) * roomBounds;
+        }
+        if (Math.abs(proj.position.z) > roomBounds) {
+          proj.velocity.z *= -1;
+          proj.bouncesLeft--;
+          hitWall = true;
+          hitPosition.z = Math.sign(proj.position.z) * roomBounds;
         }
 
-        // --- Move projectile ---
-        const move = proj.velocity.clone().multiplyScalar(delta);
-        proj.position.add(move);
-
-        // STEP 3 & 4: Wall bouncing logic with pierce/bounce interaction
-        // Only bounce off walls if:
-        // 1. We still have bounces left, OR
-        // 2. We're still in pierce mode (haven't exceeded pierce limit)
-        const stillPiercing = proj.piercedEnemies.size <= proj.piercing;
-        const canBounceWalls = proj.bouncesLeft > 0 || stillPiercing;
-
-        if (canBounceWalls) {
-          let wallBounced = false;
-          if (Math.abs(proj.position.x) > roomBounds) {
-            proj.velocity.x *= -1;
-            wallBounced = true;
-          }
-          if (Math.abs(proj.position.z) > roomBounds) {
-            proj.velocity.z *= -1;
-            wallBounced = true;
-          }
-
-          // STEP 3: Only consume a bounce if we're NOT currently piercing
-          if (wallBounced && !stillPiercing) {
-            proj.bouncesLeft--;
-          }
-        } else {
-          // Out of bounces and piercing - remove if out of bounds
-          if (Math.abs(proj.position.x) > roomBounds || Math.abs(proj.position.z) > roomBounds) {
-            continue;
-          }
+        // Add terrain impact effect
+        if (hitWall && get().addImpactEffect) {
+          get().addImpactEffect(hitPosition, 'terrain', proj.color, 0.8);
         }
+      } else if (
+        // If no bounces left, check if out of bounds and remove
+        Math.abs(proj.position.x) > roomBounds ||
+        Math.abs(proj.position.z) > roomBounds
+      ) {
+        continue;
+      }
 
-        // --- Homing ---
-        if (proj.homing && enemies.length > 0) {
-          const nearest = enemies.reduce(
-            (acc, e) => {
-              if (proj.piercedEnemies.has(e.id)) return acc;
-              const d = proj.position.distanceTo(e.position);
-              return d < acc.dist ? { enemy: e, dist: d } : acc;
-            },
-            { enemy: null as Enemy | null, dist: Infinity }
+      
+      let hitEnemy = false;
+
+      for (const enemy of enemies) {
+        // Skip if already pierced this enemy
+        if (proj.piercedEnemies.has(enemy.id)) continue;
+
+        if (proj.position.distanceTo(enemy.position) < 1.0) {
+          hitEnemy = true;
+
+          // Deal damage
+          onHit(
+            enemy.id,
+            proj.damage,
+            proj.velocity.clone().normalize().multiplyScalar(8)
           );
-          if (nearest.enemy && nearest.dist < 15) {
-            const dir = nearest.enemy.position.clone().sub(proj.position).normalize();
-            proj.velocity.lerp(dir.multiplyScalar(proj.speed), 5 * delta);
+
+          // Add impact effect
+          if (get().addImpactEffect) {
+            get().addImpactEffect(enemy.position.clone(), 'hit', proj.color, 1.5);
+          }
+
+          // ========================================
+          // BOUNCE LOGIC (if has bounces left)
+          // ========================================
+          if (proj.bouncesLeft > 0) {
+            // Calculate bounce direction (reflect off enemy)
+            const hitDirection = proj.position.clone().sub(enemy.position).normalize();
+
+            // Reflect velocity around the hit normal
+            const dot = proj.velocity.dot(hitDirection);
+            proj.velocity.x = proj.velocity.x - 2 * dot * hitDirection.x;
+            proj.velocity.z = proj.velocity.z - 2 * dot * hitDirection.z;
+
+            // Normalize and maintain speed
             proj.velocity.normalize().multiplyScalar(proj.speed);
             proj.rotationY = Math.atan2(proj.velocity.x, proj.velocity.z);
+
+            // Decrement bounces
+            proj.bouncesLeft--;
+
+            // Mark this enemy as hit (so we don't bounce off them again immediately)
+            proj.piercedEnemies.add(enemy.id);
+
+            // Move projectile slightly away from enemy to prevent getting stuck
+            proj.position.add(hitDirection.multiplyScalar(1.2));
+
+            // Continue to next enemy (we bounced, don't check pierce count)
+            continue;
           }
-        }
 
-        // STEP 4 & 5: Enemy collision with pierce/bounce interaction
-        let shouldRemove = false;
-        for (const enemy of enemies) {
-          if (proj.piercedEnemies.has(enemy.id)) continue;
-
-          const radius = 1.0;
-          const dist = proj.position.distanceTo(enemy.position);
-
-          if (dist < radius) {
-            const ps = usePlayer.getState();
-
-            // ASSASSIN: Instant kill if below threshold
-            const healthPercent = enemy.health / enemy.maxHealth;
-            let finalDamage = proj.damage;
-
-            if (ps.instantKillThreshold > 0 && healthPercent < ps.instantKillThreshold) {
-              finalDamage = enemy.health; // Instant kill
-            }
-            // SPLINTER BULLETS: 20% chance to deal 2x damage
-            // Hit the enemy
-            onHit(enemy.id, finalDamage, proj.velocity.clone().normalize().multiplyScalar(8 * ps.knockbackMultiplier));
+          // ========================================
+          // PIERCE LOGIC (if no bounces left)
+          // ========================================
+          else {
+            // Mark as pierced
             proj.piercedEnemies.add(enemy.id);
-
-            // ADD VISUAL EFFECTS HERE:
-            
-            addImpact(enemy.position.clone(), proj.color);
-            
-
-            proj.piercedEnemies.add(enemy.id);
-
-            if (proj.burn) {
-              const { applyStatusEffect } = useSummons.getState();
-              applyStatusEffect(enemy.id, "burn", proj.burn.damage, proj.burn.duration);
-            }
-
-            // Check if enemy will die from this hit
-            const willDie = enemy.health - finalDamage <= 0;
-
-            // REAPER ROUNDS: Don't count killed enemies against pierce limit
-            const shouldCountAsPierce = !willDie || !ps.pierceKilledEnemies;
-            if (willDie && proj.isSummonProjectile) {
-              const { handleEnemyKilledBySummon } = useSummons.getState();
-              handleEnemyKilledBySummon();
-            }
 
             // Explosive effect
             if (proj.explosive) {
+              if (get().addImpactEffect) {
+                get().addImpactEffect(
+                  proj.position.clone(),
+                  'explosion',
+                  '#ff6600',
+                  proj.explosive.radius
+                );
+              }
+
               for (const e of enemies) {
                 if (e.position.distanceTo(proj.position) < proj.explosive.radius) {
                   onHit(
                     e.id,
                     proj.explosive.damage,
-                    e.position.clone().sub(proj.position).normalize().multiplyScalar(12 * ps.knockbackMultiplier)
+                    e.position.clone().sub(proj.position).normalize().multiplyScalar(12)
                   );
                 }
               }
             }
 
             // Chain lightning
-            if (proj.chainLightning && proj.chainLightning.chainedEnemies.size < proj.chainLightning.chains) {
+            if (
+              proj.chainLightning &&
+              proj.chainLightning.chainedEnemies.size < proj.chainLightning.chains
+            ) {
               proj.chainLightning.chainedEnemies.add(enemy.id);
               const targets = enemies.filter(
                 (e) =>
@@ -312,46 +349,17 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
               }
             }
 
-            // Only check pierce limit if this should count
-            if (shouldCountAsPierce && proj.piercedEnemies.size > proj.piercing) {
-              // Out of pierces - try to bounce if we have bounces left
-              if (proj.bouncesLeft > 0) {
-                const bounceDir = proj.position.clone().sub(enemy.position).normalize();
-                proj.velocity.copy(bounceDir.multiplyScalar(proj.speed));
-                proj.rotationY = Math.atan2(proj.velocity.x, proj.velocity.z);
-                proj.bouncesLeft--;
-                break;
-              } else {
-                shouldRemove = true;
-                break;
-              }
+            // Check if piercing is exhausted
+            if (proj.piercedEnemies.size > proj.piercing) {
+              break; // Stop checking more enemies
             }
           }
         }
+      }
 
-        if (shouldRemove) {
-          trailGhosts.push({
-            id: proj.id,
-            life: 0.05,
-            trail: [...proj.trailHistory],
-            color: proj.color,
-            size: proj.size,
-          });
-          continue;
-        }
-
-        // --- Check max range ---
-        proj.distanceTraveled += move.length();
-        if (proj.distanceTraveled > proj.maxRange) {
-          trailGhosts.push({
-            id: proj.id,
-            life: 0.2,
-            trail: [...proj.trailHistory],
-            color: proj.color,
-            size: proj.size,
-          });
-          continue;
-        }
+      // Remove projectile if piercing is exhausted (and no bounces left)
+      if (hitEnemy && proj.bouncesLeft === 0 && proj.piercedEnemies.size > proj.piercing) {
+        continue;
       }
 
       updated.push(proj);
@@ -359,7 +367,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
 
     // --- Update ghost trails ---
     const newGhosts = trailGhosts
-      .map((g) => ({ ...g, life: g.life - (isPaused ? 0 : delta) }))
+      .map((g) => ({ ...g, life: g.life - delta }))
       .filter((g) => g.life > 0);
 
     set({
@@ -367,11 +375,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       trailGhosts: newGhosts,
     });
   },
-
-
-
-
-
+  
   removeProjectile: (id) =>
     set((s) => ({
       projectiles: s.projectiles.filter((p) => p.id !== id),

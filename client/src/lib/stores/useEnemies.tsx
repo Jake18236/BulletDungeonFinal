@@ -26,7 +26,7 @@ export interface Enemy {
   velocity: THREE.Vector3;
   hitFlash: number;
 
-  // ADD THESE BOSS PROPERTIES:
+  // BOSSS PROPERTIES:
   isBoss?: boolean;
   bossType?: "deer";
   dashCooldown?: number;
@@ -80,8 +80,8 @@ export const useEnemies = create<EnemiesState>((set, get) => {
   const spawnSchedule: SpawnScheduleEntry[] = [
     { time: 0, interval: 5, count: 2 },
     { time: 10, interval: 2, count: 2 },
-    { time: 30, interval: 3, count: 3 },
-    { time: 60, interval: 1, count: 5 },
+    { time: 20, interval: 3, count: 3 },
+    { time: 40, interval: 1, count: 10 },
   ];
 
   let spawnTimer = 0;
@@ -210,7 +210,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
       const baseStats: Partial<Enemy> =
         chosenType === "sentry"
           ? { health: 25, maxHealth: 25, attack: 1, speed: 0, detectionRange: 12, attackRange: 1.8, maxAttackCooldown: 1.5 }
-          : { health: 25, maxHealth: 25, attack: 1, speed: 3, detectionRange: 70000, attackRange: 1.4, maxAttackCooldown: 1.0 };
+          : { health: 25, maxHealth: 25, attack: 1, speed: 3 + Math.random(), detectionRange: 70000, attackRange: 1.4, maxAttackCooldown: 1.0 };
 
       const defaultPosition = new THREE.Vector3(0, 0, 0);
 
