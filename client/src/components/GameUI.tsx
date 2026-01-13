@@ -186,8 +186,8 @@ export function LevelUpScreen() {
               transition: "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.5s",
             }}
           >
-            <h2 className="text-2xl font-bold text-white mb-2">{displayedUpgrade.name}</h2>
-            <p className="text-gray-300 text-base">{displayedUpgrade.description}</p>
+            <h2 className="text-5xl font-bold text-white mb-2">{displayedUpgrade.name}</h2>
+            <p className="text-2xl text-gray-300">{displayedUpgrade.description}</p>
           </div>
 
           {/* Choose button */}
