@@ -3,17 +3,24 @@ import { create } from "zustand";
 import { usePlayer } from "./usePlayer";
 import { useGame } from "./useGame";
 import { useSummons } from "./useSummons";
+import { or } from "drizzle-orm";
 
 export interface Upgrade {
   id: string;
   name: string;
   description: string;
-  icon: string;
+  icon: string | SpriteIcon;
   category: string;
-  tier: number; // 1, 2, 3, or 4
-  requires?: string[]; // IDs of upgrades that must be taken first
+  tier: number;
+  requires?: string[];
   apply: () => void;
 }
+
+export interface SpriteIcon {
+  normal: string;
+  selected: string;
+}
+
 
 interface XPState {
   xp: number;
@@ -42,28 +49,16 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
   // ============================================================================
 
   // Tier 1
-  bullet_speed: {
-    id: "bullet_speed",
-    name: "Fast Bullets",
-    description: "Projectile Speed +30%",
-    icon: "🚀",
-    category: "speed",
-    tier: 1,
-    apply: () => {
-      const player = usePlayer.getState();
-      usePlayer.setState({ baseProjectileSpeed: player.baseProjectileSpeed * 1.3 });
-    },
-  },
-
-  // Tier 2
   take_aim: {
     id: "take_aim",
     name: "Take Aim",
     description: "Bullet Speed +30%, Spread -15%",
-    icon: "🎯",
+    icon: {
+      normal: "/sprites/upgrades/speed/take_aim.png",
+      selected: "/sprites/upgrades/speed/take_aim_selected.png",
+    },
     category: "speed",
-    tier: 2,
-    requires: ["bullet_speed"],
+    tier: 1,
     apply: () => {
       const player = usePlayer.getState();
       usePlayer.setState({
@@ -80,7 +75,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     icon: "➡️",
     category: "speed",
     tier: 2,
-    requires: ["bullet_speed"],
+    requires: ["take_aim"],
     apply: () => {
       const player = usePlayer.getState();
       usePlayer.setState({
@@ -90,15 +85,15 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     },
   },
 
-  // Tier 3
+  // Tier 2
   sniper: {
     id: "sniper",
     name: "Sniper",
     description: "Bullet Speed +25%, Bullet Damage +15%",
     icon: "🎯",
     category: "speed",
-    tier: 3,
-    requires: ["take_aim", "penetration"],
+    tier: 2,
+    requires: ["take_aim"],
     apply: () => {
       const player = usePlayer.getState();
       usePlayer.setState({
@@ -108,15 +103,15 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     },
   },
 
-  // Tier 4
+  // Tier 3
   assassin: {
     id: "assassin",
     name: "Assassin",
     description: "Instant-kill enemies below 20% HP",
     icon: "💀",
     category: "speed",
-    tier: 4,
-    requires: ["sniper"],
+    tier: 3,
+    requires: ["sniper", "penetration"],
     apply: () => {
       usePlayer.setState({ instantKillThreshold: 0.2 });
     },
@@ -127,28 +122,16 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
   // ============================================================================
 
   // Tier 1
-  increased_damage: {
-    id: "increased_damage",
-    name: "Bullet Damage",
-    description: "Bullet Damage +20%",
-    icon: "💥",
-    category: "damage",
-    tier: 1,
-    apply: () => {
-      const player = usePlayer.getState();
-      usePlayer.setState({ baseDamage: player.baseDamage * 1.2 });
-    },
-  },
-
-  // Tier 2
   power_shot: {
     id: "power_shot",
     name: "Power Shot",
     description: "Bullet Damage +40%, Knockback +20%",
-    icon: "💪",
+    icon: {
+      normal: "/sprites/upgrades/damage/power_shot.png",
+      selected: "/sprites/upgrades/damage/power_shot_selected.png",
+    },
     category: "damage",
-    tier: 2,
-    requires: ["increased_damage"],
+    tier: 1,
     apply: () => {
       const player = usePlayer.getState();
       usePlayer.setState({
@@ -165,7 +148,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     icon: "🔵",
     category: "damage",
     tier: 2,
-    requires: ["increased_damage"],
+    requires: ["power_shot"],
     apply: () => {
       const player = usePlayer.getState();
       usePlayer.setState({
@@ -174,29 +157,29 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
       });
     },
   },
-  // Tier 3
+  // Tier 2
   splinter: {
     id: "splinter",
     name: "Splinter",
     description: "Killed enemies explode into 3 bullets dealing 10% damage",
     icon: "💢",
     category: "damage",
-    tier: 3,
-    requires: ["power_shot", "big_shot"],
+    tier: 2,
+    requires: ["power_shot"],
     apply: () => {
       usePlayer.setState({ splinterBullets: true });
     },
   },
 
-  // Tier 4
+  // Tier 3
   reaper_rounds: {
     id: "reaper_rounds",
     name: "Reaper Rounds",
     description: "Damage +20%, Piercing +1, bullets pierce killed enemies",
     icon: "☠️",
     category: "damage",
-    tier: 4,
-    requires: ["splinter"],
+    tier: 3,
+    requires: ["splinter", "big_shot"],
     apply: () => {
       const player = usePlayer.getState();
       usePlayer.setState({
@@ -216,7 +199,10 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     id: "rapid_fire",
     name: "Rapid Fire",
     description: "Fire Rate +25%",
-    icon: "🔥",
+    icon: {
+      normal: "/sprites/upgrades/firerate/rapid_fire.png",
+      selected: "/sprites/upgrades/firerate/rapid_fire_selected.png",
+    },
     category: "firerate",
     tier: 1,
     apply: () => {
@@ -348,8 +334,8 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
   // ============================================================================
 
   // Tier 1
-  fast_reload: {
-    id: "fast_reload",
+  quick_hands: {
+    id: "quick_hands",
     name: "Quick Hands",
     description: "Reload Rate +20%, Fire Rate +5%",
     icon: "🔄",
@@ -378,7 +364,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
       usePlayer.setState({
         reloadTime: player.reloadTime * 0.9,
         maxAmmo: player.maxAmmo + 2,
-        ammo: player.ammo + 2,
+        
       });
     },
   },
@@ -620,68 +606,6 @@ electro_mastery: {
   requires: ["energized"],
   apply: () => {
     useSummons.setState({ electroMastery: true });
-  },
-},
-
-// Trainer Tree (general summon buffs):
-trainer: {
-  id: "trainer",
-  name: "Trainer (broken currently)",
-  description: "Summon Damage +30%",
-  icon: "🎓",
-  category: "summon",
-  tier: 1,
-  apply: () => {
-    const state = useSummons.getState();
-    useSummons.setState({ summonDamageMultiplier: state.summonDamageMultiplier * 1.3 });
-  },
-},
-
-pulsing_summons: {
-  id: "pulsing_summons",
-  name: "Pulsing Summons",
-  description: "Summon Damage +20%. Summons pulse 50 damage every 2s",
-  icon: "💥",
-  category: "summon",
-  tier: 2,
-  requires: ["trainer"],
-  apply: () => {
-    const state = useSummons.getState();
-    useSummons.setState({
-      summonDamageMultiplier: state.summonDamageMultiplier * 1.2,
-      pulsingSummons: true,
-      pulseTimer: 2.0,
-    });
-  },
-},
-
-feed_the_beasts: {
-  id: "feed_the_beasts",
-  name: "Feed the Beasts",
-  description: "Summon Damage +1% for every 15 enemies killed",
-  icon: "🍖",
-  category: "summon", 
-  tier: 3,
-  requires: ["pulsing_summons"],
-  apply: () => {
-    useSummons.setState({ feedTheBeasts: true });
-  },
-},
-
-bloodsuckers: {
-  id: "bloodsuckers",
-  name: "Bloodsuckers",
-  description: "Summon Damage +10%. Every 500th summon kill heals 1 heart",
-  icon: "🩸",
-  category: "summon",
-  tier: 4,
-  requires: ["feed_the_beasts"],
-  apply: () => {
-    const state = useSummons.getState();
-    useSummons.setState({
-      summonDamageMultiplier: state.summonDamageMultiplier * 1.1,
-      bloodsuckers: true,
-    });
   },
 },
 };

@@ -19,6 +19,13 @@ import GameUI from "./GameUI"
 import { any } from "zod";
 import { LevelUpScreen } from "./GameUI";
 import Darkness from "./Darkness";
+import {
+  enemySprite,
+  ENEMY_SPRITE_SIZE,
+  ENEMY_BOSS_SPRITE_SIZE,
+  WeaponSprites,
+  CursorSprite,
+} from "./SpriteProps";
 
 
 const TILE_SIZE = 50;
@@ -152,6 +159,8 @@ export default function CanvasGame() {
   const keysPressed = useRef<Set<string>>(new Set());
   const lastTimeRef = useRef<number>(0);
   const damagedThisFrameRef = useRef<boolean>(false);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+
   const terrainRef = useRef<TerrainObstacle[]>([]);
   const { particles, damageNumbers, impactEffects, addImpact, addExplosion, addDamageNumber, updateEffects } = useVisualEffects();
   const { phase, end } = useGame();
@@ -199,7 +208,15 @@ export default function CanvasGame() {
   const canFire = useRef(true);
   const isMouseDown = useRef(false);
   const canInteract = phase === "playing" || showCardManager;
+  const canvasRectRef = useRef<DOMRect | null>(null);
+  
+  useEffect(() => {
+    if (canvasRef.current) {
+      canvasRectRef.current = canvasRef.current.getBoundingClientRect();
+    }
+  }, []);
 
+  
   useEffect(() => {
     if (currentRoom) {
       terrainRef.current = generateRoomTerrain(currentRoom.x, currentRoom.y);
@@ -253,12 +270,21 @@ export default function CanvasGame() {
       if (!canvas) return;
 
       const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
+      
+      // Store raw mouse position for UI components
+      const rawX = e.clientX;
+      const rawY = e.clientY;
+      
+      setMousePos({ x: rawX, y: rawY });
+
+      const scaleX = CANVAS_WIDTH / rect.width;
+      const scaleY = CANVAS_HEIGHT / rect.height;
 
       mouseRef.current = {
         x: (e.clientX - rect.left) * scaleX,
         y: (e.clientY - rect.top) * scaleY,
+        rawX,
+        rawY
       };
     };
 
@@ -746,7 +772,9 @@ export default function CanvasGame() {
             const dx = e1.position.x - e2.position.x;
             const dz = e1.position.z - e2.position.z;
             const dist = Math.hypot(dx, dz);
-            const minDist = 1.5;
+            const minDist = 2;
+            e1.position.x += Math.sin(Math.random() * 10) * 0.002;
+
             if (dist > 0 && dist < minDist) {
               const push = (minDist - dist) / 2;
               const nx = dx / dist;
@@ -831,7 +859,6 @@ export default function CanvasGame() {
       drawDamageNumbers(ctx); // ADD - on top
       drawXPBar(ctx);
       drawReloadIndicator(ctx);
-      drawCustomCursor(ctx);
       drawWeapon(ctx, "revolver", phase !== "playing");
       
       animationFrameRef.current = requestAnimationFrame(gameLoop);
@@ -851,22 +878,8 @@ export default function CanvasGame() {
     phase,
   ]);
 
-  const drawCustomCursor = (ctx: CanvasRenderingContext2D) => {
-    const x = mouseRef.current.x;
-    const y = mouseRef.current.y;
+  
 
-    ctx.beginPath();
-    ctx.arc(x, y, 15, 0, Math.PI * 2);
-    ctx.strokeStyle = "#ff0000";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 16px monospace";
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.fillText(`${ammo}/6`, x + 20, y);
-  };
 
   const drawDungeon = (ctx: CanvasRenderingContext2D) => {
     if (!currentRoom) return;
@@ -1243,7 +1256,11 @@ export default function CanvasGame() {
     animateSwing();
   }, []);
 
-  const drawWeapon = (ctx: CanvasRenderingContext2D, type: string, isPaused: boolean) => {
+  const drawWeapon = (
+    ctx: CanvasRenderingContext2D,
+    type: string,
+    isPaused: boolean
+  ) => {
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
 
@@ -1256,185 +1273,72 @@ export default function CanvasGame() {
 
     if (type === "revolver") {
       
+      const scale = 0.25;
       let gunRotation = mouseAngle;
-      let cylinderRotation = 0;
+      
+      
 
+      // Reload spin (spin around its own axis)
       if (isReloading) {
-        const p = reloadProgress / reloadTime; 
-        const spins = 2; 
-        gunRotation += spins * 2 * Math.PI * p; 
-        cylinderRotation = spins * 2 * Math.PI * p * 1.2; 
+        const p = reloadProgress / reloadTime;
+        const spins = 2;
+        gunRotation += spins * 2 * Math.PI * p;
       }
 
-      if (!isPaused) {
-      ctx.rotate(gunRotation);
-      
-      // Optional hand offset
-      ctx.translate(8, 0);
-      
-      // Flip gun if aiming backward
       const flipGun = Math.abs(mouseAngle) > Math.PI / 2;
+
+      
+      
+      ctx.rotate(gunRotation);
+      ctx.translate(-10, 0);
+
+      ctx.scale(-scale, scale);
+      
       if (flipGun) ctx.scale(1, -1);
+      // ===========================
+      // REVOLVER SPRITE
+      // ===========================
+      const sprite = WeaponSprites.revolver;
+      if (sprite.complete) {
+        ctx.save();
+        const w = sprite.width;
+        const h = sprite.height;
+
+        // Grip anchor: left-middle of sprite
+        ctx.drawImage(sprite, -w, -h / 2, w, h);
+
+        ctx.restore();
       }
       // ===========================
       // MUZZLE FLASH
       // ===========================
       if (muzzleFlashTimer > 0) {
+        
         const flashAlpha = muzzleFlashTimer / 0.1;
-        const flashSize = 15 + (1 - flashAlpha) * 10;
+        const flashSize = 50 + (1 - flashAlpha) * 10;
 
         ctx.save();
         ctx.globalAlpha = flashAlpha * 0.8;
 
-        const gradient = ctx.createRadialGradient(28, 0, 0, 28, 0, flashSize);
+        
+        const flashX = 180; // scale adjustment
+        const flashY = 10;
+
+        const gradient = ctx.createRadialGradient(-flashX, -flashY, 0, -flashX, -flashY, flashSize);
         gradient.addColorStop(0, "#ffffff");
-        gradient.addColorStop(0.3, "#ffff88");
-        gradient.addColorStop(0.6, "#ff8800");
-        gradient.addColorStop(1, "rgba(255, 136, 0, 0)");
+        gradient.addColorStop(0.4, "#ffff88");
+        gradient.addColorStop(0.7, "#ff8800");
+        gradient.addColorStop(1, "rgba(255,136,0,0)");
 
         ctx.fillStyle = gradient;
         ctx.beginPath();
-        ctx.arc(28, 0, flashSize, 0, Math.PI * 2);
+        ctx.arc(-flashX, -flashY, flashSize, 0, Math.PI * 2);
         ctx.fill();
-
-        // Flash rays
-        for (let i = 0; i < 6; i++) {
-          const rayAngle = (i / 6) * Math.PI * 2 + Date.now() * 0.01;
-          const rayLength = flashSize * 1.5;
-
-          ctx.strokeStyle = `rgba(255, 255, 136, ${flashAlpha * 0.6})`;
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(28, 0);
-          ctx.lineTo(
-            28 + Math.cos(rayAngle) * rayLength,
-            Math.sin(rayAngle) * rayLength
-          );
-          ctx.stroke();
-        }
 
         ctx.restore();
       }
-
-      // ===========================
-      // BARREL
-      // ===========================
-      ctx.fillStyle = "#2a2a2a";
-      ctx.fillRect(0, -3, 28, 6);
-
-      ctx.fillStyle = "#404040";
-      ctx.fillRect(0, -3, 28, 2);
-
-      // ===========================
-      // CYLINDER
-      // ===========================
-      ctx.save();
-      ctx.translate(8, 0);
-      ctx.rotate(cylinderRotation);
-
-      ctx.fillStyle = "#3a3a3a";
-      ctx.beginPath();
-      ctx.arc(0, 0, 5, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.strokeStyle = "#2a2a2a";
-      ctx.lineWidth = 1;
-      for (let i = 0; i < 6; i++) {
-        const angle = (i / 6) * Math.PI * 2;
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(Math.cos(angle) * 5, Math.sin(angle) * 5);
-        ctx.stroke();
-
-        if (i < ammo) {
-          ctx.fillStyle = "#aa8844";
-          ctx.beginPath();
-          ctx.arc(Math.cos(angle) * 3, Math.sin(angle) * 3, 1.5, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-      ctx.restore();
-
-      // ===========================
-      // FRAME
-      // ===========================
-      ctx.fillStyle = "#333333";
-      ctx.fillRect(6, -4, 8, 8);
-
-      // ===========================
-      // GRIP
-      // ===========================
-      ctx.fillStyle = "#4a3020";
-      ctx.beginPath();
-      ctx.moveTo(6, 1);
-      ctx.lineTo(6, 6);
-      ctx.lineTo(-2, 12);
-      ctx.lineTo(-4, 12);
-      ctx.lineTo(-4, 4);
-      ctx.lineTo(4, 1);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.strokeStyle = "#3a2010";
-      ctx.lineWidth = 1;
-      for (let i = 0; i < 4; i++) {
-        ctx.beginPath();
-        ctx.moveTo(2 - i * 1.5, 3 + i * 2);
-        ctx.lineTo(-2 - i * 0.5, 8 + i * 1.5);
-        ctx.stroke();
-      }
-
-      // ===========================
-      // TRIGGER GUARD & TRIGGER
-      // ===========================
-      ctx.strokeStyle = "#2a2a2a";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(8, 4, 4, Math.PI * 0.2, Math.PI * 0.8);
-      ctx.stroke();
-
-      ctx.fillStyle = "#333333";
-      ctx.beginPath();
-      ctx.arc(8, 5, 1.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // ===========================
-      // HAMMER
-      // ===========================
-      const hammerAngle = isFiring ? -0.3 : 0;
-      ctx.save();
-      ctx.translate(2, -4);
-      ctx.rotate(hammerAngle);
-
-      ctx.fillStyle = "#2a2a2a";
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(2, -2);
-      ctx.lineTo(4, -2);
-      ctx.lineTo(4, 0);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-
-      // ===========================
-      // MUZZLE
-      // ===========================
-      ctx.fillStyle = "#1a1a1a";
-      ctx.beginPath();
-      ctx.arc(28, 0, 3, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = "#000000";
-      ctx.beginPath();
-      ctx.arc(28, 0, 2, 0, Math.PI * 2);
-      ctx.fill();
-
-      // ===========================
-      // FRONT SIGHT
-      // ===========================
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(26, -5, 2, 3);
     }
+
 
     ctx.restore();
   };
@@ -1851,47 +1755,30 @@ export default function CanvasGame() {
     // ================================================================
     // NORMAL SKELETON ENEMY
     // ================================================================
-    const r = 13;
-    const bob = Math.sin(Date.now() / 120) * 0.8;
+    const size = ENEMY_SPRITE_SIZE;
+    const facingRight = enemy.position.x >= position.x;
+    
 
     ctx.save();
-    ctx.translate(screenX, screenY + bob);
+    ctx.translate(screenX, screenY);
 
-    // shadow
-    ctx.fillStyle = "rgba(0,0,0,0.45)";
-    ctx.beginPath();
-    ctx.ellipse(0, 4, r * 1.1, r * 0.55, 0, 0, Math.PI * 2);
-    ctx.fill();
+    // sprite
+    ctx.imageSmoothingEnabled = false;
 
-    // skull
-    ctx.fillStyle = "#f0f0f0";
-    ctx.beginPath();
-    ctx.arc(0, 0, r, 0, Math.PI * 2);
-    ctx.fill();
+    // flip for left-facing
+    if (!facingRight) {
+      ctx.scale(-1, 1);
+    }
 
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = "#444";
-    ctx.stroke();
-
-    // eyes
-    ctx.fillStyle = "#000";
-    ctx.beginPath();
-    ctx.arc(-4, -3, 2.5, 0, Math.PI * 2);
-    ctx.arc(4, -3, 2.5, 0, Math.PI * 2);
-    ctx.fill();
-
-    // jaw line
-    ctx.strokeStyle = "#666";
-    ctx.beginPath();
-    ctx.moveTo(-6, 6);
-    ctx.lineTo(6, 6);
-    ctx.stroke();
+    ctx.drawImage(
+      enemySprite,
+      -size / 2,
+      -size / 2,
+      size,
+      size
+    );
 
     ctx.restore();
-
-    
-
-    
   };
 
   const drawSummons = (ctx: CanvasRenderingContext2D) => {
@@ -2153,6 +2040,9 @@ export default function CanvasGame() {
 
   return (
     <>
+      <Darkness />
+      <GameUI />
+      <LevelUpScreen />
       <canvas
         ref={canvasRef}
         width={CANVAS_WIDTH}
@@ -2160,9 +2050,11 @@ export default function CanvasGame() {
         className="border-2 border-gray-700"
         
       />
-      <Darkness />
-      
-      <LevelUpScreen />
+      <CursorSprite
+        x={mousePos.x}
+        y={mousePos.y}
+      />
+
     </>
   );
 

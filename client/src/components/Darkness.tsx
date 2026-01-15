@@ -143,7 +143,7 @@ export default function Darkness() {
         top: 0,
         left: 0,
         pointerEvents: "none",
-        zIndex: 30,
+        zIndex: 1,
       }}
     />
   );

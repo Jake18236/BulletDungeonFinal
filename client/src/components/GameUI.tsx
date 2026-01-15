@@ -11,6 +11,8 @@ import { Card, CardContent } from "./ui/card";
 import Inventory from "./Inventory";
 import Minimap from "./Minimap";
 import { Volume2, VolumeX } from "lucide-react";
+import { UpgradeIcon, HeartHUD, AmmoHUD } from "./SpriteProps";
+
 
 export function LevelUpScreen() {
   const { showLevelUpScreen, availableUpgrades, selectUpgrade, level } = useXP();
@@ -131,41 +133,39 @@ export function LevelUpScreen() {
           </div>
 
           {/* Upgrade icons */}
-          <div className="flex justify-center gap-6 mb-4">
+          <div className="flex justify-center gap-0 mb-20">
             {availableUpgrades.map((upgrade, i) => {
               const isSelected = i === selectedIndex;
               const isHovered = i === hoveredIndex;
               const isReady = animationPhase === "ready";
+
               return (
                 <div
                   key={upgrade.id}
                   onClick={() => isReady && setSelectedIndex(i)}
                   onMouseEnter={() => setHoveredIndex(i)}
                   onMouseLeave={() => setHoveredIndex(null)}
-                  className="relative hex-border cursor-pointer"
+                  className="relative cursor-pointer"
                   style={{
-                    width: "70px",
-                    height: "70px",
-                    borderColor: isSelected ? "#fbbf24" : "white",
-                    borderWidth: "3px",
-                    background: isSelected ? "#fbbf24" : "white",
+                    width: "72px",
+                    height: "72px",
                     pointerEvents: isReady ? "auto" : "none",
-                    transform: `translateY(${isReady ? "0" : "-100px"}) scale(${isHovered ? "1.1" : "1"})`,
+                    transform: `scale(${isHovered ? 1.1 : 1})`,
                     opacity: isReady ? 1 : 0,
                     transition: `
                       opacity 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${0.3 + i * 0.1}s,
                       transform 0.2s ease-out
                     `,
                     filter: isHovered
-                      ? "drop-shadow(0 0 15px rgba(251, 191, 36, 0.8))"
-                      : isSelected
-                      ? "drop-shadow(0 0 10px rgba(251, 191, 36, 0.5))"
+                      ? "drop-shadow(0 0 16px rgba(255,255,255,0.6))"
                       : "none",
                   }}
                 >
-                  <div className="hex-inner flex items-center justify-center bg-black text-white text-3xl">
-                    {upgrade.icon}
-                  </div>
+                  <UpgradeIcon
+                    icon={upgrade.icon}
+                    selected={isSelected}
+                    className="upgrade-sprite"
+                  />
                 </div>
               );
             })}
@@ -181,32 +181,47 @@ export function LevelUpScreen() {
               overflow: "hidden",
               borderColor: "white",
               padding: "1rem",
-              transform: animationPhase === "ready" ? "translateY(0) scale(1)" : "translateY(30px) scale(0.95)",
+              transform:
+                animationPhase === "ready"
+                  ? "translateY(0) scale(1)"
+                  : "translateY(30px) scale(0.95)",
               opacity: animationPhase === "ready" ? 1 : 0,
-              transition: "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.5s",
+              transition:
+                "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.5s",
             }}
           >
-            <h2 className="text-5xl font-bold text-white mb-2">{displayedUpgrade.name}</h2>
-            <p className="text-2xl text-gray-300">{displayedUpgrade.description}</p>
+            <h2 className="text-5xl font-bold text-white mb-2">
+              {displayedUpgrade.name}
+            </h2>
+            <p className="text-2xl text-gray-300">
+              {displayedUpgrade.description}
+            </p>
           </div>
 
           {/* Choose button */}
           <div className="flex justify-center">
             <button
-              onClick={() => animationPhase === "ready" && selectUpgrade(displayedUpgrade)}
+              onClick={() =>
+                animationPhase === "ready" &&
+                selectUpgrade(displayedUpgrade)
+              }
               disabled={animationPhase !== "ready"}
               className="bg-gray-800 hover:bg-gray-700 disabled:bg-gray-900 border-2 border-red-500 text-white font-bold text-lg py-2 px-6 rounded-lg pointer-events-auto"
               style={{
-                transform: animationPhase === "ready" ? "translateY(0) scale(1)" : "translateY(20px) scale(0.9)",
+                transform:
+                  animationPhase === "ready"
+                    ? "translateY(0) scale(1)"
+                    : "translateY(20px) scale(0.9)",
                 opacity: animationPhase === "ready" ? 1 : 0,
                 transition: `
                   opacity 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.6s,
                   transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
                   box-shadow 0.2s ease-out
                 `,
-                boxShadow: animationPhase === "ready"
-                  ? "0 0 20px rgba(239, 68, 68, 0.4)"
-                  : "none",
+                boxShadow:
+                  animationPhase === "ready"
+                    ? "0 0 20px rgba(239, 68, 68, 0.4)"
+                    : "none",
               }}
             >
               CHOOSE
@@ -217,30 +232,45 @@ export function LevelUpScreen() {
 
       {/* Hexagon styles */}
       <style jsx>{`
-        .hex-border {
-          clip-path: polygon(
-            25% 6.7%,
-            75% 6.7%,
-            100% 50%,
-            75% 93.3%,
-            25% 93.3%,
-            0% 50%
-          );
-          border: 3px solid;  
-          background: white;
-          display: flex;
-          align-items: center;
-          justify-content: center;
+        
+        .upgrade-sprite {
+          width: 128px;
+          height: 128px;
+          object-fit: contain;
+          pointer-events: none;
         }
 
-        .hex-inner {
-          width: 100%;
-          height: 100%;
-          clip-path: inherit;
+        .upgrade-slot {
+          width: 72px;
+          height: 72px;
           display: flex;
           align-items: center;
           justify-content: center;
         }
+        .upgrade-card {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+
+          transition:
+            transform 120ms ease,
+            filter 120ms ease,
+            opacity 120ms ease;
+        }
+
+        .upgrade-card:hover {
+          transform: scale(1.08);
+          filter: drop-shadow(0 0 6px rgba(255,255,255,0.4));
+        }
+
+        .upgrade-card.selected {
+          filter: drop-shadow(0 0 10px rgba(255,255,255,0.8));
+        }
+        .upgrade-card.locked {
+          opacity: 0.35;
+          filter: grayscale(1);
+        }
+        
 
         .font-pixel {
           font-family: 'Pixelify Sans';
@@ -252,7 +282,7 @@ export function LevelUpScreen() {
 
 export default function GameUI() {
   const { phase, start, restart } = useGame();
-  const { hearts, maxHearts, reset: resetPlayer } = usePlayer();
+  const { hearts, maxHearts, ammo, maxAmmo, reset: resetPlayer } = usePlayer();
   const { generateDungeon, reset: resetDungeon } = useDungeon();
   const { generateRoomEnemies, reset: resetEnemies } = useEnemies();
 
@@ -302,28 +332,35 @@ export default function GameUI() {
   return (
     <>
       {/* HUD */}
-      <div className="fixed top-4 left-4 z-40">
-        <Card className="bg-black bg-opacity-80 text-white border-gray-600">
-          <CardContent className="p-4">
+      <div className="fixed top-0 left-4 z-40">
+        
+          <CardContent className="p-0">
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-3xl font-bold">Hearts:</span>
+              <div className="flex items-center gap-0">
                 <div className="flex gap-1">
-                  {Array.from({ length: maxHearts }).map((_, i) => (
-                    <div
-                      key={i}
-                      className={`w-12 h-12 rounded-full border-2 ${
-                        i < hearts
-                          ? "bg-red-500 border-red-600"
-                          : "bg-gray-800 border-gray-600"
-                      }`}
-                    />
-                  ))}
+                  <HeartHUD
+                    currentHP={hearts}
+                    maxHP={maxHearts}
+                  />
                 </div>
               </div>
             </div>
           </CardContent>
-        </Card>
+
+        <CardContent className="p-0">
+          <div className="space-y-0">
+            <div className="gap-0">
+              
+
+                <AmmoHUD
+                  ammo={ammo}
+                  maxAmmo={maxAmmo}
+                />
+
+            </div>
+          </div>
+        </CardContent>
+        
       </div>
 
 
@@ -342,6 +379,52 @@ export default function GameUI() {
         </Card>
       </div>
 
+      <style jsx>{`
+          .heart-hud {
+            display: flex;
+            gap: 0px;
+          }
+
+          .heart {
+            width: 80px;
+            height: 80px;
+            z-index: 1;
+            image-rendering: pixelated;
+          }
+
+          .heart.empty {
+            opacity: 0.20;
+            filter: grayscale(1);
+          }
+          .ammo-hud {
+            display: flex;
+            gap: 0px;
+          }
+
+          .ammo {
+            width: 64px;
+            height: 64px;
+            
+            z-index: 1;
+            image-rendering: pixelated;
+          }
+          .ammo + .ammo {
+            margin-left: -30px;
+          }
+          .ammo.empty {
+            opacity: 0.40;
+            filter: grayscale(1);
+          }
+          
+          .cursor-sprite {
+            position: fixed;
+            pointer-events: none;
+            image-rendering: pixelated;
+            width: 32px;
+            height: 32px;
+            z-index: 9999;
+          }
+        `}</style>
       
     </>
   );
