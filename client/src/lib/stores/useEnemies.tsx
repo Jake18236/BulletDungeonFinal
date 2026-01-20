@@ -78,10 +78,10 @@ interface EnemiesState {
 
 export const useEnemies = create<EnemiesState>((set, get) => {
   const spawnSchedule: SpawnScheduleEntry[] = [
-    { time: 0, interval: 5, count: 2 },
-    { time: 10, interval: 2, count: 2 },
-    { time: 20, interval: 3, count: 3 },
-    { time: 40, interval: 1, count: 10 },
+    { time: 0, interval: 3, count: 1 },
+    { time: 10, interval: 4, count: 2 },
+    { time: 20, interval: 5, count: 3 },
+    { time: 40, interval: 6, count: 20 },
   ];
 
   let spawnTimer = 0;
@@ -308,7 +308,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
           spawnTimer = 0;
           for (let i = 0; i < currentConfig.count; i++) {
             const angle = Math.random() * Math.PI * 2;
-            const distance = 40 + Math.random() * 5;
+            const distance = 30 + Math.random() * 20;
             const spawnPos = new THREE.Vector3(
               playerPos.x + Math.cos(angle) * distance,
               0,

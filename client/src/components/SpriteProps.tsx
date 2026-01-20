@@ -97,23 +97,29 @@ export function CursorSprite({ x, y }: CursorSpriteProps) {
       draggable={false}
       className="cursor-sprite"
       style={{
-        position: 'fixed',
-        left: x,
-        top: y,
-        transform: 'translate(-50%, -50%)',
-        pointerEvents: 'none',
-        zIndex: 9999,
-        width: size,
-        height: size,
-        imageRendering: 'pixelated'
+        left: Math.round(x - half),
+        top: Math.round(y - half),
       }}
     />
   );
 }
 
+export const projectileSprite = {
+  src: "/sprites/bullet.png",
+  w: 8,
+  h: 4,
+};
+
+export const projectileImage = (() => {
+  const img = new Image();
+  img.src = projectileSprite.src;
+  return img;
+})();
+
+
 
 export const enemySprite = new Image();
-enemySprite.src = "/sprites/enemy.png";
+enemySprite.src = "/sprites/enemy-red.png";
 export const ENEMY_SPRITE_SIZE = 64;
 export const ENEMY_BOSS_SPRITE_SIZE = 64;
 

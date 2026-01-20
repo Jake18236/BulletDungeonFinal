@@ -25,6 +25,8 @@ import {
   ENEMY_BOSS_SPRITE_SIZE,
   WeaponSprites,
   CursorSprite,
+  projectileSprite,
+  projectileImage
 } from "./SpriteProps";
 
 
@@ -1353,93 +1355,57 @@ export default function CanvasGame() {
     const centerY = CANVAS_HEIGHT / 2;
 
     const worldToScreen = (pos: THREE.Vector3) => ({
-      x: centerX + (pos.x - playerPos.x) * TILE_SIZE / 2,
-      y: centerY + (pos.z - playerPos.z) * TILE_SIZE / 2,
+      x: centerX + ((pos.x - playerPos.x) * TILE_SIZE) / 2,
+      y: centerY + ((pos.z - playerPos.z) * TILE_SIZE) / 2,
     });
 
     ctx.save();
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
-    // Draw trails FIRST (behind projectiles)
-    projectiles.forEach(proj => {
-      if (!proj.trailHistory || proj.trailHistory.length < 2) return;
-
-      const headScreen = worldToScreen(proj.position);
-
-      
-      const trailLength = Math.min(proj.trailHistory.length, 30);
-
-      for (let i = 0; i < trailLength - 1; i++) {
-        const point1 = proj.trailHistory[i];
-        const point2 = proj.trailHistory[i + 1];
-
-        if (!point1 || !point2) continue;
-
-        const screen1 = worldToScreen(point1);
-        const screen2 = worldToScreen(point2);
-
-        // Calculate alpha based on position in trail
-        const alpha = 1 - (i / trailLength);
-
-        // Width tapers from head to tail
-        const width = (8 * alpha) + 1;
-
-        // Draw segment with glow
-        ctx.strokeStyle = proj.color;
-        ctx.lineWidth = width;
-        ctx.globalAlpha = alpha * 0.8;
-
-        ctx.beginPath();
-        ctx.moveTo(screen1.x, screen1.y);
-        ctx.lineTo(screen2.x, screen2.y);
-        ctx.stroke();
-
-        // Outer glow
-        ctx.strokeStyle = proj.color;
-        ctx.lineWidth = width + 4;
-        ctx.globalAlpha = alpha * 0.2;
-        ctx.stroke();
-      }
-    });
-
-    ctx.globalAlpha = 1;
-
-    // Draw projectile heads (bright dots)
     projectiles.forEach(proj => {
       const screen = worldToScreen(proj.position);
 
-      // Outer glow
-      const gradient = ctx.createRadialGradient(
-        screen.x, screen.y, 0,
-        screen.x, screen.y, 12
-      );
-      gradient.addColorStop(0, proj.color);
-      gradient.addColorStop(0.5, proj.color + "66");
-      gradient.addColorStop(1, proj.color + "00");
+      // --- Optional curving: apply small oscillation to velocity
+      const curveStrength = 6; // tweak for more/less curve
+      const time = performance.now() * 0.002 + proj.id; // pseudo-random per bullet
+      proj.position.x += Math.sin(time) * curveStrength;
+      proj.position.z += Math.cos(time) * curveStrength;
 
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.arc(screen.x, screen.y, 12, 0, Math.PI * 2);
-      ctx.fill();
+      
+      const ghostCount = 400;
+      const ghostSpacing = 0.05; // fraction of velocity
+      for (let i = ghostCount; i > 0; i--) {
+        const alpha = 0.2 * (i / ghostCount);
+        const offsetX = -proj.velocity.x * ghostSpacing * i;
+        const offsetZ = -proj.velocity.z * ghostSpacing * i;
 
-      // Core
-      ctx.fillStyle = "#ffffff";
-      ctx.beginPath();
-      ctx.arc(screen.x, screen.y, 3, 0, Math.PI * 2);
-      ctx.fill();
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.translate(screen.x + offsetX, screen.y + offsetZ);
+        ctx.beginPath();
+        ctx.fillStyle = "#ffffff"; // bullets are pure white
+        ctx.arc(0, 0, 3, 0, Math.PI * 2); // circular bullet, radius 3px
+        ctx.fill();
+        ctx.restore();
+      }
 
-      // Inner glow
-      ctx.fillStyle = proj.color;
-      ctx.globalAlpha = 0.8;
-      ctx.beginPath();
-      ctx.arc(screen.x, screen.y, 5, 0, Math.PI * 2);
-      ctx.fill();
+      // --- Draw main bullet
+      ctx.save();
+      ctx.translate(screen.x, screen.y);
       ctx.globalAlpha = 1;
+      ctx.beginPath();
+      ctx.fillStyle = "#ffffff";
+      ctx.arc(0, 0, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     });
 
     ctx.restore();
   };
+
+
+
 
   const drawParticles = (ctx: CanvasRenderingContext2D) => {
     const centerX = CANVAS_WIDTH / 2;
@@ -2040,6 +2006,10 @@ export default function CanvasGame() {
 
   return (
     <>
+      <div
+        className=""
+        style={{ cursor: phase === "playing" ? "none" : "default" }}
+      >
       <Darkness />
       <GameUI />
       <LevelUpScreen />
@@ -2054,7 +2024,7 @@ export default function CanvasGame() {
         x={mousePos.x}
         y={mousePos.y}
       />
-
+      </div>
     </>
   );
 

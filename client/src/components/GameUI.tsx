@@ -412,7 +412,7 @@ export default function GameUI() {
             margin-left: -30px;
           }
           .ammo.empty {
-            opacity: 0.40;
+            opacity: 0.1;
             filter: grayscale(1);
           }
           
