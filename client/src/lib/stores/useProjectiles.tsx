@@ -129,7 +129,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       color: getProjectileColor(config),
       size: 10,
       trailColor: getTrailColor(config),
-      trailLength: config.trailLength,
+      trailLength: 200,
       trailHistory: [],
 
       homing: config.homing,
@@ -162,12 +162,21 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
   updateProjectiles: (delta, enemies, playerPos, roomBounds, onHit) => {
     const updated: Projectile[] = [];
     const { trailGhosts } = get();
-
+    const CURVE_RATE = 0.1;
     for (const proj of get().projectiles) {
+      // --- Move projectile ---
+      // --- Apply curve to velocity (slight rotation) ---
+      const speed = proj.velocity.length();
+      const angle = Math.atan2(proj.velocity.z, proj.velocity.x); // note: z first for world
+      const newAngle = angle + CURVE_RATE * delta; // scaled by delta for frame rate independence
+      proj.velocity.x = Math.cos(newAngle) * speed;
+      proj.velocity.z = Math.sin(newAngle) * speed;
+
       // --- Move projectile ---
       const move = proj.velocity.clone().multiplyScalar(delta);
       proj.position.add(move);
       proj.distanceTraveled += move.length();
+
 
       // --- Update trail history ---
       if (!proj.trailHistory) proj.trailHistory = [];

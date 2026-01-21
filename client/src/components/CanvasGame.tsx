@@ -26,7 +26,9 @@ import {
   WeaponSprites,
   CursorSprite,
   projectileSprite,
-  projectileImage
+  projectileImage,
+  xpSprite,
+  
 } from "./SpriteProps";
 
 
@@ -168,6 +170,7 @@ export default function CanvasGame() {
   const { phase, end } = useGame();
   const {
     position,
+    xp,
     hearts,
     maxHearts,
     maxAmmo,
@@ -1102,27 +1105,22 @@ export default function CanvasGame() {
       const screenX = centerX + ((orb.position.x - position.x) * TILE_SIZE) / 2;
       const screenY = centerY + ((orb.position.z - position.z) * TILE_SIZE) / 2;
 
-      const gradient = ctx.createRadialGradient(screenX, screenY, 0, screenX, screenY, 12);
-      gradient.addColorStop(0, "rgba(18, 150, 97, 0.8)");
-      gradient.addColorStop(0.5, "rgba(28, 186, 123, 0.4)");
-      gradient.addColorStop(1, "rgba(43, 207, 142, 0)");
+      const sprite = xpSprite; // assume you imported or loaded xp.png as xpImage
 
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.arc(screenX, screenY, 12, 0, Math.PI * 2);
-      ctx.fill();
+      if (sprite.complete) {
+        const scale = 2; // adjust size as needed
+        const w = sprite.width * scale;
+        const h = sprite.height * scale;
 
-      ctx.fillStyle = "#033822";
-      ctx.beginPath();
-      ctx.arc(screenX, screenY, 6, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
-      ctx.beginPath();
-      ctx.arc(screenX - 2, screenY - 2, 2, 0, Math.PI * 2);
-      ctx.fill();
+        ctx.save();
+        ctx.imageSmoothingEnabled = false; // pixelated
+        ctx.translate(screenX, screenY);
+        ctx.drawImage(sprite, -w / 2, -h / 2, w, h);
+        ctx.restore();
+      }
     });
   };
+
 
   const drawXPBar = (ctx: CanvasRenderingContext2D) => {
     const barWidth = 400;
@@ -1227,37 +1225,6 @@ export default function CanvasGame() {
     }
   };
 
-  const swordImg = new Image();
-  swordImg.src = swordSrc;
-  
-  const revolverImg = new Image();
-  revolverImg.src = "/images/revolver.png";
-
-  const SWING_SPEED = 0.1;
-  const SWING_ARC = Math.PI;
-
-  const swingRef = useRef({
-    progress: 0,
-    swinging: false,
-    direction: 1,
-  });
-
-  useEffect(() => {
-    const animateSwing = () => {
-      if (swingRef.current.swinging) {
-        swingRef.current.progress += SWING_SPEED * swingRef.current.direction;
-        if (swingRef.current.progress >= 1) swingRef.current.direction = -2;
-        if (swingRef.current.progress <= 0) {
-          swingRef.current.progress = 0;
-          swingRef.current.swinging = false;
-          swingRef.current.direction = 1;
-        }
-      }
-      requestAnimationFrame(animateSwing);
-    };
-    animateSwing();
-  }, []);
-
   const drawWeapon = (
     ctx: CanvasRenderingContext2D,
     type: string,
@@ -1271,11 +1238,12 @@ export default function CanvasGame() {
     const mouseAngle = Math.atan2(dy, dx);
 
     ctx.save();
+    ctx.imageSmoothingEnabled = false;
     ctx.translate(centerX, centerY);
 
     if (type === "revolver") {
       
-      const scale = 0.25;
+      const scale = 2;
       let gunRotation = mouseAngle;
       
       
@@ -1315,16 +1283,16 @@ export default function CanvasGame() {
       // MUZZLE FLASH
       // ===========================
       if (muzzleFlashTimer > 0) {
-        
+        ctx.scale(scale, scale)
         const flashAlpha = muzzleFlashTimer / 0.1;
-        const flashSize = 50 + (1 - flashAlpha) * 10;
+        const flashSize = 5 + (1 - flashAlpha) * 2.5;
 
         ctx.save();
         ctx.globalAlpha = flashAlpha * 0.8;
 
         
-        const flashX = 180; // scale adjustment
-        const flashY = 10;
+        const flashX = 15; // scale adjustment
+        const flashY = 0;
 
         const gradient = ctx.createRadialGradient(-flashX, -flashY, 0, -flashX, -flashY, flashSize);
         gradient.addColorStop(0, "#ffffff");
@@ -1353,7 +1321,7 @@ export default function CanvasGame() {
     const { projectiles } = useProjectiles.getState();
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
-
+    
     const worldToScreen = (pos: THREE.Vector3) => ({
       x: centerX + ((pos.x - playerPos.x) * TILE_SIZE) / 2,
       y: centerY + ((pos.z - playerPos.z) * TILE_SIZE) / 2,
@@ -1363,46 +1331,40 @@ export default function CanvasGame() {
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
-    projectiles.forEach(proj => {
+    projectiles.forEach((proj) => {
       const screen = worldToScreen(proj.position);
 
-      // --- Optional curving: apply small oscillation to velocity
-      const curveStrength = 6; // tweak for more/less curve
-      const time = performance.now() * 0.002 + proj.id; // pseudo-random per bullet
-      proj.position.x += Math.sin(time) * curveStrength;
-      proj.position.z += Math.cos(time) * curveStrength;
+      // --- Draw tapered trail ---
+      const trail = proj.trailHistory;
+      if (trail.length > 1) {
+        for (let i = 0; i < trail.length - 1; i++) {
+          const start = worldToScreen(trail[i]);
+          const end = worldToScreen(trail[i + 1]);
 
-      
-      const ghostCount = 400;
-      const ghostSpacing = 0.05; // fraction of velocity
-      for (let i = ghostCount; i > 0; i--) {
-        const alpha = 0.2 * (i / ghostCount);
-        const offsetX = -proj.velocity.x * ghostSpacing * i;
-        const offsetZ = -proj.velocity.z * ghostSpacing * i;
+          const t = i / trail.length; // 0 at front, 1 at tail
+          const alpha = 0.9 * (1 - t); // fades out toward tail
+          const width = 6 * (1 - t * 0.4); // front 2px, tail shrinks to 0.4px
 
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        ctx.translate(screen.x + offsetX, screen.y + offsetZ);
-        ctx.beginPath();
-        ctx.fillStyle = "#ffffff"; // bullets are pure white
-        ctx.arc(0, 0, 3, 0, Math.PI * 2); // circular bullet, radius 3px
-        ctx.fill();
-        ctx.restore();
+          ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+          ctx.lineWidth = width;
+          ctx.beginPath();
+          ctx.moveTo(start.x, start.y);
+          ctx.lineTo(end.x, end.y);
+          ctx.stroke();
+        }
       }
 
-      // --- Draw main bullet
-      ctx.save();
-      ctx.translate(screen.x, screen.y);
-      ctx.globalAlpha = 1;
+      // --- Draw main bullet (always visible) ---
       ctx.beginPath();
-      ctx.fillStyle = "#ffffff";
-      ctx.arc(0, 0, 3, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff"; // pure white like 20MTD
+      ctx.arc(screen.x, screen.y, 6, 0, Math.PI * 2);
       ctx.fill();
-      ctx.restore();
     });
 
     ctx.restore();
   };
+
+
 
 
 
@@ -1507,11 +1469,11 @@ export default function CanvasGame() {
       const scale = dmg.scale;
       const fontSize = 15 * scale;
 
-      ctx.font = `bold ${fontSize}px monospace`;
+      ctx.font = `bold ${fontSize}px Press Start monospace`;
 
       // Outline
       ctx.strokeStyle = "#000000";
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 4;
       ctx.strokeText(dmg.damage.toString(), screenX, screenY);
 
       // White text

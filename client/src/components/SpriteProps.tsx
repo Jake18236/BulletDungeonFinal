@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react" 
+import { useXP } from  "../lib/stores/useXP"
 
 export const WeaponSprites = {
   revolver: (() => {
@@ -82,6 +84,26 @@ export function AmmoHUD({ ammo, maxAmmo }: AmmoHUDProps) {
   );
 }
 
+export function XpHUD({ Xp, maxAmmo }: AmmoHUDProps) {
+  return (
+    <div className="ammo-hud">
+      {Array.from({ length: maxAmmo }).map((_, i) => {
+        const filled = i < ammo;
+
+        return (
+          <img
+            key={i}
+            src="/sprites/ammo.png"
+            alt=""
+            draggable={false}
+            className={`ammo ${filled ? "full" : "empty"}`}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 type CursorSpriteProps = {
   x: number;
   y: number;
@@ -116,10 +138,15 @@ export const projectileImage = (() => {
   return img;
 })();
 
+export const enemySprite = (() => {
+  const img = new Image();
+  img.src = "/sprites/enemy-red.png";
+  return img;
+})();
 
-
-export const enemySprite = new Image();
-enemySprite.src = "/sprites/enemy-red.png";
 export const ENEMY_SPRITE_SIZE = 64;
+
 export const ENEMY_BOSS_SPRITE_SIZE = 64;
 
+export const xpSprite = new Image();
+xpSprite.src = "/sprites/xp.png";

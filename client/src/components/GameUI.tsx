@@ -5,13 +5,14 @@ import { useAudio } from "../lib/stores/useAudio";
 import { useInventory } from "../lib/stores/useInventory";
 import { useDungeon } from "../lib/stores/useDungeon";
 import { useEnemies } from "../lib/stores/useEnemies";
+
 import { useXP } from "../lib/stores/useXP";
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
 import Inventory from "./Inventory";
 import Minimap from "./Minimap";
 import { Volume2, VolumeX } from "lucide-react";
-import { UpgradeIcon, HeartHUD, AmmoHUD } from "./SpriteProps";
+import { UpgradeIcon, HeartHUD, AmmoHUD, XpHUD, } from "./SpriteProps";
 
 
 export function LevelUpScreen() {
@@ -358,9 +359,24 @@ export default function GameUI() {
                 />
 
             </div>
+            
           </div>
         </CardContent>
         
+        <CardContent className="p-0">
+          <div className="space-y-1">
+            <div className="gap-0">
+
+
+                <XpHUD
+                  xp={xp}
+                  xpToNextLevel={xpToNextLevel}
+                />
+
+            </div>
+
+          </div>
+        </CardContent>
       </div>
 
 

@@ -7,6 +7,7 @@ interface PlayerState {
   velocity: THREE.Vector3;
   speed: number;
 
+  xp: number;
   hearts: number;
   maxHearts: number;
   invincibilityTimer: number;
@@ -91,6 +92,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
 
   firerate: 0.5,
 
+  xp: 0,
   hearts: 5,
   maxHearts: 5,
   invincibilityTimer: 0,
@@ -301,6 +303,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   reset: () => set({
     position: new THREE.Vector3(),
     velocity: new THREE.Vector3(),
+    xp: 0,
     hearts: 5,
     maxHearts: 5,
     invincibilityTimer: 0,
