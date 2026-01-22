@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react" 
-import { useXP } from  "../lib/stores/useXP"
+
 
 export const WeaponSprites = {
   revolver: (() => {
@@ -84,25 +84,8 @@ export function AmmoHUD({ ammo, maxAmmo }: AmmoHUDProps) {
   );
 }
 
-export function XpHUD({ Xp, maxAmmo }: AmmoHUDProps) {
-  return (
-    <div className="ammo-hud">
-      {Array.from({ length: maxAmmo }).map((_, i) => {
-        const filled = i < ammo;
 
-        return (
-          <img
-            key={i}
-            src="/sprites/ammo.png"
-            alt=""
-            draggable={false}
-            className={`ammo ${filled ? "full" : "empty"}`}
-          />
-        );
-      })}
-    </div>
-  );
-}
+
 
 type CursorSpriteProps = {
   x: number;
@@ -150,3 +133,15 @@ export const ENEMY_BOSS_SPRITE_SIZE = 64;
 
 export const xpSprite = new Image();
 xpSprite.src = "/sprites/xp.png";
+
+export const xpBarFillSprite = "/sprites/xp-bar-fill.png";
+export const xpBarFrameSprite = "/sprites/xp-bar-frame.png";
+
+export const XP_BAR_WIDTH = 1000;  
+export const XP_BAR_HEIGHT = 32;
+
+type XPHUDProps = {
+  xp: number;
+  xpToNextLevel: number;
+};
+

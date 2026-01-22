@@ -11,7 +11,7 @@ import { useAudio } from "../lib/stores/useAudio";
 import { useInventory } from "../lib/stores/useInventory";
 import { useSpellSlots } from "../lib/stores/useSpellSlots";
 import { useProjectiles } from "../lib/stores/useProjectiles";
-import { useXP } from "../lib/stores/useXP";
+
 import { useSummons } from "../lib/stores/useSummons";
 import { useVisualEffects } from "../lib/stores/useVisualEffects";
 import swordSrc from "/images/sword.png";
@@ -33,8 +33,8 @@ import {
 
 
 const TILE_SIZE = 50;
-const CANVAS_WIDTH = 1490;
-const CANVAS_HEIGHT = 750;
+export const CANVAS_WIDTH = 1490;
+export const CANVAS_HEIGHT = 750;
 const ROOM_SIZE = 200;
 
 interface Position {
@@ -171,6 +171,10 @@ export default function CanvasGame() {
   const {
     position,
     xp,
+    xpToNextLevel,
+    level,
+    availableUpgrades,
+    takenUpgrades,
     hearts,
     maxHearts,
     maxAmmo,
@@ -190,7 +194,7 @@ export default function CanvasGame() {
     loseHeart,
     updateInvincibility,
     muzzleFlashTimer,
-      updateMuzzleFlash,
+    updateMuzzleFlash,
       updateFanFire,
       startFanFire,
       fireMuzzleFlash,
@@ -199,7 +203,7 @@ export default function CanvasGame() {
   const { projectiles, addProjectile, updateProjectiles } = useProjectiles();
 
   const [showCardManager, setShowCardManager] = useState(false);
-  const { xp, level, xpToNextLevel } = useXP();
+  
   const { xpOrbs, addXPOrb, updateXPOrbs } = useEnemies();
   const movePlayer = usePlayer((s) => s.move);
   const player = usePlayer.getState();
@@ -1127,7 +1131,7 @@ export default function CanvasGame() {
     const barHeight = 20;
     const barX = (CANVAS_WIDTH - barWidth) / 2;
     const barY = 20;
-
+    
     // Background
     ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
     ctx.fillRect(barX - 5, barY - 5, barWidth + 10, barHeight + 10);
@@ -1357,7 +1361,7 @@ export default function CanvasGame() {
       // --- Draw main bullet (always visible) ---
       ctx.beginPath();
       ctx.fillStyle = "#ffffff"; // pure white like 20MTD
-      ctx.arc(screen.x, screen.y, 6, 0, Math.PI * 2);
+      ctx.arc(screen.x, screen.y, proj.size, 0, Math.PI * 2);
       ctx.fill();
     });
 
@@ -1973,8 +1977,10 @@ export default function CanvasGame() {
         style={{ cursor: phase === "playing" ? "none" : "default" }}
       >
       <Darkness />
-      <GameUI />
       <LevelUpScreen />
+      <GameUI />
+      
+      
       <canvas
         ref={canvasRef}
         width={CANVAS_WIDTH}

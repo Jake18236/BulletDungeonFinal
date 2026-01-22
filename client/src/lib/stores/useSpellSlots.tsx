@@ -65,6 +65,7 @@ interface SpellSlotsState {
     damage: number;
     speed: number;
     range: number;
+    
     reload: number;
     projectileCount: number;
     homing: boolean;

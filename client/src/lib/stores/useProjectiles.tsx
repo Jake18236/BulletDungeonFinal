@@ -63,7 +63,7 @@ interface ProjectilesState {
     damage: number;
     speed: number;
     range: number;
-
+    size: number;
     homing: boolean;
     piercing: number;
     bouncing: number;
@@ -102,7 +102,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
     damage: number;
     speed: number;
     range: number;
-
+    size: number;
     homing: boolean;
     piercing: number;
     bouncing: number;
@@ -127,7 +127,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       currentLength: 0,
       jitterOffset: new THREE.Vector3(),
       color: getProjectileColor(config),
-      size: 10,
+      size: config.size,
       trailColor: getTrailColor(config),
       trailLength: 200,
       trailHistory: [],

@@ -39,7 +39,7 @@ interface XPState {
 
 // Calculate XP needed (exponential curve)
 const calculateXPForLevel = (level: number): number => {
-  return Math.floor(10 + level * 15 + Math.pow(level, 1.5) * 5);
+  return Math.floor(20 + level * 15 + Math.pow(level, 1.5) * 5);
 };
 
 // All available upgrades organized by category and tier

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import * as THREE from "three";
-import { useXP } from "./useXP";
+import { usePlayer } from "./usePlayer"
 import { useVisualEffects } from "./useVisualEffects";
 
 export interface XPOrb {
@@ -133,7 +133,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
       const COLLECT_RANGE = 1.5;
       const MAGNET_SPEED = 15;
 
-      const addXP = useXP.getState().addXP;
+      const addXP = usePlayer.getState().addXP;
 
       set((state) => {
         const remainingOrbs: XPOrb[] = [];

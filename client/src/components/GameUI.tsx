@@ -5,18 +5,19 @@ import { useAudio } from "../lib/stores/useAudio";
 import { useInventory } from "../lib/stores/useInventory";
 import { useDungeon } from "../lib/stores/useDungeon";
 import { useEnemies } from "../lib/stores/useEnemies";
+import { CANVAS_WIDTH, CANVAS_HEIGHT } from "../components/CanvasGame"
 
-import { useXP } from "../lib/stores/useXP";
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
 import Inventory from "./Inventory";
 import Minimap from "./Minimap";
 import { Volume2, VolumeX } from "lucide-react";
-import { UpgradeIcon, HeartHUD, AmmoHUD, XpHUD, } from "./SpriteProps";
+import { UpgradeIcon, HeartHUD, AmmoHUD, XPHUD, } from "./SpriteProps";
 
 
 export function LevelUpScreen() {
-  const { showLevelUpScreen, availableUpgrades, selectUpgrade, level } = useXP();
+
+  const { level, availableUpgrades, showLevelUpScreen, xp, selectUpgrade } = usePlayer();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [animationPhase, setAnimationPhase] = useState<"beam" | "dropdown" | "ready">("beam");
@@ -283,9 +284,10 @@ export function LevelUpScreen() {
 
 export default function GameUI() {
   const { phase, start, restart } = useGame();
-  const { hearts, maxHearts, ammo, maxAmmo, reset: resetPlayer } = usePlayer();
+  const { hearts, maxHearts, ammo, maxAmmo, xp, xpToNextLevel, level, showLevelUpScreen, reset: resetPlayer } = usePlayer();
   const { generateDungeon, reset: resetDungeon } = useDungeon();
   const { generateRoomEnemies, reset: resetEnemies } = useEnemies();
+  const progress = showLevelUpScreen ? 1 : Math.min(xp / xpToNextLevel, 1);
 
   const handleStart = () => {
     resetPlayer();
@@ -295,6 +297,21 @@ export default function GameUI() {
     generateRoomEnemies();
     start();
   };
+  const [xpFlash, setXpFlash] = useState(false);
+
+  useEffect(() => {
+    if (!showLevelUpScreen) {
+      setXpFlash(false);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setXpFlash((prev) => !prev);
+    }, 300); // flash speed (adjust to taste)
+
+    return () => clearInterval(interval);
+  }, [showLevelUpScreen]);
+
 
   if (phase === "ready") {
     return (
@@ -334,7 +351,48 @@ export default function GameUI() {
     <>
       {/* HUD */}
       <div className="fixed top-0 left-4 z-40">
-        
+          <div
+            className="xp-bar"
+            style={{
+              position: "absolute",
+                top: 6,
+                left: 700,
+                transform: "translateX(-50%)",
+                width: 720,
+                height: 20,
+                backgroundColor: "rgba(0,0,0,0.6)",
+                border: "2px solid #1f2933",
+                borderRadius: 6,
+                zIndex: 10,
+            }}
+          >
+            <div
+              style={{
+                width: `${progress * 100}%`,
+                height: "100%",
+                backgroundColor: showLevelUpScreen
+                  ? xpFlash
+                    ? "#22c55e"   // bright green
+                    : "#166534"   // dark green
+                  : "#60ff87",   // normal XP color
+                borderRadius: 4,
+                transition: "width 120ms linear",
+              }}
+            />
+            <span
+              style={{
+                position: "absolute",
+                right: -36,
+                top: -4,
+                fontSize: 11,
+                color: "#e5e7eb",
+                fontFamily: "monospace",
+              }}
+            >
+              Lv {level}
+            </span>
+          </div>
+
           <CardContent className="p-0">
             <div className="space-y-2">
               <div className="flex items-center gap-0">
@@ -362,21 +420,6 @@ export default function GameUI() {
             
           </div>
         </CardContent>
-        
-        <CardContent className="p-0">
-          <div className="space-y-1">
-            <div className="gap-0">
-
-
-                <XpHUD
-                  xp={xp}
-                  xpToNextLevel={xpToNextLevel}
-                />
-
-            </div>
-
-          </div>
-        </CardContent>
       </div>
 
 
@@ -396,9 +439,12 @@ export default function GameUI() {
       </div>
 
       <style jsx>{`
+          
+      
           .heart-hud {
             display: flex;
             gap: 0px;
+            margin-top: 20px;
           }
 
           .heart {
@@ -440,6 +486,8 @@ export default function GameUI() {
             height: 32px;
             z-index: 9999;
           }
+        
+
         `}</style>
       
     </>
