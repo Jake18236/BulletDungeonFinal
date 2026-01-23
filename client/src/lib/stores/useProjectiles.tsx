@@ -6,6 +6,8 @@ import { Enemy } from "./useEnemies";
 import { useSummons } from "./useSummons";
 import { useVisualEffects } from "./useVisualEffects";
 
+export type projectileType = "basic" | "heavy";
+
 export interface Projectile {
   id: string;
   position: THREE.Vector3;
@@ -21,6 +23,7 @@ export interface Projectile {
   jitterOffset: THREE.Vector3;
 
   // Visual
+  type: projectileType;
   color: string;
   size: number;
   trailColor: string;
@@ -59,7 +62,7 @@ interface ProjectilesState {
   addProjectile: (config: {
     position: THREE.Vector3;
     direction: THREE.Vector3;
-    
+    projectileType?: projectileType;
     trailLength: number;
     damage: number;
     speed: number;
@@ -98,7 +101,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
   addProjectile: (config: {
     position: THREE.Vector3;
     direction: THREE.Vector3;
-    
+    projectileType?: projectileType;
     trailLength: number;
     damage: number;
     speed: number;
@@ -132,6 +135,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       trailColor: getTrailColor(config),
       trailLength: config.trailLength * config.speed,
       trailHistory: [],
+      type: config.projectileType || "basic",
 
       homing: config.homing,
       piercing: config.piercing,
