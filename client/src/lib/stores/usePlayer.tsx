@@ -728,10 +728,10 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   isFiring: false,
   
   baseDamage: 13,
-  baseProjectileSpeed: 80,
+  baseProjectileSpeed: 60,
   baseProjectileRange: 50,
   projectileCount: 1,
-  projectileSize: 3.0,
+  projectileSize: 10.0,
   homing: false,
   piercing: 0,
   bouncing: 0,

@@ -82,6 +82,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
     { time: 10, interval: 4, count: 2 },
     { time: 20, interval: 5, count: 3 },
     { time: 40, interval: 6, count: 20 },
+    { time: 60, interval: 2, count: 30 },
   ];
 
   let spawnTimer = 0;

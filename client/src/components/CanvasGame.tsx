@@ -1033,50 +1033,6 @@ export default function CanvasGame() {
         floorSize,
       );
     }
-
-    // ============================================
-    // EXITS (Glowing cyan)
-    // ============================================
-
-    ctx.fillStyle = "#00ffcc";
-    const exitSize = 60;
-
-    currentRoom.exits.forEach((exit) => {
-      switch (exit) {
-        case "north":
-          ctx.fillRect(
-            centerX - exitSize / 2 + offsetX,
-            centerY - floorSize / 2 - 10 + offsetZ,
-            exitSize,
-            10,
-          );
-          break;
-        case "south":
-          ctx.fillRect(
-            centerX - exitSize / 2 + offsetX,
-            centerY + floorSize / 2 + offsetZ,
-            exitSize,
-            10,
-          );
-          break;
-        case "east":
-          ctx.fillRect(
-            centerX + floorSize / 2 + offsetX,
-            centerY - exitSize / 2 + offsetZ,
-            10,
-            exitSize,
-          );
-          break;
-        case "west":
-          ctx.fillRect(
-            centerX - floorSize / 2 - 10 + offsetX,
-            centerY - exitSize / 2 + offsetZ,
-            10,
-            exitSize,
-          );
-          break;
-      }
-    });
   };
 
   const drawXPOrbs = (ctx: CanvasRenderingContext2D) => {
@@ -1293,7 +1249,7 @@ export default function CanvasGame() {
 
           const t = i / trail.length; // 0 at front, 1 at tail
           const alpha = 0.9 * (1 - t); // fades out toward tail
-          const width = 6 * (1 - t * 0.4); // front 2px, tail shrinks to 0.4px
+          const width = proj.size * (1 - t * 0.4); // front 2px, tail shrinks to 0.4px
 
           ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
           ctx.lineWidth = width;
