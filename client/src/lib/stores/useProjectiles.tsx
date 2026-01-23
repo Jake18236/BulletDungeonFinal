@@ -15,6 +15,7 @@ export interface Projectile {
   maxRange: number;
   distanceTraveled: number;
   rotationY: number;
+  
 
   currentLength: number; 
   jitterOffset: THREE.Vector3;

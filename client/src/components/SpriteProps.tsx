@@ -1,14 +1,21 @@
-import { useEffect, useState } from "react" 
+import { useEffect, useState } from "react";
 
+export const BASE_SPRITE_SIZE = 32; // native sprite resolution
+export const BASE_SCALE = 3;        // global pixel upscaling factor
+
+export type SpriteDef = {
+  img: HTMLImageElement;
+  size: number; // sprite pixel resolution
+  scale: number;    // relative world/UI size
+};
 
 export const WeaponSprites = {
   revolver: (() => {
     const img = new Image();
-    img.src = "/sprites/revolver.png"; // adjust path if needed
+    img.src = "/sprites/revolver.png";
     return img;
   })(),
 };
-
 
 export function UpgradeIcon({
   icon,
@@ -33,13 +40,14 @@ export function UpgradeIcon({
   );
 }
 
-
 type HeartHUDProps = {
   currentHP: number;
   maxHP: number;
 };
 
 export function HeartHUD({ currentHP, maxHP }: HeartHUDProps) {
+  const size = BASE_SPRITE_SIZE * BASE_SCALE;
+
   return (
     <div className="heart-hud">
       {Array.from({ length: maxHP }).map((_, i) => {
@@ -49,9 +57,12 @@ export function HeartHUD({ currentHP, maxHP }: HeartHUDProps) {
           <img
             key={i}
             src="/sprites/heart.png"
-            alt=""
             draggable={false}
-            className={`heart ${filled ? "full" : "empty"}`}
+            style={{
+              width: size,
+              height: size,
+            }}
+            className={`heart ${filled ? "full" : "empty"} image-rendering-pixelated`}
           />
         );
       })}
@@ -65,6 +76,8 @@ type AmmoHUDProps = {
 };
 
 export function AmmoHUD({ ammo, maxAmmo }: AmmoHUDProps) {
+  const size = BASE_SPRITE_SIZE * BASE_SCALE;
+
   return (
     <div className="ammo-hud">
       {Array.from({ length: maxAmmo }).map((_, i) => {
@@ -74,9 +87,12 @@ export function AmmoHUD({ ammo, maxAmmo }: AmmoHUDProps) {
           <img
             key={i}
             src="/sprites/ammo.png"
-            alt=""
             draggable={false}
-            className={`ammo ${filled ? "full" : "empty"}`}
+            style={{
+              width: size,
+              height: size,
+            }}
+            className={`ammo ${filled ? "full" : "empty"} image-rendering-pixelated`}
           />
         );
       })}
@@ -84,24 +100,25 @@ export function AmmoHUD({ ammo, maxAmmo }: AmmoHUDProps) {
   );
 }
 
-
-
-
 type CursorSpriteProps = {
   x: number;
   y: number;
 };
 
 export function CursorSprite({ x, y }: CursorSpriteProps) {
-  const size = 32;
+
+  const scale = 0.5;
+  const size = 32 * BASE_SCALE * scale;
   const half = size / 2;
 
   return (
     <img
       src="/sprites/crosshair.png"
       draggable={false}
-      className="cursor-sprite"
+      className="cursor-sprite image-rendering-pixelated"
       style={{
+        width: size,
+        height: size,
         left: Math.round(x - half),
         top: Math.round(y - half),
       }}
@@ -109,39 +126,66 @@ export function CursorSprite({ x, y }: CursorSpriteProps) {
   );
 }
 
-export const projectileSprite = {
-  src: "/sprites/bullet.png",
-  w: 8,
-  h: 4,
+export const ProjectileSprites: Record<string, SpriteDef> = {
+  default: {
+    img: (() => {
+      const img = new Image();
+      img.src = "/sprites/bullet.png";
+      return img;
+    })(),
+    size: 8,
+    scale: 0.5,
+  },
+  fire: {
+    img: (() => {
+      const img = new Image();
+      img.src = "/sprites/bullet_fire.png";
+      return img;
+    })(),
+    size: 8,
+    scale: 0.6,
+  },
 };
 
-export const projectileImage = (() => {
+export const enemySprite: SpriteDef = {
+  img: (() => {
+    const img = new Image();
+    img.src = "/sprites/enemy-red.png";
+    return img;
+  })(),
+  
+  scale: 2.0,
+  size: 32,
+};
+
+export const bossEnemySprite: SpriteDef = {
+  img: enemySprite.img,
+  size: 32,
+  scale: 2.2,
+};
+
+export const xpSprite = (() => {
   const img = new Image();
-  img.src = projectileSprite.src;
+  img.src = "/sprites/xp.png";
   return img;
 })();
-
-export const enemySprite = (() => {
-  const img = new Image();
-  img.src = "/sprites/enemy-red.png";
-  return img;
-})();
-
-export const ENEMY_SPRITE_SIZE = 64;
-
-export const ENEMY_BOSS_SPRITE_SIZE = 64;
-
-export const xpSprite = new Image();
-xpSprite.src = "/sprites/xp.png";
 
 export const xpBarFillSprite = "/sprites/xp-bar-fill.png";
 export const xpBarFrameSprite = "/sprites/xp-bar-frame.png";
 
-export const XP_BAR_WIDTH = 1000;  
-export const XP_BAR_HEIGHT = 32;
+
+export const XP_BAR_BASE_WIDTH = 256;
+export const XP_BAR_BASE_HEIGHT = 8;
+export const XP_BAR_SCALE = 3;
+
+export const XP_BAR_WIDTH = XP_BAR_BASE_WIDTH * XP_BAR_SCALE;
+
+export const XP_BAR_HEIGHT = XP_BAR_BASE_HEIGHT * XP_BAR_SCALE;
+
 
 type XPHUDProps = {
   xp: number;
   xpToNextLevel: number;
 };
+
 

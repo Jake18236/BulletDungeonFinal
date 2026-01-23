@@ -231,8 +231,8 @@ export function LevelUpScreen() {
       <style jsx>{`
         
         .upgrade-sprite {
-          width: 128px;
-          height: 128px;
+          width: calc(32px * 3);
+          height: calc(32px * 3);
           object-fit: contain;
           pointer-events: none;
         }
@@ -261,7 +261,18 @@ export function LevelUpScreen() {
         }
 
         .upgrade-card.selected {
-          filter: drop-shadow(0 0 10px rgba(255,255,255,0.8));
+          filter: drop-shadow(0 0 10px rgba(255,255,255,0.8))
+            brightness(0.15)
+            contrast(1.1)
+            saturate(1.25)
+            hue-rotate(-8deg);
+        }
+        .upgrade-selected {
+          filter:
+            brightness(0.15)
+            contrast(1.1)
+            saturate(1.25)
+            hue-rotate(-8deg);
         }
         .upgrade-card.locked {
           opacity: 0.35;
@@ -440,33 +451,37 @@ export default function GameUI() {
             display: flex;
             gap: 0px;
             margin-top: 20px;
+            
           }
 
           .heart {
-            width: 100px;
-            height: 100px;
             z-index: 1;
             image-rendering: pixelated;
+            
+          }
+
+          .heart + .heart {
+            z-index: 1;
+            image-rendering: pixelated;
+            margin-left: -20px;
           }
 
           .heart.empty {
             opacity: 0.20;
-            filter: grayscale(1);
+            filter: grayscale(0.8);
           }
           .ammo-hud {
             display: flex;
             gap: 0px;
+            margin-left: -15px;
           }
 
           .ammo {
-            width: 86px;
-            height: 86px;
-            
             z-index: 1;
             image-rendering: pixelated;
           }
           .ammo + .ammo {
-            margin-left: -40px;
+            margin-left: -50px;
           }
           .ammo.empty {
             opacity: 0.1;
@@ -477,8 +492,6 @@ export default function GameUI() {
             position: fixed;
             pointer-events: none;
             image-rendering: pixelated;
-            width: 32px;
-            height: 32px;
             z-index: 9999;
           }
         

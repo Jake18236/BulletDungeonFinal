@@ -21,8 +21,6 @@ import { LevelUpScreen } from "./GameUI";
 import Darkness from "./Darkness";
 import {
   enemySprite,
-  ENEMY_SPRITE_SIZE,
-  ENEMY_BOSS_SPRITE_SIZE,
   WeaponSprites,
   CursorSprite,
   projectileSprite,
@@ -315,6 +313,8 @@ export default function CanvasGame() {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
+      ctx.imageSmoothingEnabled = false;
+      
 
       ctx.fillStyle = "#1a1a1a";
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -1270,11 +1270,6 @@ export default function CanvasGame() {
     ctx.restore();
   };
 
-
-
-
-
-
   const drawParticles = (ctx: CanvasRenderingContext2D) => {
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
@@ -1409,6 +1404,7 @@ export default function CanvasGame() {
 
     ctx.fillStyle = "#4a9eff";
     ctx.beginPath();
+    
     ctx.arc(0, 0, 15, 0, Math.PI * 2);
     ctx.fill();
 
@@ -1467,6 +1463,7 @@ export default function CanvasGame() {
       ctx.rotate(enemy.rotationY ?? 0);
 
       // ---------------- Shadow ----------------
+
       ctx.fillStyle = "rgba(0,0,0,0.5)";
       ctx.beginPath();
       ctx.ellipse(0, 7, radius * 1.15, radius * 0.55, 0, 0, Math.PI * 2);
@@ -1589,7 +1586,7 @@ export default function CanvasGame() {
     // ================================================================
     // NORMAL SKELETON ENEMY
     // ================================================================
-    const size = ENEMY_SPRITE_SIZE;
+    const size = enemySprite.size * enemySprite.scale;
     const facingRight = enemy.position.x >= position.x;
     
 
@@ -1605,7 +1602,7 @@ export default function CanvasGame() {
     }
 
     ctx.drawImage(
-      enemySprite,
+      enemySprite.img,
       -size / 2,
       -size / 2,
       size,
@@ -1847,7 +1844,7 @@ export default function CanvasGame() {
       >
       <Darkness />
       <LevelUpScreen />
-      
+      <GameUI />
       
       
       <canvas
@@ -1857,7 +1854,7 @@ export default function CanvasGame() {
         className="border-2 border-gray-700"
         
       />
-        <GameUI />
+        
       <CursorSprite
         x={mousePos.x}
         y={mousePos.y}
