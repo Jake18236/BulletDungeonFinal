@@ -55,17 +55,19 @@ interface PlayerState {
   baseDamage: number;
   baseProjectileSpeed: number;
   baseProjectileRange: number;
+  projectileSize: number;
   projectileCount: number;
   homing: boolean;
   piercing: number;
   bouncing: number;
+  accuracy: number;
+  trailLength: number;
   explosive?: { radius: number; damage: number };
   chainLightning?: { chains: number; range: number };
-  accuracy: number;
+  
 
   // Special Upgrades
   knockbackMultiplier: number;
-  projectileSize: number;
   instantKillThreshold: number;
   splinterBullets: boolean;
   pierceKilledEnemies: boolean;
@@ -106,13 +108,15 @@ interface PlayerState {
     damage: number;
     speed: number;
     range: number;
+    projectileSize: number;
     projectileCount: number;
     homing: boolean;
     piercing: number;
     bouncing: number;
+    accuracy: number;
+    trailLength: number;
     explosive?: { radius: number; damage: number };
     chainLightning?: { chains: number; range: number };
-    accuracy: number;
   };
 
   // Actions - Fan Fire
@@ -718,25 +722,28 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   firerate: 0.5,
   ammo: 6,
   maxAmmo: 6,
-  reloadTime: 1.5,
+  reloadTime: 1,
   isReloading: false,
   reloadProgress: 0,
   isFiring: false,
-
-  baseDamage: 100,
+  
+  baseDamage: 13,
   baseProjectileSpeed: 80,
   baseProjectileRange: 50,
   projectileCount: 1,
+  projectileSize: 3.0,
   homing: false,
   piercing: 0,
   bouncing: 0,
+  accuracy: 1.0,
+  trailLength: 1,
   explosive: undefined,
   chainLightning: undefined,
-  accuracy: 1.0,
+  
+  
 
   // Special Upgrades
   knockbackMultiplier: 1.0,
-  projectileSize: 1.0,
   instantKillThreshold: 0,
   splinterBullets: false,
   pierceKilledEnemies: false,
@@ -890,6 +897,9 @@ export const usePlayer = create<PlayerState>((set, get) => ({
       explosive: state.explosive,
       chainLightning: state.chainLightning,
       accuracy: state.accuracy,
+      knockbackMultiplier: state.knockbackMultiplier,
+      projectileSize: state.projectileSize,
+      trailLength: state.trailLength,
     };
   },
 

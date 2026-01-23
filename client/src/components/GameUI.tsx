@@ -62,7 +62,7 @@ export function LevelUpScreen() {
   const displayedUpgrade = availableUpgrades[hoveredIndex ?? selectedIndex];
 
   return (
-    <div className="fixed inset-0 z-[999] font-pixel pointer-events-none">
+    <div className="fixed inset-0 z-[20] font-pixel pointer-events-none">
       {/* Background overlay */}
       <div
         className="absolute inset-0 bg-black transition-opacity duration-500"
@@ -152,15 +152,10 @@ export function LevelUpScreen() {
                     width: "72px",
                     height: "72px",
                     pointerEvents: isReady ? "auto" : "none",
-                    transform: `scale(${isHovered ? 1.1 : 1})`,
+                    transform: `scale(${isHovered ? 1.3 : 1})`,
                     opacity: isReady ? 1 : 0,
-                    transition: `
-                      opacity 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${0.3 + i * 0.1}s,
-                      transform 0.2s ease-out
-                    `,
-                    filter: isHovered
-                      ? "drop-shadow(0 0 16px rgba(255,255,255,0.6))"
-                      : "none",
+                    
+                    
                   }}
                 >
                   <UpgradeIcon
@@ -363,7 +358,7 @@ export default function GameUI() {
                 backgroundColor: "rgba(0,0,0,0.6)",
                 border: "2px solid #1f2933",
                 borderRadius: 6,
-                zIndex: 10,
+                zIndex: 100,
             }}
           >
             <div
@@ -448,8 +443,8 @@ export default function GameUI() {
           }
 
           .heart {
-            width: 80px;
-            height: 80px;
+            width: 100px;
+            height: 100px;
             z-index: 1;
             image-rendering: pixelated;
           }
@@ -464,14 +459,14 @@ export default function GameUI() {
           }
 
           .ammo {
-            width: 64px;
-            height: 64px;
+            width: 86px;
+            height: 86px;
             
             z-index: 1;
             image-rendering: pixelated;
           }
           .ammo + .ammo {
-            margin-left: -30px;
+            margin-left: -40px;
           }
           .ammo.empty {
             opacity: 0.1;

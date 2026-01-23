@@ -36,7 +36,7 @@ export interface Projectile {
   chainLightning?: { chains: number; range: number; chainedEnemies: Set<string> };
 
   // Slot reference
-  slotId: number;
+  
 
   // ADD THESE NEW FIELDS:
   isSummonProjectile?: boolean;
@@ -58,7 +58,7 @@ interface ProjectilesState {
   addProjectile: (config: {
     position: THREE.Vector3;
     direction: THREE.Vector3;
-    slotId: number;
+    
     trailLength: number;
     damage: number;
     speed: number;
@@ -97,7 +97,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
   addProjectile: (config: {
     position: THREE.Vector3;
     direction: THREE.Vector3;
-    slotId: number;
+    
     trailLength: number;
     damage: number;
     speed: number;
@@ -129,7 +129,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       color: getProjectileColor(config),
       size: config.size,
       trailColor: getTrailColor(config),
-      trailLength: 200,
+      trailLength: config.trailLength * config.speed,
       trailHistory: [],
 
       homing: config.homing,
@@ -146,7 +146,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
           }
         : undefined,
 
-      slotId: config.slotId,
+      
 
       // ADD THESE:
       isSummonProjectile: config.isSummonProjectile,
@@ -162,13 +162,13 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
   updateProjectiles: (delta, enemies, playerPos, roomBounds, onHit) => {
     const updated: Projectile[] = [];
     const { trailGhosts } = get();
-    const CURVE_RATE = 0.1;
+    const CURVE_RATE = 0.2;
     for (const proj of get().projectiles) {
       // --- Move projectile ---
       // --- Apply curve to velocity (slight rotation) ---
       const speed = proj.velocity.length();
       const angle = Math.atan2(proj.velocity.z, proj.velocity.x); // note: z first for world
-      const newAngle = angle + CURVE_RATE * delta; // scaled by delta for frame rate independence
+      const newAngle = Math.random() / 1000 + angle + CURVE_RATE * delta;
       proj.velocity.x = Math.cos(newAngle) * speed;
       proj.velocity.z = Math.sin(newAngle) * speed;
 
@@ -268,7 +268,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
         // Skip if already pierced this enemy
         if (proj.piercedEnemies.has(enemy.id)) continue;
 
-        if (proj.position.distanceTo(enemy.position) < 1.0) {
+        if (proj.position.distanceTo(enemy.position) < 1.3) {
           hitEnemy = true;
 
           // Deal damage

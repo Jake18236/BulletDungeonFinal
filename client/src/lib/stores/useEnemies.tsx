@@ -99,7 +99,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
 
       set({
         enemies: enemies.map((e) =>
-          e.id === id ? { ...e, hitFlash: 0.12, health: e.health - dmg } : e
+          e.id === id ? { ...e, hitFlash: 0.92, health: e.health - dmg } : e
         ),
         damagePopups: [
           ...damagePopups,

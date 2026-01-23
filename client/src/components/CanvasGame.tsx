@@ -9,7 +9,7 @@ import { bounceAgainstBounds } from "../lib/collision";
 import { useGame } from "../lib/stores/useGame";
 import { useAudio } from "../lib/stores/useAudio";
 import { useInventory } from "../lib/stores/useInventory";
-import { useSpellSlots } from "../lib/stores/useSpellSlots";
+
 import { useProjectiles } from "../lib/stores/useProjectiles";
 
 import { useSummons } from "../lib/stores/useSummons";
@@ -178,7 +178,6 @@ export default function CanvasGame() {
     hearts,
     maxHearts,
     maxAmmo,
-    heartsPerLevel,
     invincibilityTimer,
     speed,
     firerate,
@@ -199,10 +198,10 @@ export default function CanvasGame() {
       startFanFire,
       fireMuzzleFlash,
   } = usePlayer();
-  const { slots, activeSlotId, getSlotStats, startCooldown, updateCooldowns } = useSpellSlots();
+  
   const { projectiles, addProjectile, updateProjectiles } = useProjectiles();
 
-  const [showCardManager, setShowCardManager] = useState(false);
+  
   
   const { xpOrbs, addXPOrb, updateXPOrbs } = useEnemies();
   const movePlayer = usePlayer((s) => s.move);
@@ -216,7 +215,7 @@ export default function CanvasGame() {
   const fireTimer = useRef(0);
   const canFire = useRef(true);
   const isMouseDown = useRef(false);
-  const canInteract = phase === "playing" || showCardManager;
+  const canInteract = phase === "playing";
   const canvasRectRef = useRef<DOMRect | null>(null);
   
   useEffect(() => {
@@ -239,10 +238,6 @@ export default function CanvasGame() {
 
       if (e.code === "KeyR" && !isReloading && ammo < 6) {
         startReload();
-      }
-
-      if (e.code === "KeyC") {
-        setShowCardManager((prev) => !prev);
       }
     
     if (e.code === "KeyB") {
@@ -327,6 +322,8 @@ export default function CanvasGame() {
       if (currentRoom) drawDungeon(ctx);
 
       if (phase === "playing") {
+
+        const ps = usePlayer.getState();
         updateReload(delta);
         updateInvincibility(delta);
         
@@ -339,20 +336,20 @@ export default function CanvasGame() {
           const angle = (fanIndex / 10) * Math.PI * 2;
           const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
 
-          const ps = usePlayer.getState();
-          const stats = getSlotStats(activeSlotId);
+          
+          const stats = usePlayer.getState().getProjectileStats();
 
           addProjectile({
             position: ps.position.clone(),
             direction,
-            slotId: activeSlotId,
+            size: stats.projectileSize,
             damage: stats.damage * 0.15,
             speed: stats.speed,
             range: stats.range,
             trailLength: stats.trailLength,
             homing: false,
-            piercing: 0,
-            bouncing: 0,
+            piercing: stats.piercing,
+            bouncing: stats.bouncing,
           });
 
           playHit();
@@ -387,44 +384,24 @@ export default function CanvasGame() {
         setFiring(isMouseDown.current && !isReloading && ammo > 0);
 
         if (isMouseDown.current && !isReloading && ammo > 0 && canFire.current) {
-          const activeSlot = slots.find(s => s.id === activeSlotId);
-          if (activeSlot && !activeSlot.isOnCooldown) {
             if (fireShot()) {
               const centerX = CANVAS_WIDTH / 2;
               const centerY = CANVAS_HEIGHT / 2;
 
-              // Get combined stats
-              const slotStats = getSlotStats(activeSlotId);
-              const playerStats = usePlayer.getState().getProjectileStats();
-
-              const stats = {
-                damage: slotStats.damage + playerStats.damage - 100,
-                speed: slotStats.speed * (playerStats.speed / 80),
-                range: slotStats.range * (playerStats.range / 50),
-                projectileCount: Math.max(slotStats.projectileCount, playerStats.projectileCount),
-                homing: slotStats.homing || playerStats.homing,
-                piercing: Math.max(slotStats.piercing, playerStats.piercing),
-                bouncing: Math.max(slotStats.bouncing, playerStats.bouncing),
-                explosive: slotStats.explosive || playerStats.explosive,
-                chainLightning: slotStats.chainLightning || playerStats.chainLightning,
-                accuracy: Math.min(slotStats.accuracy, playerStats.accuracy),
-                trailLength: slotStats.trailLength,
-              };
-
-              const ps = usePlayer.getState();
+              const stats = usePlayer.getState().getProjectileStats();
               const baseAngle = Math.atan2(
                 mouseRef.current.y - centerY,
                 mouseRef.current.x - centerX
               );
 
               // Helper function to fire a projectile in a direction
-              const fireProjectileInDirection = (angle: number, damageMultiplier: number = 1) => {
+           const fireProjectileInDirection = (angle: number, damageMultiplier: number = 1) => {
                 const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
                 const handOffset = 8;
                 const barrelLength = 28;
                 const totalOffsetPixels = handOffset + barrelLength;
                 const totalOffset = totalOffsetPixels / (TILE_SIZE / 2);
-
+                
                 const barrelPosition = ps.position.clone().add(
                   new THREE.Vector3(
                     Math.cos(angle) * totalOffset,
@@ -436,16 +413,16 @@ export default function CanvasGame() {
                 addProjectile({
                   position: barrelPosition,
                   direction,
-                  slotId: activeSlotId,
                   damage: stats.damage * damageMultiplier,
                   speed: stats.speed,
+                  size: stats.projectileSize,
                   range: stats.range,
-                  trailLength: stats.trailLength,
                   homing: stats.homing,
                   piercing: stats.piercing,
                   bouncing: stats.bouncing,
                   explosive: stats.explosive,
                   chainLightning: stats.chainLightning,
+                  trailLength: stats.trailLength, // Add a default trail length
                 });
               };
 
@@ -512,7 +489,7 @@ export default function CanvasGame() {
               fireTimer.current = firerate;
               canFire.current = false;
             }
-          }
+          
         }
 
 
@@ -556,6 +533,7 @@ export default function CanvasGame() {
           enemies,
           position,
           ROOM_SIZE,
+          
           (enemyId, damage, knockback) => {
             const enemy = enemies.find((e) => e.id === enemyId);
             if (enemy) {
@@ -583,19 +561,19 @@ export default function CanvasGame() {
                   for (let i = 0; i < 3; i++) {
                     const angle = (i / 3) * Math.PI * 2 + Math.random() * 0.3;
                     const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
-                    const slotStats = getSlotStats(activeSlotId);
+                    const playerStats = usePlayer.getState().getProjectileStats();
 
                     addProjectile({
                       position: enemy.position.clone(),
+                      size: 3,
                       direction,
-                      slotId: activeSlotId,
-                      damage: slotStats.damage * 0.1,
-                      speed: slotStats.speed * 0.8,
-                      range: slotStats.range * 0.5,
-                      trailLength: slotStats.trailLength,
+                      damage: playerStats.damage * 0.1,
+                      speed: playerStats.speed * 1.5,
+                      range: playerStats.range * 0.5,
                       homing: false,
                       piercing: 2,
                       bouncing: 0,
+                      trailLength: 10,
                     });
                   }
                 }
@@ -693,7 +671,7 @@ export default function CanvasGame() {
               addProjectile({
                 position: updated.position.clone().add(direction.clone().multiplyScalar(2)),
                 direction,
-                slotId: 0,
+                size: 4,
                 damage: 1,
                 speed: 40,
                 range: 80,
@@ -849,7 +827,7 @@ export default function CanvasGame() {
 
         updateXPOrbs(delta, position);
         updateEnemies(aliveEnemies);
-        updateCooldowns(delta);
+        
         
 
         useEnemies.getState().updateAutoSpawn(delta, player.position);
@@ -866,7 +844,7 @@ export default function CanvasGame() {
       drawParticles(ctx); // ADD - in front of everything
       drawXPOrbs(ctx);
       drawDamageNumbers(ctx); // ADD - on top
-      drawXPBar(ctx);
+      
       drawReloadIndicator(ctx);
       drawWeapon(ctx, "revolver", phase !== "playing");
       
@@ -1123,38 +1101,6 @@ export default function CanvasGame() {
         ctx.restore();
       }
     });
-  };
-
-
-  const drawXPBar = (ctx: CanvasRenderingContext2D) => {
-    const barWidth = 400;
-    const barHeight = 20;
-    const barX = (CANVAS_WIDTH - barWidth) / 2;
-    const barY = 20;
-    
-    // Background
-    ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
-    ctx.fillRect(barX - 5, barY - 5, barWidth + 10, barHeight + 10);
-
-    // XP Bar background
-    ctx.fillStyle = "#333333";
-    ctx.fillRect(barX, barY, barWidth, barHeight);
-
-    // XP Bar fill
-    const progress = xp / xpToNextLevel;
-    ctx.fillStyle = "#64c8ff";
-    ctx.fillRect(barX, barY, barWidth * progress, barHeight);
-
-    // Border
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(barX, barY, barWidth, barHeight);
-
-    // Text
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 44px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("XP", barX + barWidth / 2, barY + barHeight + 20);
   };
 
   const drawReloadIndicator = (ctx: CanvasRenderingContext2D) => {
@@ -1897,39 +1843,6 @@ export default function CanvasGame() {
     });
   };
   
-  const drawLightningStrikes = (ctx: CanvasRenderingContext2D) => {
-    const { recentStrikes } = useSummons.getState();
-
-    if (!recentStrikes) return;
-
-    const centerX = CANVAS_WIDTH / 2;
-    const centerY = CANVAS_HEIGHT / 2;
-
-    recentStrikes.forEach(strike => {
-      if (strike.life < 0.2) {
-        const screenX = centerX + ((strike.x - position.x) * TILE_SIZE) / 2;
-        const screenY = centerY + ((strike.z - position.z) * TILE_SIZE) / 2;
-
-        const alpha = 1 - (strike.life / 0.2);
-
-        // Lightning bolt
-        ctx.strokeStyle = `rgba(0, 255, 255, ${alpha})`;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(screenX, screenY - 100);
-        ctx.lineTo(screenX - 5, screenY - 50);
-        ctx.lineTo(screenX + 5, screenY - 50);
-        ctx.lineTo(screenX, screenY);
-        ctx.stroke();
-
-        // Flash
-        ctx.fillStyle = `rgba(0, 255, 255, ${alpha * 0.3})`;
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, 30, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    });
-  };
 
   const drawStatusEffects = (ctx: CanvasRenderingContext2D) => {
     const centerX = CANVAS_WIDTH / 2;
@@ -1978,7 +1891,7 @@ export default function CanvasGame() {
       >
       <Darkness />
       <LevelUpScreen />
-      <GameUI />
+      
       
       
       <canvas
@@ -1988,6 +1901,7 @@ export default function CanvasGame() {
         className="border-2 border-gray-700"
         
       />
+        <GameUI />
       <CursorSprite
         x={mousePos.x}
         y={mousePos.y}

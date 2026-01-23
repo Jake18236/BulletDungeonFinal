@@ -285,13 +285,13 @@ export const useSummons = create<SummonState>((set, get) => ({
 
                       addProjectile({
                           position: updated.position.clone(),
-                          size: 80,
+                          size: 20,
                           direction: dir,
                           
                           damage: state.ghostDamage * state.summonDamageMultiplier,
                           speed: 20,
                           range: 100,
-                          trailLength: 10,
+                          trailLength: 0,
                           homing: false,
                           piercing: 999,
                           bouncing: 0,
