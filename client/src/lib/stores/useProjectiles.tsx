@@ -12,8 +12,11 @@ export interface Projectile {
   id: string;
   position: THREE.Vector3;
   velocity: THREE.Vector3;
+  drag: number;
   damage: number;
   speed: number;
+  life: number;
+  maxLife: number;
   maxRange: number;
   distanceTraveled: number;
   rotationY: number;
@@ -61,7 +64,7 @@ interface ProjectilesState {
   addProjectile: (config: {
     position: THREE.Vector3;
     direction: THREE.Vector3;
-    
+    life?: number;
     trailLength: number;
     damage: number;
     speed: number;
@@ -100,7 +103,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
   addProjectile: (config: {
     position: THREE.Vector3;
     direction: THREE.Vector3;
-    
+    life?: number;
     trailLength: number;
     damage: number;
     speed: number;
@@ -124,6 +127,10 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       velocity: config.direction.clone().normalize().multiplyScalar(config.speed),
       damage: config.damage,
       speed: config.speed,
+      life: config.life ?? 3,        // default lifetime (seconds)
+      maxLife: config.life ?? 3,
+      drag: 0.985,
+
       maxRange: config.range,
       distanceTraveled: 0,
       rotationY: Math.atan2(config.direction.x, config.direction.z),
@@ -132,7 +139,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       color: getProjectileColor(config),
       size: config.size,
       trailColor: getTrailColor(config),
-      trailLength: config.trailLength * config.speed,
+      trailLength: config.trailLength * 150,
       trailHistory: [],
 
       homing: config.homing,
@@ -165,21 +172,34 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
   updateProjectiles: (delta, enemies, playerPos, roomBounds, onHit) => {
     const updated: Projectile[] = [];
     const { trailGhosts } = get();
-    const CURVE_RATE = 0.2;
+    const spawnedProjectiles: Projectile[] = [];
+
     for (const proj of get().projectiles) {
       // --- Move projectile ---
-      // --- Apply curve to velocity (slight rotation) ---
-      const speed = proj.velocity.length();
-      const angle = Math.atan2(proj.velocity.z, proj.velocity.x); // note: z first for world
-      const newAngle = Math.random() / 1000 + angle + CURVE_RATE * delta;
-      proj.velocity.x = Math.cos(newAngle) * speed;
-      proj.velocity.z = Math.sin(newAngle) * speed;
 
+      
+      
+      const drag = proj.drag;
+      proj.velocity.multiplyScalar(Math.pow(drag, delta * 60));
+
+      // Subtle curvature (perpendicular force)
+      const lateral = new THREE.Vector3(
+        -proj.velocity.z,
+        0,
+        proj.velocity.x
+      ).normalize();
+
+      proj.velocity.add(lateral.multiplyScalar(0.15 * delta));
       // --- Move projectile ---
       const move = proj.velocity.clone().multiplyScalar(delta);
       proj.position.add(move);
       proj.distanceTraveled += move.length();
 
+      const velocityFactor = proj.velocity.length() / proj.speed;
+      const effectiveTrailLength = Math.max(
+        2,
+        Math.floor(proj.trailLength * velocityFactor)
+      );
 
       // --- Update trail history ---
       if (!proj.trailHistory) proj.trailHistory = [];
@@ -195,9 +215,9 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       } else {
         proj.trailHistory.unshift(proj.position.clone());
       }
-
-      if (proj.trailHistory.length > proj.trailLength) {
-        proj.trailHistory = proj.trailHistory.slice(0, proj.trailLength);
+        
+      if (proj.trailHistory.length > effectiveTrailLength) {
+        proj.trailHistory = proj.trailHistory.slice(0, effectiveTrailLength);
       }
 
       // --- Homing ---
@@ -219,7 +239,9 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       }
 
       // --- Check range ---
-      if (proj.distanceTraveled > proj.maxRange) {
+      proj.life -= delta;
+
+      if (proj.life <= 0) {
         if (proj.trailHistory.length > 1) {
           trailGhosts.push({
             id: proj.id,
@@ -299,7 +321,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
             proj.velocity.z = proj.velocity.z - 2 * dot * hitDirection.z;
 
             // Normalize and maintain speed
-            proj.velocity.normalize().multiplyScalar(proj.speed);
+            proj.velocity.normalize().multiplyScalar(proj.velocity.length() * 0.85);
             proj.rotationY = Math.atan2(proj.velocity.x, proj.velocity.z);
 
             // Decrement bounces
@@ -384,10 +406,10 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       .map((g) => ({ ...g, life: g.life - delta }))
       .filter((g) => g.life > 0);
 
-    set({
-      projectiles: updated,
+    set(state => ({
+      projectiles: [...state.projectiles, ...updated],
       trailGhosts: newGhosts,
-    });
+    }));
   },
   
   removeProjectile: (id) =>

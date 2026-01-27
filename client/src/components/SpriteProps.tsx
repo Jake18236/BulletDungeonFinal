@@ -126,26 +126,16 @@ export function CursorSprite({ x, y }: CursorSpriteProps) {
   );
 }
 
-export const ProjectileSprites: Record<string, SpriteDef> = {
-  default: {
-    img: (() => {
-      const img = new Image();
-      img.src = "/sprites/bullet.png";
-      return img;
-    })(),
-    size: 8,
-    scale: 0.5,
-  },
-  fire: {
-    img: (() => {
-      const img = new Image();
-      img.src = "/sprites/bullet_fire.png";
-      return img;
-    })(),
-    size: 8,
-    scale: 0.6,
-  },
-};
+let projectileImage: HTMLImageElement | null = null;
+
+export function getProjectileImage() {
+  if (!projectileImage) {
+    projectileImage = new Image();
+    projectileImage.src = "/sprites/bulletB.png";
+  }
+  return projectileImage;
+}
+
 
 export const enemySprite: SpriteDef = {
   img: (() => {

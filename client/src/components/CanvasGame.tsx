@@ -24,9 +24,9 @@ import {
   WeaponSprites,
   CursorSprite,
   projectileSprite,
-  projectileImage,
-  xpSprite,
   
+  xpSprite,
+  getProjectileImage,
 } from "./SpriteProps";
 
 
@@ -344,6 +344,7 @@ export default function CanvasGame() {
             direction,
             size: stats.projectileSize,
             damage: stats.damage * 0.15,
+            life: stats.life,
             speed: stats.speed,
             range: stats.range,
             trailLength: stats.trailLength,
@@ -415,6 +416,7 @@ export default function CanvasGame() {
                   direction,
                   damage: stats.damage * damageMultiplier,
                   speed: stats.speed,
+                  life: stats.life,
                   size: stats.projectileSize,
                   range: stats.range,
                   homing: stats.homing,
@@ -427,7 +429,7 @@ export default function CanvasGame() {
               };
 
               // Normal projectiles
-              const spreadAngle = stats.projectileCount > 1 ? 0.2 : 0;
+              const spreadAngle = stats.projectileCount > 1 ? 0.15 : 0;
               for (let i = 0; i < stats.projectileCount; i++) {
                 let angle = baseAngle;
                 if (stats.projectileCount > 1) {
@@ -436,7 +438,7 @@ export default function CanvasGame() {
                 }
 
                 const inaccuracy = (1 - stats.accuracy);
-                angle += (Math.random() - 0.5) * inaccuracy;
+                angle += ((Math.random() / 4) - 0.125) * inaccuracy;
 
                 fireProjectileInDirection(angle);
               }
@@ -548,35 +550,36 @@ export default function CanvasGame() {
               playHit();
 
               if (enemy.health <= 0) {
-                playSuccess();
-
-                // ADD EXPLOSION EFFECT:
                 const { addExplosion } = useVisualEffects.getState();
                 addExplosion(enemy.position.clone(), 25); 
 
-                removeEnemy(enemyId);
                 // Splinter Bullets
                 const ps = usePlayer.getState();
-                if (ps.splinterBullets) {
+                if (ps.splinterBullets = true) {
+                  const addProjectile = useProjectiles.getState().addProjectile;
+                  const stats = usePlayer.getState().getProjectileStats();
+
                   for (let i = 0; i < 3; i++) {
-                    const angle = (i / 3) * Math.PI * 2 + Math.random() * 0.3;
+                    const angle = (i / 3) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
                     const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
-                    const playerStats = usePlayer.getState().getProjectileStats();
 
                     addProjectile({
                       position: enemy.position.clone(),
-                      size: 3,
+                      size: 1,
                       direction,
-                      damage: playerStats.damage * 0.1,
-                      speed: playerStats.speed * 1.5,
-                      range: playerStats.range * 0.5,
+                      life: 3,
+                      damage: stats.damage * 0.1,
+                      speed: stats.speed * 1.5,
+                      range: stats.range * 0.5,
                       homing: false,
                       piercing: 2,
                       bouncing: 0,
-                      trailLength: 10,
+                      trailLength: 4,
                     });
                   }
                 }
+
+                
               }
             }
           },
@@ -1234,38 +1237,45 @@ export default function CanvasGame() {
     });
 
     ctx.save();
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
+    const img = getProjectileImage();
 
     projectiles.forEach((proj) => {
-      const screen = worldToScreen(proj.position);
-
-      // --- Draw tapered trail ---
       const trail = proj.trailHistory;
-      if (trail.length > 1) {
-        for (let i = 0; i < trail.length - 1; i++) {
-          const start = worldToScreen(trail[i]);
-          const end = worldToScreen(trail[i + 1]);
 
-          const t = i / trail.length; // 0 at front, 1 at tail
-          const alpha = 0.9 * (1 - t); // fades out toward tail
-          const width = proj.size * (1 - t * 0.4); // front 2px, tail shrinks to 0.4px
+      // --- SPRITE TRAIL ---
+      for (let i = 0; i < trail.length; i++) {
+        const t = i / trail.length; // 0 = head, 1 = tail
+        const alpha = 1;
+        const scale = 1 - t * 0.7;
 
-          ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
-          ctx.lineWidth = width;
-          ctx.beginPath();
-          ctx.moveTo(start.x, start.y);
-          ctx.lineTo(end.x, end.y);
-          ctx.stroke();
-        }
+        const p = worldToScreen(trail[i]);
+        const size = proj.size * 20 * scale;
+
+        ctx.globalAlpha = alpha;
+        ctx.drawImage(
+          img,
+          p.x - size / 2,
+          p.y - size / 2,
+          size,
+          size
+        );
       }
 
-      // --- Draw main bullet (always visible) ---
-      ctx.beginPath();
-      ctx.fillStyle = "#ffffff"; // pure white like 20MTD
-      ctx.arc(screen.x, screen.y, proj.size, 0, Math.PI * 2);
-      ctx.fill();
+      // --- MAIN BULLET (brightest, full size) ---
+      const screen = worldToScreen(proj.position);
+      const mainSize = proj.size * 20;
+      ctx.imageSmoothingEnabled = false;
+      ctx.globalAlpha = 1;
+      ctx.drawImage(
+        img,
+        screen.x - mainSize / 2,
+        screen.y - mainSize / 2,
+        mainSize,
+        mainSize
+      );
     });
+
+    ctx.globalAlpha = 1;
 
     ctx.restore();
   };

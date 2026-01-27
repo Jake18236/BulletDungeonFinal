@@ -57,6 +57,7 @@ interface PlayerState {
   baseProjectileRange: number;
   projectileSize: number;
   projectileCount: number;
+  life: number,
   homing: boolean;
   piercing: number;
   bouncing: number;
@@ -108,6 +109,7 @@ interface PlayerState {
     damage: number;
     speed: number;
     range: number;
+    life: number;
     projectileSize: number;
     projectileCount: number;
     homing: boolean;
@@ -731,6 +733,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   baseProjectileSpeed: 60,
   baseProjectileRange: 50,
   projectileCount: 1,
+  life: 3.0,
   projectileSize: 10.0,
   homing: false,
   piercing: 0,
@@ -745,7 +748,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   // Special Upgrades
   knockbackMultiplier: 1.0,
   instantKillThreshold: 0,
-  splinterBullets: false,
+  splinterBullets: true,
   pierceKilledEnemies: false,
   siegeMode: false,
   fanFire: false,
@@ -890,6 +893,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
       damage: state.baseDamage * damageMultiplier,
       speed: state.baseProjectileSpeed,
       range: state.baseProjectileRange,
+      life: state.life,
       projectileCount: state.projectileCount,
       homing: state.homing,
       piercing: state.piercing,
@@ -991,19 +995,19 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     isFiring: false,
     isMoving: false,
     baseDamage: 13,
-    baseProjectileSpeed: 80,
+    baseProjectileSpeed: 60,
     baseProjectileRange: 50,
-    projectileCount: 1,
+    projectileCount: 2,
     homing: false,
     piercing: 0,
     bouncing: 0,
     explosive: undefined,
     chainLightning: undefined,
-    accuracy: 1.0,
+    accuracy: 0.99,
     knockbackMultiplier: 1.0,
     projectileSize: 1.0,
     instantKillThreshold: 0,
-    splinterBullets: false,
+    splinterBullets: true,
     pierceKilledEnemies: false,
     siegeMode: false,
     fanFire: false,
