@@ -12,8 +12,6 @@ export interface Summon {
   type: "ghost" | "scythe" | "spear" | "dagger" | "electrobug";
   position: THREE.Vector3;
   rotation: number;
-  lastHitTime?: Record<string, number>;
-
 
   // Ghost-specific
   driftOffset?: THREE.Vector3;
@@ -32,6 +30,10 @@ export interface Summon {
   target?: THREE.Vector3;
   targetId?: string;
   lastTargetTime?: number;
+
+  // Scythe-specific - damage cooldown per enemy
+  lastDamageTime?: number;
+  damagedEnemies?: Record<string, number>;
 }
 
 export interface StatusEffect {
@@ -107,14 +109,14 @@ export const useSummons = create<SummonState>((set, get) => ({
   statusEffects: [],
 
   summonDamageMultiplier: 1.0,
-  
+
   ghostDamage: 20,
-  ghostFireRate: 10,
+  ghostFireRate: 2,
   ghostProjectiles: 1,
   ghostBurn: false,
   ghostTriggerOnHit: false,
 
-  scytheDamage: 40,
+  scytheDamage: 10,
   scytheCurse: false,
   curseDamageBonus: 0,
   scytheSpeedBonus: false,
@@ -152,7 +154,7 @@ export const useSummons = create<SummonState>((set, get) => ({
         type: "ghost",
         position: playerPos.clone().add(new THREE.Vector3(50, 0, 0)),
         rotation: 0,
-        
+
         fireTimer: 0,
       };
 
@@ -162,11 +164,13 @@ export const useSummons = create<SummonState>((set, get) => ({
       const summon: Summon = {
         id: `scythe_${Date.now()}`,
         type: "scythe",
-        position: playerPos.clone(),
+        position: playerPos.clone().add(new THREE.Vector3(50, 0, 0)),
         rotation: 0,
         orbitAngle: 0,
-        orbitRadius: 40,
-        orbitSpeed: 3,
+        orbitRadius: 5,
+        orbitSpeed: 2,
+        lastDamageTime: 0,
+        damagedEnemies: {},
       };
 
       set(state => ({ summons: [...state.summons, summon] }));
@@ -221,135 +225,151 @@ export const useSummons = create<SummonState>((set, get) => ({
   updateSummons: (delta, playerPos, enemies, addProjectile, playHit) => {
     const state = get();
 
-    // Update pulse timer
-    
-    
     const updatedSummons = state.summons.map(summon => {
       const updated = { ...summon };
-      
 
       // ========================================================================
       // GHOST FRIEND - Stays close, drifts gently, fires at closest enemy
       // ========================================================================
         if (summon.type === "ghost") {
-          
+
             const orbitScreenRadius = 50;
             const orbitRadius = orbitScreenRadius / (TILE_SIZE / 2); // pixels from player
-            const orbitSpeed = 0.1;   // radians per second
+            const orbitSpeed = 2;   // radians per second
 
             // Initialize orbit angle if undefined
-            if (updated.orbitAngle === undefined) {
-              updated.orbitAngle = Math.random() * Math.PI * 2;
-            }
+            if (summon.orbitAngle === undefined) summon.orbitAngle = Math.random() * Math.PI * 2;
 
-            updated.orbitAngle += orbitSpeed * delta;
 
-            if (updated.orbitAngle > Math.PI * 2) updated.orbitAngle -= Math.PI * 2;
+            // Advance orbit angle
+            summon.orbitAngle += orbitSpeed * delta;
+            if (summon.orbitAngle > Math.PI * 2) summon.orbitAngle -= Math.PI * 2;
 
             // Update ghost position around player
-            updated.position.x = playerPos.x + Math.cos(updated.orbitAngle) * orbitRadius;
-            updated.position.z = playerPos.z + Math.sin(updated.orbitAngle) * orbitRadius;
-            
+            updated.position.x = playerPos.x + Math.cos(summon.orbitAngle) * orbitRadius;
+            updated.position.z = playerPos.z + Math.sin(summon.orbitAngle) * orbitRadius;
+
 
             // Optional: gentle rotation for visual effect
             updated.rotation += delta * 2;
-            updated.fireTimer ??= state.ghostFireRate;
+            if (updated.fireTimer === undefined) updated.fireTimer = state.ghostFireRate;
 
             // Fire continuously at closest enemy
-          // Fire continuously at closest enemy
-          updated.fireTimer! -= delta;
-          if (updated.fireTimer! <= 0 && enemies.length > 0) {
-              updated.fireTimer = state.ghostFireRate; // <-- FIXED
+            updated.fireTimer! -= delta;
+            if (updated.fireTimer! <= 0 && enemies.length > 0) {
+                updated.fireTimer = state.ghostFireRate;
 
-              // Find closest enemy
-              let closest = null;
-              let closestDist = Infinity;
-              for (const enemy of enemies) {
-                  const dist = updated.position.distanceTo(enemy.position);
-                  if (dist < closestDist) {
-                      closestDist = dist;
-                      closest = enemy;
-                  }
-              }
+                // Find closest enemy
+                let closest = null;
+                let closestDist = Infinity;
+                for (const enemy of enemies) {
+                    const dist = updated.position.distanceTo(enemy.position);
+                    if (dist < closestDist) {
+                        closestDist = dist;
+                        closest = enemy;
+                    }
+                }
 
-              if (closest && closestDist < 200) {
-                  for (let i = 0; i < state.ghostProjectiles; i++) {
-                      const spreadAngle = state.ghostProjectiles > 1 ? 0.3 : 0;
-                      const baseAngle = Math.atan2(
-                          closest.position.z - updated.position.z,
-                          closest.position.x - updated.position.x
-                      );
-                      const angle = baseAngle + (i - (state.ghostProjectiles - 1) / 2) * spreadAngle;
+                if (closest && closestDist < 200) {
+                    for (let i = 0; i < state.ghostProjectiles; i++) {
+                        const spreadAngle = state.ghostProjectiles > 1 ? 0.3 : 0;
+                        const baseAngle = Math.atan2(
+                            closest.position.z - updated.position.z,
+                            closest.position.x - updated.position.x
+                        );
+                        const angle = baseAngle + (i - (state.ghostProjectiles - 1) / 2) * spreadAngle;
 
-                      const dir = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+                        const dir = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
 
-                      addProjectile({
-                          position: updated.position.clone(),
-                          size: 6,
-                          direction: dir,
-                          
-                          damage: state.ghostDamage * state.summonDamageMultiplier,
-                          speed: 20,
-                          range: 100,
-                          trailLength: 0,
-                          homing: false,
-                          piercing: 999,
-                          bouncing: 0,
-                          isSummonProjectile: true,
-                          burn: state.ghostBurn ? { damage: 6, duration: 1 } : undefined,
-                      });
-                  }
+                        addProjectile({
+                            position: updated.position.clone(),
+                            size: 20,
+                            direction: dir,
+                            slotId: 0,
+                            damage: state.ghostDamage * state.summonDamageMultiplier,
+                            speed: 60,
+                            range: 100,
+                            trailLength: 10,
+                            homing: false,
+                            piercing: 999,
+                            bouncing: 0,
+                            isSummonProjectile: true,
+                            burn: state.ghostBurn ? { damage: 6, duration: 1 } : undefined,
+                        });
+                    }
 
-                  playHit();
-              }
-          }
+                    playHit();
+                }
+            }
         }
 
 
       // ========================================================================
-      // MAGIC SCYTHE - Orbits player, damages on contact
+      // SCYTHE - Orbits player, damages on contact
       // ========================================================================
-      else if (summon.type === "scythe") {
-        // Orbit around player
-        updated.orbitAngle = (summon.orbitAngle! + summon.orbitSpeed! * delta) % (Math.PI * 2);
+        else if (summon.type === "scythe") {
+          const playerPos = usePlayer.getState().position;
 
-        const x = playerPos.x + Math.cos(updated.orbitAngle) * summon.orbitRadius!;
-        const z = playerPos.z + Math.sin(updated.orbitAngle) * summon.orbitRadius!;
+          updated.orbitAngle += updated.orbitSpeed * delta;
 
-        updated.position = new THREE.Vector3(x, 0, z);
-        updated.rotation += delta * 10;
+          updated.position.set(
+            playerPos.x + Math.cos(updated.orbitAngle) * updated.orbitRadius,
+            0,
+            playerPos.z + Math.sin(updated.orbitAngle) * updated.orbitRadius
+          );
 
-        // Check collision with enemies
-        enemies.forEach(enemy => {
-          const dist = updated.position.distanceTo(enemy.position);
-          const hitRadius = 18;
+          updated.rotation = updated.orbitAngle + Math.PI / 2;
 
-          if (dist < hitRadius) {
-            const ps = usePlayer.getState();
-            let damage = state.scytheDamage * state.summonDamageMultiplier;
+          if (!updated.damagedEnemies) updated.damagedEnemies = {};
+          const now = Date.now();
 
-            // Windcutter: bonus from move speed
-            if (state.scytheSpeedBonus) {
-              const speedBonus = (ps.speed - 10) / 10;
-              damage *= (1 + speedBonus);
+          enemies.forEach(enemy => {
+            const dist = updated.position.distanceTo(enemy.position);
+            const HIT_RADIUS = 2.2; 
+
+            const lastHit = updated.damagedEnemies![enemy.id] ?? 0;
+
+            if (dist < HIT_RADIUS && now - lastHit > 250) {
+              let damage =
+                state.scytheDamage * state.summonDamageMultiplier;
+
+              // Speed-based scaling
+              if (state.scytheSpeedBonus) {
+                const ps = usePlayer.getState();
+                damage *= 1 + Math.max(0, ps.speed - 10) * 0.05;
+              }
+
+              hitEnemy = true;
+
+              // Deal damage
+              onHit(
+                enemy.id,
+                state.scytheDamage,
+                proj.velocity.clone().normalize().multiplyScalar(8)
+              );
+              updated.damagedEnemies![enemy.id] = now;
+
+              if (state.scytheCurse) {
+                get().applyStatusEffect(
+                  enemy.id,
+                  "curse",
+                  damage * 0.5,
+                  1
+                );
+              }
+
+              playHit();
             }
+          });
 
-            // Scythe Mastery: bonus from bullet damage
-            if (state.scytheDamageBonus) {
-              const damageBonus = (ps.baseDamage - 100) / 100;
-              damage *= (1 + damageBonus * 0.1);
-            }
-
-            enemy.health -= damage;
-
-            // Curse effect
-            if (state.scytheCurse) {
-              const curseDamage = ps.baseDamage * 2 * (1 + state.curseDamageBonus);
-              get().applyStatusEffect(enemy.id, "curse", curseDamage, 1);
+          // Cleanup
+          for (const id in updated.damagedEnemies) {
+            if (now - updated.damagedEnemies[id] > 1000) {
+              delete updated.damagedEnemies[id];
             }
           }
-        });
-      }
+        }
+
 
       // ========================================================================
       // MAGIC SPEAR - Orbits player
@@ -563,7 +583,7 @@ export const useSummons = create<SummonState>((set, get) => ({
       statusEffects: [...state.statusEffects, effect],
     }));
   },
-  
+
   removeSummon: (id) => set(state => ({
     summons: state.summons.filter(s => s.id !== id),
   })),

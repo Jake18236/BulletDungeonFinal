@@ -160,6 +160,15 @@ export const xpSprite = (() => {
   return img;
 })();
 
+export const SummonSprites = {
+  scythe: (() => {
+    const img = new Image();
+    img.src = "/sprites/scythe.png";
+    return img;
+  })(),
+};
+
+
 export const xpBarFillSprite = "/sprites/xp-bar-fill.png";
 export const xpBarFrameSprite = "/sprites/xp-bar-frame.png";
 

@@ -6,7 +6,14 @@ import { Enemy } from "./useEnemies";
 import { useSummons } from "./useSummons";
 import { useVisualEffects } from "./useVisualEffects";
 
-
+export type DamageSource = {
+  type: "player" | "summon" | "enemy";
+  playerEffects?: {
+    splinterBullets?: boolean;
+    splitFire?: boolean;
+    fanFire?: boolean;
+  };
+};
 
 export interface Projectile {
   id: string;
@@ -40,11 +47,7 @@ export interface Projectile {
   bouncesLeft: number;
   explosive?: { radius: number; damage: number };
   chainLightning?: { chains: number; range: number; chainedEnemies: Set<string> };
-
-  // Slot reference
   
-
-  // ADD THESE NEW FIELDS:
   isSummonProjectile?: boolean;
   burn?: { damage: number; duration: number };
   triggerOnHit?: boolean;
@@ -172,8 +175,6 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
   updateProjectiles: (delta, enemies, playerPos, roomBounds, onHit) => {
     const updated: Projectile[] = [];
     const { trailGhosts } = get();
-    const spawnedProjectiles: Projectile[] = [];
-
     for (const proj of get().projectiles) {
       // --- Move projectile ---
 
@@ -406,10 +407,10 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       .map((g) => ({ ...g, life: g.life - delta }))
       .filter((g) => g.life > 0);
 
-    set(state => ({
-      projectiles: [...state.projectiles, ...updated],
+    set({
+      projectiles: updated,
       trailGhosts: newGhosts,
-    }));
+    });
   },
   
   removeProjectile: (id) =>

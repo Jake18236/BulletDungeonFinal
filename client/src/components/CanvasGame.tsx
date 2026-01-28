@@ -24,7 +24,7 @@ import {
   WeaponSprites,
   CursorSprite,
   projectileSprite,
-  
+  SummonSprites,
   xpSprite,
   getProjectileImage,
 } from "./SpriteProps";
@@ -49,6 +49,8 @@ interface TerrainObstacle {
   type: "rock" | "pillar" | "wall";
 }
 
+const { addSummon } = useSummons.getState();
+addSummon("scythe");
 
 function generateRoomTerrain(roomX: number, roomY: number): TerrainObstacle[] {
   const obstacles: TerrainObstacle[] = [];
@@ -322,15 +324,12 @@ export default function CanvasGame() {
       if (currentRoom) drawDungeon(ctx);
 
       if (phase === "playing") {
-
+        
         const ps = usePlayer.getState();
         updateReload(delta);
         updateInvincibility(delta);
-        
         updateMuzzleFlash(delta);
-
         updateSummons(delta, position, enemies, addProjectile, playHit);
-
         updateFanFire(delta, () => {
           const fanIndex = usePlayer.getState().fanFireIndex;
           const angle = (fanIndex / 10) * Math.PI * 2;
@@ -362,9 +361,36 @@ export default function CanvasGame() {
             enemy.health -= damage;
             if (enemy.health <= 0) {
               handleEnemyKilledBySummon();
+
+              // SPLINTER BULLETS HERE
+              const ps = usePlayer.getState();
+              if (ps.splinterBullets) {
+                const stats = ps.getProjectileStats();
+                const addProjectile = useProjectiles.getState().addProjectile;
+
+                for (let i = 0; i < 3; i++) {
+                  const angle = (i / 3) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
+                  const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+
+                  addProjectile({
+                    position: enemy.position.clone(),
+                    direction,
+                    size: 1,
+                    damage: stats.damage * 0.1,
+                    speed: stats.speed * 1.5,
+                    life: stats.life,
+                    range: stats.range * 0.5,
+                    trailLength: 10,
+                    piercing: 2,
+                    bouncing: 0,
+                    homing: false,
+                  });
+                }
+              }
             }
           }
         });
+
 
         updateEffects(delta);
         
@@ -425,6 +451,7 @@ export default function CanvasGame() {
                   explosive: stats.explosive,
                   chainLightning: stats.chainLightning,
                   trailLength: stats.trailLength, // Add a default trail length
+                  source: { type: "player", playerEffects: { splinterBullets: ps.splinterBullets } },
                 });
               };
 
@@ -548,39 +575,6 @@ export default function CanvasGame() {
               if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
               enemy.velocity.add(knockback);
               playHit();
-
-              if (enemy.health <= 0) {
-                const { addExplosion } = useVisualEffects.getState();
-                addExplosion(enemy.position.clone(), 25); 
-
-                // Splinter Bullets
-                const ps = usePlayer.getState();
-                if (ps.splinterBullets = true) {
-                  const addProjectile = useProjectiles.getState().addProjectile;
-                  const stats = usePlayer.getState().getProjectileStats();
-
-                  for (let i = 0; i < 3; i++) {
-                    const angle = (i / 3) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
-                    const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
-
-                    addProjectile({
-                      position: enemy.position.clone(),
-                      size: 1,
-                      direction,
-                      life: 3,
-                      damage: stats.damage * 0.1,
-                      speed: stats.speed * 1.5,
-                      range: stats.range * 0.5,
-                      homing: false,
-                      piercing: 2,
-                      bouncing: 0,
-                      trailLength: 4,
-                    });
-                  }
-                }
-
-                
-              }
             }
           },
         );
@@ -819,9 +813,7 @@ export default function CanvasGame() {
           enemy.velocity.copy(bounced.velocity);
 
           if (enemy.health <= 0) {
-            playSuccess();
-            addXPOrb(enemy.position.clone(), 25);
-            removeEnemy(enemy.id);
+            handleEnemyDeath(enemy);
             continue;
           }
 
@@ -851,6 +843,7 @@ export default function CanvasGame() {
       drawReloadIndicator(ctx);
       drawWeapon(ctx, "revolver", phase !== "playing");
       
+      
       animationFrameRef.current = requestAnimationFrame(gameLoop);
     };
 
@@ -868,7 +861,38 @@ export default function CanvasGame() {
     phase,
   ]);
 
-  
+  function handleEnemyDeath(enemy: Enemy) {
+    const ps = usePlayer.getState();
+
+    addXPOrb(enemy.position.clone(), 25);
+    addExplosion(enemy.position.clone(), 25);
+    removeEnemy(enemy.id);
+
+    if (ps.splinterBullets) {
+      const stats = ps.getProjectileStats();
+      const addProjectile = useProjectiles.getState().addProjectile;
+
+      for (let i = 0; i < 3; i++) {
+        const angle = (i / 3) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
+        const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+
+        addProjectile({
+          position: enemy.position.clone(),
+          size: 1.5,
+          direction,
+          damage: stats.damage * 0.1,
+          speed: stats.speed * 1.5,
+          life: 0.2,
+          range: stats.range * 0.01,
+          trailLength: 0.5,
+          piercing: 0,
+          bouncing: 0,
+          homing: false,
+        });
+      }
+    }
+  }
+
 
 
   const drawDungeon = (ctx: CanvasRenderingContext2D) => {
@@ -1049,7 +1073,7 @@ export default function CanvasGame() {
       const sprite = xpSprite; // assume you imported or loaded xp.png as xpImage
 
       if (sprite.complete) {
-        const scale = 2; // adjust size as needed
+        const scale = 3; // adjust size as needed
         const w = sprite.width * scale;
         const h = sprite.height * scale;
 
@@ -1626,6 +1650,10 @@ export default function CanvasGame() {
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
 
+    // Load scythe sprite
+    const scytheSprite = new Image();
+    scytheSprite.src = "/sprites/scythe.png"; 
+
     summons.forEach(summon => {
       const screenX = centerX + ((summon.position.x - position.x) * TILE_SIZE) / 2;
       const screenY = centerY + ((summon.position.z - position.z) * TILE_SIZE) / 2;
@@ -1669,37 +1697,22 @@ export default function CanvasGame() {
         }
       }
       else if (summon.type === "scythe") {
-        // Large spinning scythe blade
-        ctx.fillStyle = "#ff4444";
-        ctx.strokeStyle = "#aa0000";
-        ctx.lineWidth = 3;
+          const sprite = SummonSprites.scythe;
+          if (!sprite.complete) return;
+          
+          const scale = 4;
+          const w = sprite.width * scale;
+          const h = sprite.height * scale;
+    
+          ctx.save();
+          ctx.imageSmoothingEnabled = false;
 
-        // Curved blade
-        ctx.beginPath();
-        ctx.moveTo(-10, -25);
-        ctx.quadraticCurveTo(5, -20, 10, -5);
-        ctx.lineTo(5, 0);
-        ctx.lineTo(-10, 0);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-
-        // Handle
-        ctx.strokeStyle = "#8b4513";
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(0, 25);
-        ctx.stroke();
-
-        // Glow effect
-        ctx.globalAlpha = 0.4;
-        ctx.strokeStyle = "#ff6666";
-        ctx.lineWidth = 6;
-        ctx.beginPath();
-        ctx.arc(0, -12, 15, 0, Math.PI * 2);
-        ctx.stroke();
-      }
+          // Rotate so the blade leads the orbit
+          
+          ctx.rotate(0);
+          ctx.drawImage(sprite, -w / 2, -h / 2, w, h);
+          ctx.restore();
+        }
       else if (summon.type === "spear") {
         // Sharp spear
         ctx.fillStyle = "#ffaa00";

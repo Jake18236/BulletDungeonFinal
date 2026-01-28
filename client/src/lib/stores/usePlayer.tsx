@@ -748,7 +748,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   // Special Upgrades
   knockbackMultiplier: 1.0,
   instantKillThreshold: 0,
-  splinterBullets: true,
+  splinterBullets: false,
   pierceKilledEnemies: false,
   siegeMode: false,
   fanFire: false,
@@ -1007,7 +1007,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     knockbackMultiplier: 1.0,
     projectileSize: 1.0,
     instantKillThreshold: 0,
-    splinterBullets: true,
+    splinterBullets: false,
     pierceKilledEnemies: false,
     siegeMode: false,
     fanFire: false,
