@@ -166,6 +166,11 @@ export const SummonSprites = {
     img.src = "/sprites/scythe.png";
     return img;
   })(),
+  dagger: (() => {
+    const img = new Image();
+    img.src = "/sprites/dagger.png";
+    return img;
+  })(),
 };
 
 

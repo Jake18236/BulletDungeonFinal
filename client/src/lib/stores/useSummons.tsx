@@ -2,6 +2,7 @@
 import { create } from "zustand";
 import * as THREE from "three";
 import { usePlayer } from "./usePlayer";
+import { useHit } from "./useHit";
 
 const CANVAS_WIDTH = 1490;
 const CANVAS_HEIGHT = 750;
@@ -26,11 +27,14 @@ export interface Summon {
   strikeTimer?: number;
 
   // Dagger-specific
-  velocity?: THREE.Vector3;
-  target?: THREE.Vector3;
   targetId?: string;
+  hitCooldown?: number;
+  velocity?: THREE.Vector3;
   lastTargetTime?: number;
-
+  recentTargets?: string[];
+  trail?: THREE.Vector3[];
+  enemiesInside?: Set<string>;
+  
   // Scythe-specific - damage cooldown per enemy
   lastDamageTime?: number;
   damagedEnemies?: Record<string, number>;
@@ -135,7 +139,7 @@ export const useSummons = create<SummonState>((set, get) => ({
   beastKills: 0,
   bloodsuckers: false,
 
-  daggerDamage: 30,
+  daggerDamage: 12,
   daggerCount: 1,
   daggerBurn: false,
 
@@ -147,7 +151,8 @@ export const useSummons = create<SummonState>((set, get) => ({
 
   addSummon: (type) => {
     const playerPos = usePlayer.getState().position;
-
+    
+    
     if (type === "ghost") {
       const summon: Summon = {
         id: `ghost_${Date.now()}`,
@@ -201,8 +206,10 @@ export const useSummons = create<SummonState>((set, get) => ({
           position: playerPos.clone().add(new THREE.Vector3(offset, 0, 30)),
           rotation: 0,
           velocity: new THREE.Vector3(),
+          
         };
-
+        
+        
         set(state => ({ summons: [...state.summons, summon] }));
       }
     }
@@ -224,7 +231,7 @@ export const useSummons = create<SummonState>((set, get) => ({
 
   updateSummons: (delta, playerPos, enemies, addProjectile, playHit) => {
     const state = get();
-
+    const { applyHit } = useHit.getState();
     const updatedSummons = state.summons.map(summon => {
       const updated = { ...summon };
 
@@ -328,36 +335,28 @@ export const useSummons = create<SummonState>((set, get) => ({
             const HIT_RADIUS = 2.2; 
 
             const lastHit = updated.damagedEnemies![enemy.id] ?? 0;
-
-            if (dist < HIT_RADIUS && now - lastHit > 250) {
+            
+            if (dist < HIT_RADIUS && now - lastHit > 950) {
               let damage =
                 state.scytheDamage * state.summonDamageMultiplier;
-
+              
               // Speed-based scaling
               if (state.scytheSpeedBonus) {
                 const ps = usePlayer.getState();
                 damage *= 1 + Math.max(0, ps.speed - 10) * 0.05;
               }
-
-              hitEnemy = true;
-
-              // Deal damage
-              onHit(
-                enemy.id,
-                state.scytheDamage,
-                proj.velocity.clone().normalize().multiplyScalar(8)
-              );
+              
+              applyHit({
+                enemy,
+                damage,
+                sourcePos: updated.position,
+                color: "#ff4444",
+                knockbackStrength: 6,
+                curse: state.scytheCurse,
+                isSummonDamage: true,
+              });
               updated.damagedEnemies![enemy.id] = now;
-
-              if (state.scytheCurse) {
-                get().applyStatusEffect(
-                  enemy.id,
-                  "curse",
-                  damage * 0.5,
-                  1
-                );
-              }
-
+              let hitEnemy = true;
               playHit();
             }
           });
@@ -369,10 +368,8 @@ export const useSummons = create<SummonState>((set, get) => ({
             }
           }
         }
-
-
       // ========================================================================
-      // MAGIC SPEAR - Orbits player
+      // MAGIC SPEAR 
       // ========================================================================
       else if (summon.type === "spear") {
         updated.orbitAngle = (summon.orbitAngle! + summon.orbitSpeed! * delta) % (Math.PI * 2);
@@ -406,87 +403,159 @@ export const useSummons = create<SummonState>((set, get) => ({
       // ========================================================================
       // MAGIC DAGGER - Homes in on enemies
       // ========================================================================
-      else if (summon.type === "dagger") {
-        // Initialize velocity
-        if (!updated.velocity) {
-          updated.velocity = new THREE.Vector3();
-        }
+        else if (summon.type === "dagger") {
+          if (!updated.recentTargets) updated.recentTargets = [];
+          if (!updated.enemiesInside) {
+            updated.enemiesInside = new Set<string>();
+          }
+          if (!updated.trail) updated.trail = [];
+          updated.trail.unshift(updated.position.clone());
 
-        // Find on-screen enemies to target
-        const CANVAS_WIDTH = 1490;
-        const CANVAS_HEIGHT = 750;
-        const TILE_SIZE = 50;
+          if (updated.trail.length > 25) {
+            updated.trail.pop();
+          }
 
-        const screenEnemies = enemies.filter(enemy => {
-          const screenX = CANVAS_WIDTH / 2 + ((enemy.position.x - playerPos.x) * TILE_SIZE) / 2;
-          const screenY = CANVAS_HEIGHT / 2 + ((enemy.position.z - playerPos.z) * TILE_SIZE) / 2;
-          return screenX > -100 && screenX < CANVAS_WIDTH + 100 &&
-                 screenY > -100 && screenY < CANVAS_HEIGHT + 100;
-        });
 
-        // Target selection
-        const now = Date.now();
-        if (screenEnemies.length > 0) {
-          if (!updated.target || !updated.lastTargetTime || now - updated.lastTargetTime > 500) {
-            let closest = null;
-            let closestDist = Infinity;
+          if (!updated.velocity) {
+            updated.velocity = new THREE.Vector3();
+          }
 
-            for (const enemy of screenEnemies) {
-              if (updated.targetId === enemy.id && now - updated.lastTargetTime! < 2000) {
-                continue;
-              }
-              const dist = summon.position.distanceTo(enemy.position);
-              if (dist < closestDist) {
-                closestDist = dist;
-                closest = enemy;
+          if (!updated.hitCooldown) {
+            updated.hitCooldown = 0;
+          }
+
+          updated.hitCooldown -= delta;
+
+          const ps = usePlayer.getState();
+
+          // ---------- TARGET SELECTION ----------
+          let targetEnemy = enemies.find(e => e.id === updated.targetId);
+
+          const MAX_LEASH_DIST = 100;
+          const ACQUIRE_RADIUS = 100;
+
+          const distFromPlayer = updated.position.distanceTo(playerPos);
+
+          const needsNewTarget =
+            !targetEnemy ||
+            targetEnemy.health <= 0 ||
+            updated.hitCooldown > 0 ||
+            distFromPlayer > MAX_LEASH_DIST;
+
+          if (needsNewTarget) {
+            let best: Enemy | null = null;
+            let bestScore = Infinity;
+
+            for (const enemy of enemies) {
+              if (enemy.health <= 0) continue;
+              if (updated.recentTargets?.includes(enemy.id)) continue;
+
+
+              const dPlayer = enemy.position.distanceTo(playerPos);
+              if (dPlayer > ACQUIRE_RADIUS) continue;
+
+              const dDagger = enemy.position.distanceTo(updated.position);
+              const score = (dDagger * 2.7 + dPlayer * 10.3) / Math.random();
+
+              if (score < bestScore) {
+                bestScore = score;
+                best = enemy;
               }
             }
 
-            if (closest) {
-              updated.target = closest.position.clone();
-              updated.targetId = closest.id;
-              updated.lastTargetTime = now;
+            updated.targetId = best?.id;
+            targetEnemy = best || null;
+          }
+
+          // ---------- MOVEMENT ----------
+          let desiredDir: THREE.Vector3;
+
+          if (targetEnemy) {
+            desiredDir = targetEnemy.position.clone().sub(updated.position);
+          } else {
+            // Drift back toward player if idle
+            desiredDir = playerPos.clone().sub(updated.position);
+          }
+          const MAX_SPEED = 40;
+          const dist = desiredDir.length();
+
+          if (dist > 1) {
+            desiredDir.normalize();
+
+            const ACCEL = 20;
+            const desiredVelocity = desiredDir.multiplyScalar(ACCEL);
+
+            // Steering = "where I want to go" − "where I am going"
+            const steering = desiredVelocity.sub(updated.velocity);
+
+            // Clamp steering force
+            const MAX_STEER = 100 * delta;
+            if (steering.length() > MAX_STEER) {
+              steering.setLength(MAX_STEER);
+            }
+
+            updated.velocity.add(steering);
+
+          }
+        
+          if (updated.velocity.length() > MAX_SPEED) {
+            updated.velocity.setLength(MAX_SPEED);
+          }
+
+          // Damping
+          
+
+          updated.position.add(updated.velocity.clone().multiplyScalar(delta));
+          updated.rotation += delta * 8;
+          const DAGGER_HIT_RADIUS = 1.5;
+
+          // ---------- HIT LOGIC ----------
+          for (const enemy of enemies) {
+            if (enemy.health <= 0) continue;
+
+            // Must still be within player radius
+            if (enemy.position.distanceTo(playerPos) > ACQUIRE_RADIUS) continue;
+
+            const dist = enemy.position.distanceTo(updated.position);
+            const isInside = dist <= DAGGER_HIT_RADIUS;
+            const wasInside = updated.enemiesInside.has(enemy.id);
+
+            // ENTER hit radius → deal damage once
+            if (isInside && !wasInside) {
+              let damage = state.daggerDamage * state.summonDamageMultiplier;
+
+              applyHit({
+                enemy,
+                damage,
+                sourcePos: updated.position,
+                color: "#ff4444",
+                knockbackStrength: 6,
+                curse: state.scytheCurse,
+                isSummonDamage: true,
+              });
+              updated.recentTargets.push(enemy.id);
+              if (updated.recentTargets.length > 4) {
+                updated.recentTargets.shift();
+              }
+
+              updated.targetId = undefined;
+              updated.enemiesInside.add(enemy.id);
+            }
+
+            // EXIT hit radius → allow future hits
+            if (!isInside && wasInside) {
+              updated.enemiesInside.delete(enemy.id);
             }
           }
-        }
-
-        // Move toward target or player
-        const target = updated.target || playerPos;
-        const dir = target.clone().sub(updated.position);
-        const dist = dir.length();
-
-        if (dist > 5) {
-          const force = dir.normalize().multiplyScalar(8);
-          updated.velocity.add(force.multiplyScalar(delta));
-        }
-
-        // Limit speed
-        const speed = updated.velocity.length();
-        if (speed > 50) {
-          updated.velocity.normalize().multiplyScalar(50);
-        }
-
-        updated.velocity.multiplyScalar(0.98);
-        updated.position.add(updated.velocity.clone().multiplyScalar(delta));
-        updated.rotation += delta * 15;
-
-        // Check collision
-        enemies.forEach(enemy => {
-          const dist = updated.position.distanceTo(enemy.position);
-          if (dist < 10) {
-            let damage = state.daggerDamage * state.summonDamageMultiplier;
-            enemy.health -= damage;
-
-            if (state.daggerBurn) {
-              get().applyStatusEffect(enemy.id, "burn", 12, 4);
+          for (const id of updated.enemiesInside) {
+            const e = enemies.find(en => en.id === id);
+            if (!e || e.health <= 0) {
+              updated.enemiesInside.delete(id);
             }
-
-            const bounceDir = updated.position.clone().sub(enemy.position).normalize();
-            updated.velocity = bounceDir.multiplyScalar(30);
-            updated.target = undefined;
           }
-        });
-      }
+
+        }
+
 
       // ========================================================================
       // ELECTRO BUG - Orbits and shoots lightning periodically

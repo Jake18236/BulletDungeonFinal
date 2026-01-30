@@ -11,7 +11,7 @@ import { useAudio } from "../lib/stores/useAudio";
 import { useInventory } from "../lib/stores/useInventory";
 
 import { useProjectiles } from "../lib/stores/useProjectiles";
-
+import { useHit } from "../lib/stores/useHit";
 import { useSummons } from "../lib/stores/useSummons";
 import { useVisualEffects } from "../lib/stores/useVisualEffects";
 import swordSrc from "/images/sword.png";
@@ -27,6 +27,7 @@ import {
   SummonSprites,
   xpSprite,
   getProjectileImage,
+  
 } from "./SpriteProps";
 
 
@@ -50,7 +51,7 @@ interface TerrainObstacle {
 }
 
 const { addSummon } = useSummons.getState();
-addSummon("scythe");
+addSummon("dagger");
 
 function generateRoomTerrain(roomX: number, roomY: number): TerrainObstacle[] {
   const obstacles: TerrainObstacle[] = [];
@@ -164,7 +165,7 @@ export default function CanvasGame() {
   const lastTimeRef = useRef<number>(0);
   const damagedThisFrameRef = useRef<boolean>(false);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-
+  const { applyHit, applyPlayerDamage } = useHit();
   const terrainRef = useRef<TerrainObstacle[]>([]);
   const { particles, damageNumbers, impactEffects, addImpact, addExplosion, addDamageNumber, updateEffects } = useVisualEffects();
   const { phase, end } = useGame();
@@ -562,25 +563,58 @@ export default function CanvasGame() {
           enemies,
           position,
           ROOM_SIZE,
-          
-          (enemyId, damage, knockback) => {
+          (enemyId, damage, knockback, projectileData) => {
             const enemy = enemies.find((e) => e.id === enemyId);
             if (enemy) {
-              enemy.health -= damage;
+              applyHit({
+                enemy,
+                damage,
+                sourcePos: position,
+                color: projectileData?.color || "#ffffff",
+                knockbackStrength: knockback.length(),
+                explosive: projectileData?.explosive,
+                chainLightning: projectileData?.chainLightning,
+                burn: projectileData?.burn,
+                isPlayerDamage: true,
+              }, enemies);
 
-              const { addImpact, addDamageNumber } = useVisualEffects.getState();
-              addImpact(enemy.position.clone(), "#ffffff");
-              addDamageNumber(enemy.position.x, enemy.position.z, damage);
+              if (enemy.health <= 0) {
+                playSuccess();
+                const { addExplosion } = useVisualEffects.getState();
+                addExplosion(enemy.position.clone(), 25);
+                removeEnemy(enemyId);
 
-              if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
-              enemy.velocity.add(knockback);
-              playHit();
+                // Splinter bullets (stays here due to addProjectile access)
+                const ps = usePlayer.getState();
+                if (ps.splinterBullets) {
+                  for (let i = 0; i < 3; i++) {
+                    const angle = (i / 3) * Math.PI * 2 + Math.random() * 0.3;
+                    const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+                    const stats = ps.getProjectileStats();
+                    addProjectile({
+                      position: enemy.position.clone(),
+                      direction,
+                      size: 1,
+                      damage: stats.damage * 0.1,
+                      speed: stats.speed * 0.8,
+                      range: stats.range * 0.5,
+                      trailLength: stats.trailLength,
+                      homing: false,
+                      piercing: 2,
+                      bouncing: 0,
+                    });
+                  }
+                }
+              }
             }
-          },
+          }
         );
 
       const updatedEnemies = enemies.map((enemy) => {
       // BOSS LOGIC
+        enemy.hitFlash = Math.max(enemy.hitFlash - delta, 0);
+
+
         // #########################################################################
         if (enemy.isBoss && enemy.bossType === "deer") {
           const updated = { ...enemy };
@@ -784,17 +818,7 @@ export default function CanvasGame() {
 
           if (dist > 0 && dist < PLAYER_RADIUS + ENEMY_RADIUS) {
             if (enemy.canAttack && invincibilityTimer <= 0 && !damagedThisFrameRef.current) {
-              loseHeart();
-              playHit();
-
-              // ADD IMPACT ON PLAYER:
-              const { addImpact } = useVisualEffects.getState();
-              addImpact(position.clone(), "#ff4444");
-              addImpact(position.clone(), "#ff4444");
-              addImpact(position.clone(), "#ff3244");
-              addImpact(position.clone(), "#ff3444");
-              addImpact(position.clone(), "#ff4444");
-              
+              applyPlayerDamage(1, enemy.position);
               enemy.attackCooldown = enemy.maxAttackCooldown;
               damagedThisFrameRef.current = true;
             }
@@ -835,11 +859,10 @@ export default function CanvasGame() {
       drawSummons(ctx);
       drawStatusEffects(ctx);
       drawImpactEffects(ctx); // ADD - behind projectiles
-      drawProjectilesAndTrails(ctx, phase !== "playing", position); // Enhanced version
-      drawParticles(ctx); // ADD - in front of everything
+      drawProjectilesAndTrails(ctx, phase !== "playing", position); 
+      drawParticles(ctx); 
+      drawDamageNumbers(ctx); 
       drawXPOrbs(ctx);
-      drawDamageNumbers(ctx); // ADD - on top
-      
       drawReloadIndicator(ctx);
       drawWeapon(ctx, "revolver", phase !== "playing");
       
@@ -867,7 +890,7 @@ export default function CanvasGame() {
     addXPOrb(enemy.position.clone(), 25);
     addExplosion(enemy.position.clone(), 25);
     removeEnemy(enemy.id);
-
+    
     if (ps.splinterBullets) {
       const stats = ps.getProjectileStats();
       const addProjectile = useProjectiles.getState().addProjectile;
@@ -1622,7 +1645,6 @@ export default function CanvasGame() {
     // ================================================================
     const size = enemySprite.size * enemySprite.scale;
     const facingRight = enemy.position.x >= position.x;
-    
 
     ctx.save();
     ctx.translate(screenX, screenY);
@@ -1635,6 +1657,7 @@ export default function CanvasGame() {
       ctx.scale(-1, 1);
     }
 
+    // --- BASE SPRITE ---
     ctx.drawImage(
       enemySprite.img,
       -size / 2,
@@ -1643,24 +1666,41 @@ export default function CanvasGame() {
       size
     );
 
+    // --- HIT FLASH ---
+    if (enemy.hitFlash && enemy.hitFlash > 0) {
+      const t = enemy.hitFlash / 0.001; // same duration you set on hit
+
+      ctx.globalAlpha = t + 20;
+      ctx.globalCompositeOperation = "lighter"; // additive white
+      ctx.drawImage(
+        enemySprite.img,
+        -size / 2,
+        -size / 2,
+        size,
+        size
+      );
+    }
+
+    // cleanup (IMPORTANT)
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "source-over";
     ctx.restore();
   };
 
   const drawSummons = (ctx: CanvasRenderingContext2D) => {
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
-
+    
     // Load scythe sprite
     const scytheSprite = new Image();
     scytheSprite.src = "/sprites/scythe.png"; 
-
+    const daggerSprite = new Image();
+    daggerSprite.src = "/sprites/dagger.png"; 
+    
     summons.forEach(summon => {
       const screenX = centerX + ((summon.position.x - position.x) * TILE_SIZE) / 2;
       const screenY = centerY + ((summon.position.z - position.z) * TILE_SIZE) / 2;
 
-      ctx.save();
-      ctx.translate(screenX, screenY);
-      ctx.rotate(summon.rotation);
 
       if (summon.type === "ghost") {
         // Semi-transparent ghostly body
@@ -1742,43 +1782,48 @@ export default function CanvasGame() {
         ctx.arc(0, -15, 10, 0, Math.PI * 2);
         ctx.fill();
       }
-      else if (summon.type === "dagger") {
-        // Fast spinning dagger
-        ctx.fillStyle = "#ff00ff";
-        ctx.strokeStyle = "#cc00cc";
-        ctx.lineWidth = 2;
+      
+        else if (summon.type === "dagger") {
+            const sprite = SummonSprites.dagger;
+            if (!sprite.complete) return;
+            const img = getProjectileImage();
+            // --- TRAIL ---
+            if (summon.trail) {
+                for (let i = summon.trail.length - 1; i >= 0; i--) {
+                    const p = summon.trail[i];
 
-        // Blade
-        ctx.beginPath();
-        ctx.moveTo(0, -15);
-        ctx.lineTo(4, -3);
-        ctx.lineTo(-4, -3);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
+                    // Convert world to screen coordinates
+                    const x = centerX + ((p.x - position.x) * TILE_SIZE) / 2;
+                    const y = centerY + ((p.z - position.z) * TILE_SIZE) / 2;
 
-        // Handle
-        ctx.fillStyle = "#4a4a4a";
-        ctx.fillRect(-2, -3, 4, 8);
+                    const t = i / summon.trail.length;
+                    const size = 60 * (1 - t * 0.99);
 
-        // Pommel
-        ctx.fillStyle = "#ff00ff";
-        ctx.beginPath();
-        ctx.arc(0, 6, 3, 0, Math.PI * 2);
-        ctx.fill();
+                    ctx.save();
+                    ctx.globalAlpha = 1.5; // optional fade
+                    ctx.imageSmoothingEnabled = false;
+                    ctx.drawImage(img, x - size / 2, y - size / 2, size, size);
+                    ctx.restore();
+                }
+            }
 
-        // Motion blur if moving fast
-        if (summon.velocity && summon.velocity.length() > 10) {
-          ctx.globalAlpha = 0.3;
-          ctx.strokeStyle = "#ff00ff";
-          ctx.lineWidth = 4;
-          const vel = summon.velocity.clone().normalize().multiplyScalar(-15);
-          ctx.beginPath();
-          ctx.moveTo(0, 0);
-          ctx.lineTo(vel.x, vel.z);
-          ctx.stroke();
+            // --- MAIN DAGGER ---
+            const screenX = centerX + ((summon.position.x - position.x) * TILE_SIZE) / 2;
+            const screenY = centerY + ((summon.position.z - position.z) * TILE_SIZE) / 2;
+
+            const scale = 2;
+            const w = sprite.width * scale;
+            const h = sprite.height * scale;
+
+            ctx.save();
+            ctx.translate(screenX, screenY);
+            ctx.rotate(summon.rotation); // only rotate the dagger itself
+            ctx.globalAlpha = 1;
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(sprite, -w / 2, -h / 2, w, h);
+            ctx.restore();
         }
-      }
+                               
       else if (summon.type === "electrobug") {
         // Small electric bug
         ctx.fillStyle = "#00ffff";

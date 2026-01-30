@@ -78,7 +78,7 @@ interface EnemiesState {
 
 export const useEnemies = create<EnemiesState>((set, get) => {
   const spawnSchedule: SpawnScheduleEntry[] = [
-    { time: 0, interval: 3, count: 1 },
+    { time: 0, interval: 3, count: 20 },
     { time: 10, interval: 4, count: 2 },
     { time: 20, interval: 5, count: 3 },
     { time: 40, interval: 6, count: 20 },

@@ -91,7 +91,17 @@ interface ProjectilesState {
     }>,
     playerPos: THREE.Vector3,
     roomBounds: number,
-    onHit: (enemyId: string, damage: number, knockback: THREE.Vector3) => void,
+    onHit: (
+      enemyId: string, 
+      damage: number, 
+      knockback: THREE.Vector3,
+      projectileData: {
+        color: string;
+        explosive?: { radius: number; damage: number };
+        chainLightning?: { chains: number; range: number; chainedEnemies: Set<string> };
+        burn?: { damage: number; duration: number };
+      }
+    ) => void,
     isPaused: boolean,
   ) => void;
 
@@ -301,13 +311,14 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
           onHit(
             enemy.id,
             proj.damage,
-            proj.velocity.clone().normalize().multiplyScalar(8)
+            proj.velocity.clone().normalize().multiplyScalar(8),
+            {
+              color: proj.color,
+              explosive: proj.explosive,
+              chainLightning: proj.chainLightning,
+              burn: proj.burn,
+            }
           );
-
-          // Add impact effect
-          if (get().addImpactEffect) {
-            get().addImpactEffect(enemy.position.clone(), 'hit', proj.color, 1.5);
-          }
 
           // ========================================
           // BOUNCE LOGIC (if has bounces left)
@@ -344,48 +355,6 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
           else {
             // Mark as pierced
             proj.piercedEnemies.add(enemy.id);
-
-            // Explosive effect
-            if (proj.explosive) {
-              if (get().addImpactEffect) {
-                get().addImpactEffect(
-                  proj.position.clone(),
-                  'explosion',
-                  '#ff6600',
-                  proj.explosive.radius
-                );
-              }
-
-              for (const e of enemies) {
-                if (e.position.distanceTo(proj.position) < proj.explosive.radius) {
-                  onHit(
-                    e.id,
-                    proj.explosive.damage,
-                    e.position.clone().sub(proj.position).normalize().multiplyScalar(12)
-                  );
-                }
-              }
-            }
-
-            // Chain lightning
-            if (
-              proj.chainLightning &&
-              proj.chainLightning.chainedEnemies.size < proj.chainLightning.chains
-            ) {
-              proj.chainLightning.chainedEnemies.add(enemy.id);
-              const targets = enemies.filter(
-                (e) =>
-                  e.id !== enemy.id &&
-                  !proj.chainLightning!.chainedEnemies.has(e.id) &&
-                  e.position.distanceTo(enemy.position) < proj.chainLightning!.range
-              );
-              if (targets.length > 0) {
-                const t = targets[0];
-                onHit(t.id, proj.damage * 0.7, new THREE.Vector3());
-                proj.chainLightning.chainedEnemies.add(t.id);
-              }
-            }
-
             // Check if piercing is exhausted
             if (proj.piercedEnemies.size > proj.piercing) {
               break; // Stop checking more enemies

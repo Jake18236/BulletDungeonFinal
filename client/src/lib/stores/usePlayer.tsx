@@ -145,10 +145,6 @@ const calculateXPForLevel = (level: number): number => {
   return Math.floor(10 + level * 15 + Math.pow(level, 1.5) * 5);
 };
 
-// ============================================================================
-// ALL UPGRADES (moved from useXP.tsx)
-// ============================================================================
-
 const ALL_UPGRADES: Record<string, Upgrade> = {
   // FAST BULLETS TREE
   take_aim: {
