@@ -131,7 +131,7 @@ let projectileImage: HTMLImageElement | null = null;
 export function getProjectileImage() {
   if (!projectileImage) {
     projectileImage = new Image();
-    projectileImage.src = "/sprites/bulletB.png";
+    projectileImage.src = "/sprites/bulletC.png";
   }
   return projectileImage;
 }
@@ -144,6 +144,17 @@ export const enemySprite: SpriteDef = {
     return img;
   })(),
   
+  scale: 2.0,
+  size: 32,
+};
+
+export const enemyFlashSprite: SpriteDef = {
+  img: (() => {
+    const img = new Image();
+    img.src = "/sprites/enemy-flash.png";
+    return img;
+  })(),
+
   scale: 2.0,
   size: 32,
 };
@@ -167,6 +178,19 @@ export const SummonSprites = {
     return img;
   })(),
   dagger: (() => {
+    const img = new Image();
+    img.src = "/sprites/dagger.png";
+    return img;
+  })(),
+};
+
+export const VisualSprites = {
+  circle: (() => {
+    const img = new Image();
+    img.src = "/sprites/bullet.png";
+    return img;
+  })(),
+  cshape: (() => {
     const img = new Image();
     img.src = "/sprites/dagger.png";
     return img;

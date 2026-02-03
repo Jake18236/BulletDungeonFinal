@@ -411,7 +411,7 @@ export const useSummons = create<SummonState>((set, get) => ({
           if (!updated.trail) updated.trail = [];
           updated.trail.unshift(updated.position.clone());
 
-          if (updated.trail.length > 25) {
+          if (updated.trail.length > 20) {
             updated.trail.pop();
           }
 
@@ -529,12 +529,12 @@ export const useSummons = create<SummonState>((set, get) => ({
                 damage,
                 sourcePos: updated.position,
                 color: "#ff4444",
-                knockbackStrength: 6,
+                knockbackStrength: 10,
                 curse: state.scytheCurse,
                 isSummonDamage: true,
               });
               updated.recentTargets.push(enemy.id);
-              if (updated.recentTargets.length > 4) {
+              if (updated.recentTargets.length > 2) {
                 updated.recentTargets.shift();
               }
 

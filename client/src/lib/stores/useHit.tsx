@@ -55,7 +55,7 @@ export const useHit = create<HitState>((set, get) => ({
     const { applyStatusEffect } = useSummons.getState();
 
     enemy.health -= damage;
-    enemy.hitFlash = 0.8;
+    enemy.hitFlash = 0.08;
     addImpact(enemy.position.clone(), color);
     addDamageNumber(enemy.position.x, enemy.position.z, damage);
 

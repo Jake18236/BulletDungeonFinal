@@ -23,13 +23,16 @@ import {
   enemySprite,
   WeaponSprites,
   CursorSprite,
-  projectileSprite,
   SummonSprites,
   xpSprite,
   getProjectileImage,
+  enemyFlashSprite,
+  VisualSprites,
   
 } from "./SpriteProps";
 
+VisualSprites.circle.src = "/sprites/impact_circle.png";
+VisualSprites.cshape.src = "/sprites/impact_cShape.png";
 
 const TILE_SIZE = 50;
 export const CANVAS_WIDTH = 1490;
@@ -1293,10 +1296,10 @@ export default function CanvasGame() {
       for (let i = 0; i < trail.length; i++) {
         const t = i / trail.length; // 0 = head, 1 = tail
         const alpha = 1;
-        const scale = 1 - t * 0.7;
+        const scale = 1 - t * 0.9;
 
         const p = worldToScreen(trail[i]);
-        const size = proj.size * 20 * scale;
+        const size = proj.size * 60 * scale;
 
         ctx.globalAlpha = alpha;
         ctx.drawImage(
@@ -1310,7 +1313,7 @@ export default function CanvasGame() {
 
       // --- MAIN BULLET (brightest, full size) ---
       const screen = worldToScreen(proj.position);
-      const mainSize = proj.size * 20;
+      const mainSize = proj.size * 60;
       ctx.imageSmoothingEnabled = false;
       ctx.globalAlpha = 1;
       ctx.drawImage(
@@ -1375,36 +1378,40 @@ export default function CanvasGame() {
   const drawImpactEffects = (ctx: CanvasRenderingContext2D) => {
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
-
+    
     ctx.save();
 
     impactEffects.forEach(impact => {
+      // Compute screen position
       const screenX = centerX + ((impact.x - position.x) * TILE_SIZE) / 2;
       const screenY = centerY + ((impact.y - position.z) * TILE_SIZE) / 2;
 
-      const lifePercent = impact.life / impact.maxLife;
-      const alpha = 1 - lifePercent;
-      const size = impact.size * (1 + lifePercent * 2);
+      // Compute fade alpha (optional)
+      const alpha = impact.alpha ?? 1;
 
-      // Flash circle
-      const gradient = ctx.createRadialGradient(
-        screenX, screenY, 0,
-        screenX, screenY, size
-      );
-      gradient.addColorStop(0, impact.color + "ff");
-      gradient.addColorStop(0.3, impact.color + "88");
-      gradient.addColorStop(1, impact.color + "00");
-      gradient.addColorStop(1, impact.color + "bb");
+      // Compute size (optional scaling over lifetime)
+      const lifePercent = impact.life / impact.frameDuration; // percent through current frame
+      const size = impact.size * (1 + lifePercent * 0.2); // subtle growth effect
 
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.arc(screenX, screenY, size, 0, Math.PI * 2);
-      ctx.fill();
+      // Get current frame sprite
+      const frame = impact.frames[impact.currentFrame];
+
+      if (frame.complete) {
+        ctx.save();
+        ctx.translate(screenX, screenY);
+        ctx.imageSmoothingEnabled = false;
+        ctx.globalAlpha = alpha;
+        if(frame.complete) {
+        ctx.drawImage(frame, -size / 2, -size / 2, size, size);
+        }
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      }
     });
 
     ctx.restore();
   };
+
 
   const drawDamageNumbers = (ctx: CanvasRenderingContext2D) => {
     const centerX = CANVAS_WIDTH / 2;
@@ -1648,54 +1655,24 @@ export default function CanvasGame() {
 
     ctx.save();
     ctx.translate(screenX, screenY);
-
-    // sprite
     ctx.imageSmoothingEnabled = false;
 
-    // flip for left-facing
-    if (!facingRight) {
-      ctx.scale(-1, 1);
-    }
+    if (!facingRight) ctx.scale(-1, 1);
 
-    // --- BASE SPRITE ---
-    ctx.drawImage(
-      enemySprite.img,
-      -size / 2,
-      -size / 2,
-      size,
-      size
-    );
+    // Base sprite
+    
 
-    // --- HIT FLASH ---
-    if (enemy.hitFlash && enemy.hitFlash > 0) {
-      const t = enemy.hitFlash / 0.001; // same duration you set on hit
-
-      ctx.globalAlpha = t + 20;
-      ctx.globalCompositeOperation = "lighter"; // additive white
-      ctx.drawImage(
-        enemySprite.img,
-        -size / 2,
-        -size / 2,
-        size,
-        size
-      );
-    }
-
-    // cleanup (IMPORTANT)
-    ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = "source-over";
+    // Hit flash (white overlay)
+    if (enemy.hitFlash > 0) {
+      ctx.drawImage(enemyFlashSprite.img, -size/2, -size/2, size, size);
+    } else {ctx.drawImage(enemySprite.img, -size / 2, -size / 2, size, size);}
+    
     ctx.restore();
   };
 
   const drawSummons = (ctx: CanvasRenderingContext2D) => {
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
-    
-    // Load scythe sprite
-    const scytheSprite = new Image();
-    scytheSprite.src = "/sprites/scythe.png"; 
-    const daggerSprite = new Image();
-    daggerSprite.src = "/sprites/dagger.png"; 
     
     summons.forEach(summon => {
       const screenX = centerX + ((summon.position.x - position.x) * TILE_SIZE) / 2;
@@ -1783,46 +1760,54 @@ export default function CanvasGame() {
         ctx.fill();
       }
       
-        else if (summon.type === "dagger") {
+          else if (summon.type === "dagger") {
             const sprite = SummonSprites.dagger;
-            if (!sprite.complete) return;
             const img = getProjectileImage();
+
+            const canDrawDagger =
+              sprite.complete && sprite.naturalWidth > 0;
+
+            const canDrawTrail =
+              img.complete && img.naturalWidth > 0;
+
             // --- TRAIL ---
-            if (summon.trail) {
-                for (let i = summon.trail.length - 1; i >= 0; i--) {
-                    const p = summon.trail[i];
+            if (summon.trail && canDrawTrail) {
+              for (let i = summon.trail.length - 1; i >= 0; i--) {
+                const p = summon.trail[i];
 
-                    // Convert world to screen coordinates
-                    const x = centerX + ((p.x - position.x) * TILE_SIZE) / 2;
-                    const y = centerY + ((p.z - position.z) * TILE_SIZE) / 2;
+                const x = centerX + ((p.x - position.x) * TILE_SIZE) / 2;
+                const y = centerY + ((p.z - position.z) * TILE_SIZE) / 2;
 
-                    const t = i / summon.trail.length;
-                    const size = 60 * (1 - t * 0.99);
+                const t = i / summon.trail.length;
+                const size = 120 * (1 - t * 0.9);
 
-                    ctx.save();
-                    ctx.globalAlpha = 1.5; // optional fade
-                    ctx.imageSmoothingEnabled = false;
-                    ctx.drawImage(img, x - size / 2, y - size / 2, size, size);
-                    ctx.restore();
-                }
+                ctx.save();
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(img, x - size / 2, y - size / 2, size, size);
+                ctx.restore();
+              }
             }
 
             // --- MAIN DAGGER ---
-            const screenX = centerX + ((summon.position.x - position.x) * TILE_SIZE) / 2;
-            const screenY = centerY + ((summon.position.z - position.z) * TILE_SIZE) / 2;
+            if (!canDrawDagger) return; // ← safe here ONLY if this is inside a dagger block
+
+            const screenX =
+              centerX + ((summon.position.x - position.x) * TILE_SIZE) / 2;
+            const screenY =
+              centerY + ((summon.position.z - position.z) * TILE_SIZE) / 2;
 
             const scale = 2;
-            const w = sprite.width * scale;
-            const h = sprite.height * scale;
+            const w = sprite.naturalWidth * scale;
+            const h = sprite.naturalHeight * scale;
 
             ctx.save();
             ctx.translate(screenX, screenY);
-            ctx.rotate(summon.rotation); // only rotate the dagger itself
-            ctx.globalAlpha = 1;
+            ctx.rotate(summon.rotation);
             ctx.imageSmoothingEnabled = false;
             ctx.drawImage(sprite, -w / 2, -h / 2, w, h);
             ctx.restore();
-        }
+          }
+
                                
       else if (summon.type === "electrobug") {
         // Small electric bug
