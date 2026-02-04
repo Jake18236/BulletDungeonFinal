@@ -10,7 +10,7 @@ import { Enemy } from "./useEnemies";
 export interface ImpactParams {
   enemy: Enemy;
   damage: number;
-  sourcePos?: THREE.Vector3;
+  impactPos?: THREE.Vector3;
   color?: string;
   knockbackStrength?: number;
 
@@ -43,12 +43,12 @@ interface HitState {
     chainedEnemies: Set<string>,
     allEnemies: Enemy[]
   ) => void;
-  applyPlayerDamage: (damage: number, sourcePos?: THREE.Vector3) => void;
+  applyPlayerDamage: (damage: number, impactPos?: THREE.Vector3) => void;
 }
 
 export const useHit = create<HitState>((set, get) => ({
   applyHit: (params, allEnemies = []) => {
-    const { enemy, damage, sourcePos, color = "#ffffff", knockbackStrength = 8 } = params;
+    const { enemy, damage, impactPos, color = "#ffffff", knockbackStrength = 8 } = params;
 
     const { addImpact, addDamageNumber } = useVisualEffects.getState();
     const { playHit } = useAudio.getState();
@@ -56,15 +56,24 @@ export const useHit = create<HitState>((set, get) => ({
 
     enemy.health -= damage;
     enemy.hitFlash = 0.08;
-    addImpact(enemy.position.clone(), color);
+    
+    if (impactPos) {
+      const dir = enemy.position.clone().sub(impactPos);
+      dir.y = 0;
+    }
+    if (impactPos) {
+      addImpact(impactPos);
+    } else {
+      addImpact(enemy.position.clone());
+    }
     addDamageNumber(enemy.position.x, enemy.position.z, damage);
 
     if (!enemy.velocity) {
       enemy.velocity = new THREE.Vector3();
     }
 
-    if (sourcePos) {
-      const dir = enemy.position.clone().sub(sourcePos);
+    if (impactPos) {
+      const dir = enemy.position.clone().sub(impactPos);
       dir.y = 0;
       if (dir.lengthSq() > 0.0001) {
         const ps = usePlayer.getState();
@@ -133,8 +142,8 @@ export const useHit = create<HitState>((set, get) => ({
         enemy.health = 0;
 
         const { addImpact } = useVisualEffects.getState();
-        addImpact(enemy.position.clone(), "#ff00ff");
-        addImpact(enemy.position.clone(), "#ff00ff");
+        addImpact(enemy.position.clone());
+        addImpact(enemy.position.clone());
 
         return true;
       }
@@ -211,7 +220,7 @@ export const useHit = create<HitState>((set, get) => ({
     }
   },
 
-  applyPlayerDamage: (damage, sourcePos) => {
+  applyPlayerDamage: (damage, impactPos) => {
     const { loseHeart, position, invincibilityTimer } = usePlayer.getState();
 
     if (invincibilityTimer > 0) return;
@@ -227,8 +236,8 @@ export const useHit = create<HitState>((set, get) => ({
 
     playHit();
 
-    if (sourcePos) {
-      const dir = position.clone().sub(sourcePos);
+    if (impactPos) {
+      const dir = position.clone().sub(impactPos);
       dir.y = 0;
       if (dir.lengthSq() > 0.0001) {
         dir.normalize().multiplyScalar(5);

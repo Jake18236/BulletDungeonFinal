@@ -27,7 +27,7 @@ export interface Projectile {
   maxRange: number;
   distanceTraveled: number;
   rotationY: number;
-  
+  impactPos?: THREE.Vector3;
 
   currentLength: number; 
   jitterOffset: THREE.Vector3;
@@ -100,6 +100,7 @@ interface ProjectilesState {
         explosive?: { radius: number; damage: number };
         chainLightning?: { chains: number; range: number; chainedEnemies: Set<string> };
         burn?: { damage: number; duration: number };
+        impactPos?: THREE.Vector3;
       }
     ) => void,
     isPaused: boolean,
@@ -175,6 +176,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       isSummonProjectile: config.isSummonProjectile,
       burn: config.burn,
       triggerOnHit: config.triggerOnHit,
+      impactPos: null,
     };
 
     set((state) => ({
@@ -300,68 +302,67 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       
       let hitEnemy = false;
 
+      const enemyRadius = 0.8; // tune once, no magic numbers elsewhere
+
       for (const enemy of enemies) {
-        // Skip if already pierced this enemy
         if (proj.piercedEnemies.has(enemy.id)) continue;
 
-        if (proj.position.distanceTo(enemy.position) < 1.3) {
-          hitEnemy = true;
+        // Vector from enemy center → projectile
+        const toProj = proj.position.clone().sub(enemy.position);
+        toProj.y = 0;
 
-          // Deal damage
-          onHit(
-            enemy.id,
-            proj.damage,
-            proj.velocity.clone().normalize().multiplyScalar(8),
-            {
-              color: proj.color,
-              explosive: proj.explosive,
-              chainLightning: proj.chainLightning,
-              burn: proj.burn,
-            }
+        const dist = toProj.length();
+        if (dist > enemyRadius) continue;
+
+        // ================= HIT =================
+        hitEnemy = true;
+
+        // ✅ Impact point on enemy surface
+        const impactPos = enemy.position.clone().add(
+          toProj.normalize().multiplyScalar(enemyRadius)
+        );
+
+        onHit(
+          enemy.id,
+          proj.damage,
+          proj.velocity.clone().normalize().multiplyScalar(8),
+          {
+            color: proj.color,
+            explosive: proj.explosive,
+            chainLightning: proj.chainLightning,
+            burn: proj.burn,
+            impactPos,
+          }
+        );
+
+        // ================= BOUNCE =================
+        if (proj.bouncesLeft > 0) {
+          const normal = toProj.normalize();
+          const dot = proj.velocity.dot(normal);
+
+          proj.velocity.sub(normal.multiplyScalar(2 * dot));
+          proj.velocity.multiplyScalar(0.85);
+          proj.rotationY = Math.atan2(proj.velocity.x, proj.velocity.z);
+
+          proj.bouncesLeft--;
+          proj.piercedEnemies.add(enemy.id);
+
+          // Push projectile out of enemy
+          proj.position.copy(
+            enemy.position.clone().add(normal.multiplyScalar(enemyRadius + 0.05))
           );
 
-          // ========================================
-          // BOUNCE LOGIC (if has bounces left)
-          // ========================================
-          if (proj.bouncesLeft > 0) {
-            // Calculate bounce direction (reflect off enemy)
-            const hitDirection = proj.position.clone().sub(enemy.position).normalize();
+          continue;
+        }
 
-            // Reflect velocity around the hit normal
-            const dot = proj.velocity.dot(hitDirection);
-            proj.velocity.x = proj.velocity.x - 2 * dot * hitDirection.x;
-            proj.velocity.z = proj.velocity.z - 2 * dot * hitDirection.z;
-
-            // Normalize and maintain speed
-            proj.velocity.normalize().multiplyScalar(proj.velocity.length() * 0.85);
-            proj.rotationY = Math.atan2(proj.velocity.x, proj.velocity.z);
-
-            // Decrement bounces
-            proj.bouncesLeft--;
-
-            // Mark this enemy as hit (so we don't bounce off them again immediately)
-            proj.piercedEnemies.add(enemy.id);
-
-            // Move projectile slightly away from enemy to prevent getting stuck
-            proj.position.add(hitDirection.multiplyScalar(1.2));
-
-            // Continue to next enemy (we bounced, don't check pierce count)
-            continue;
-          }
-
-          // ========================================
-          // PIERCE LOGIC (if no bounces left)
-          // ========================================
-          else {
-            // Mark as pierced
-            proj.piercedEnemies.add(enemy.id);
-            // Check if piercing is exhausted
-            if (proj.piercedEnemies.size > proj.piercing) {
-              break; // Stop checking more enemies
-            }
-          }
+        // ================= PIERCE =================
+        proj.piercedEnemies.add(enemy.id);
+        if (proj.piercedEnemies.size > proj.piercing) {
+          break;
         }
       }
+
+
 
       // Remove projectile if piercing is exhausted (and no bounces left)
       if (hitEnemy && proj.bouncesLeft === 0 && proj.piercedEnemies.size > proj.piercing) {

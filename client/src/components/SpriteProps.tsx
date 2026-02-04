@@ -185,17 +185,13 @@ export const SummonSprites = {
 };
 
 export const VisualSprites = {
-  circle: (() => {
+  impactSheet: (() => {
     const img = new Image();
-    img.src = "/sprites/bullet.png";
-    return img;
-  })(),
-  cshape: (() => {
-    const img = new Image();
-    img.src = "/sprites/dagger.png";
+    img.src = "/sprites/impact-spritesheet.png"; // your spritesheet
     return img;
   })(),
 };
+
 
 
 export const xpBarFillSprite = "/sprites/xp-bar-fill.png";

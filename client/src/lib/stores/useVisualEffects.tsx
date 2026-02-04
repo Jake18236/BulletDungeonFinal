@@ -29,15 +29,15 @@ export interface DamageNumber {
 
 export interface ImpactEffect {
   id: string;
-  x: number;
-  y: number;
-  life: number;              // time spent on current frame
-  currentFrame: number;      // index of the frame currently drawn
-  frames: HTMLImageElement[]; // preloaded sprites
-  frameDuration: number;     // seconds per frame
-  size: number;              // base size
-  alpha: number;             // optional per-frame alpha
+  position: THREE.Vector3;
+  life: number;        // how long this frame has been alive
+  maxLife: number;     // duration per frame
+  size: number;
+  frameIndex: number;  // current frame
+  totalFrames: number; // total frames in spritesheet
 }
+
+
 
 // ---------------- Store ----------------
 interface VisualEffectsState {
@@ -58,29 +58,21 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
   impactEffects: [],
 
   // ---------------- Impact Effects ----------------
-  addImpact: (position, size = 16) => {
-    const impactFrames = [
-      VisualSprites.circle, // frame 1: circle explosion
-      VisualSprites.cshape  // frame 2: dissipation "C"
-    ];
-
+  addImpact: (position: THREE.Vector3, size = 64) => {
     const impactEffect: ImpactEffect = {
       id: `impact_${Date.now()}`,
-      x: position.x,
-      y: position.z,
+      position: position.clone(),
       life: 0,
-      currentFrame: 0,
-      frames: impactFrames,
-      frameDuration: 0.05, // 50ms per frame
+      maxLife: 0.15,      // 0.15 sec per frame
       size,
-      alpha: 1,
+      frameIndex: 0,
+      totalFrames: 2,      // number of frames in spritesheet
     };
 
     set(state => ({
       impactEffects: [...state.impactEffects, impactEffect],
     }));
   },
-
   // ---------------- Explosion ----------------
   addExplosion: (position, count = 5) => {
     const particles: Particle[] = [];
@@ -183,20 +175,18 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
       })
       .filter(d => d.life < d.maxLife);
 
-    // Impact effects (animated)
     const updatedImpacts = state.impactEffects
-      .map(i => {
-        const updated = { ...i };
-        updated.life += delta;
+    .map(i => {
+      const updated = { ...i };
+      updated.life += delta;
 
-        if (updated.life >= updated.frameDuration) {
-          updated.life = 0;
-          updated.currentFrame++;
-        }
+      // 2-frame animation: first half = frame 0, second half = frame 1
+      const lifePercent = updated.life / updated.maxLife;
+      updated.frameIndex = lifePercent < 0.5 ? 0 : 1;
 
-        return updated;
-      })
-      .filter(i => i.currentFrame < i.frames.length);
+      return updated;
+    })
+    .filter(i => i.life < i.maxLife);
 
     set({
       particles: updatedParticles,

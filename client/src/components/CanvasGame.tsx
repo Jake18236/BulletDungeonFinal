@@ -31,9 +31,6 @@ import {
   
 } from "./SpriteProps";
 
-VisualSprites.circle.src = "/sprites/impact_circle.png";
-VisualSprites.cshape.src = "/sprites/impact_cShape.png";
-
 const TILE_SIZE = 50;
 export const CANVAS_WIDTH = 1490;
 export const CANVAS_HEIGHT = 750;
@@ -44,6 +41,9 @@ interface Position {
   y: number;
   z: number;
 }
+const img = new Image();
+img.src = "/sprites/bullet.png";
+img.onload = () => console.log("Circle loaded");
 
 interface TerrainObstacle {
   x: number;
@@ -226,6 +226,14 @@ export default function CanvasGame() {
     if (canvasRef.current) {
       canvasRectRef.current = canvasRef.current.getBoundingClientRect();
     }
+  }, []);
+
+  useEffect(() => {
+    Object.values(VisualSprites).forEach(img => {
+      if (!img.complete) {
+        img.onload = () => {};
+      }
+    });
   }, []);
 
   
@@ -572,7 +580,7 @@ export default function CanvasGame() {
               applyHit({
                 enemy,
                 damage,
-                sourcePos: position,
+                impactPos: projectileData?.impactPos,
                 color: projectileData?.color || "#ffffff",
                 knockbackStrength: knockback.length(),
                 explosive: projectileData?.explosive,
@@ -584,7 +592,7 @@ export default function CanvasGame() {
               if (enemy.health <= 0) {
                 playSuccess();
                 const { addExplosion } = useVisualEffects.getState();
-                addExplosion(enemy.position.clone(), 25);
+                
                 removeEnemy(enemyId);
 
                 // Splinter bullets (stays here due to addProjectile access)
@@ -1375,42 +1383,35 @@ export default function CanvasGame() {
     ctx.restore();
   };
 
+
+
   const drawImpactEffects = (ctx: CanvasRenderingContext2D) => {
-    const centerX = CANVAS_WIDTH / 2;
-    const centerY = CANVAS_HEIGHT / 2;
-    
-    ctx.save();
+    const impactEffects = useVisualEffects.getState().impactEffects;
+    const sprite = VisualSprites.impactSheet;
+
+
+    const frameWidth = sprite.width / 2; 
+    const frameHeight = sprite.height;
 
     impactEffects.forEach(impact => {
-      // Compute screen position
-      const screenX = centerX + ((impact.x - position.x) * TILE_SIZE) / 2;
-      const screenY = centerY + ((impact.y - position.z) * TILE_SIZE) / 2;
+      const screenX = CANVAS_WIDTH/2 + ((impact.x - position.x) * TILE_SIZE)/2;
+      const screenY = CANVAS_HEIGHT/2 + ((impact.y - position.z) * TILE_SIZE)/2;
 
-      // Compute fade alpha (optional)
-      const alpha = impact.alpha ?? 1;
-
-      // Compute size (optional scaling over lifetime)
-      const lifePercent = impact.life / impact.frameDuration; // percent through current frame
-      const size = impact.size * (1 + lifePercent * 0.2); // subtle growth effect
-
-      // Get current frame sprite
-      const frame = impact.frames[impact.currentFrame];
-
-      if (frame.complete) {
-        ctx.save();
-        ctx.translate(screenX, screenY);
-        ctx.imageSmoothingEnabled = false;
-        ctx.globalAlpha = alpha;
-        if(frame.complete) {
-        ctx.drawImage(frame, -size / 2, -size / 2, size, size);
-        }
-        ctx.globalAlpha = 1;
-        ctx.restore();
-      }
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.globalAlpha = 1 - (impact.frameIndex / impact.totalFrames); // optional fade
+      ctx.drawImage(
+        sprite,
+        frameWidth * impact.frameIndex, 0,  // source x, y
+        frameWidth, frameHeight,            // source width, height
+        screenX - impact.size/2, screenY - impact.size/2,  // dest x, y
+        impact.size, impact.size            // dest width, height
+      );
+      ctx.restore();
     });
-
-    ctx.restore();
   };
+
+
 
 
   const drawDamageNumbers = (ctx: CanvasRenderingContext2D) => {
