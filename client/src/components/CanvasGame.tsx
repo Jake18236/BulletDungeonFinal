@@ -1681,37 +1681,36 @@ export default function CanvasGame() {
 
 
       if (summon.type === "ghost") {
-        // Semi-transparent ghostly body
-        ctx.globalAlpha = 0.7;
+        const sprite = SummonSprites.ghostSheet;
+        const isSheetReady = sprite.complete && sprite.naturalWidth > 0 && sprite.naturalHeight > 0;
 
-        // Main body
-        ctx.fillStyle = "#88ccff";
-        ctx.beginPath();
-        ctx.arc(0, 0, 12, 0, Math.PI * 2);
-        ctx.fill();
+        if (isSheetReady) {
+          const totalCols = 6;
+          const totalRows = 2;
+          const frameW = sprite.naturalWidth / totalCols;
+          const frameH = sprite.naturalHeight / totalRows;
 
-        // Glow
-        ctx.globalAlpha = 0.3;
-        ctx.fillStyle = "#88ccff";
-        ctx.beginPath();
-        ctx.arc(0, 0, 18, 0, Math.PI * 2);
-        ctx.fill();
+          const passiveFrames = 6;
+          const shootFrames = 4;
+          const inShootAnim = (summon.shootAnimTimer ?? 0) > 0;
 
-        // Eyes
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = "#000000";
-        ctx.beginPath();
-        ctx.arc(-4, -2, 2, 0, Math.PI * 2);
-        ctx.arc(4, -2, 2, 0, Math.PI * 2);
-        ctx.fill();
+          const nowSeconds = performance.now() / 1000;
+          const animFps = inShootAnim ? 10 : 6;
+          const frameIndex = Math.floor(nowSeconds * animFps);
 
-        // Wavy tail
-        ctx.globalAlpha = 0.5;
-        ctx.fillStyle = "#88ccff";
-        for (let i = 0; i < 3; i++) {
-          ctx.beginPath();
-          ctx.arc(0, 12 + i * 4, 10 - i * 2, 0, Math.PI * 2);
-          ctx.fill();
+          const sx = inShootAnim ? (frameIndex % shootFrames) * frameW : (frameIndex % passiveFrames) * frameW;
+          const sy = inShootAnim ? frameH : 0;
+
+          const drawScale = 3;
+          const drawW = frameW * drawScale;
+          const drawH = frameH * drawScale;
+
+          ctx.save();
+          ctx.translate(screenX, screenY);
+          ctx.imageSmoothingEnabled = false;
+          ctx.globalAlpha = 0.95;
+          ctx.drawImage(sprite, sx, sy, frameW, frameH, -drawW / 2, -drawH / 2, drawW, drawH);
+          ctx.restore();
         }
       }
       else if (summon.type === "scythe") {

@@ -172,6 +172,11 @@ export const xpSprite = (() => {
 })();
 
 export const SummonSprites = {
+  ghostSheet: (() => {
+    const img = new Image();
+    img.src = "/sprites/ghost-spritesheet.png";
+    return img;
+  })(),
   scythe: (() => {
     const img = new Image();
     img.src = "/sprites/scythe.png";
@@ -211,5 +216,4 @@ type XPHUDProps = {
   xp: number;
   xpToNextLevel: number;
 };
-
 
