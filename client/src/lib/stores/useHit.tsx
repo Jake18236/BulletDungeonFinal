@@ -58,13 +58,7 @@ export const useHit = create<HitState>((set, get) => ({
     enemy.hitFlash = 0.08;
     
     if (impactPos) {
-      const dir = enemy.position.clone().sub(impactPos);
-      dir.y = 0;
-    }
-    if (impactPos) {
       addImpact(impactPos);
-    } else {
-      addImpact(enemy.position.clone());
     }
     addDamageNumber(enemy.position.x, enemy.position.z, damage);
 
@@ -75,7 +69,7 @@ export const useHit = create<HitState>((set, get) => ({
     if (impactPos) {
       const dir = enemy.position.clone().sub(impactPos);
       dir.y = 0;
-      if (dir.lengthSq() > 0.0001) {
+      if (dir.lengthSq() > 0.1) {
         const ps = usePlayer.getState();
         const finalKnockback = knockbackStrength * (ps.knockbackMultiplier || 1);
         dir.normalize().multiplyScalar(finalKnockback);

@@ -580,7 +580,7 @@ export default function CanvasGame() {
               applyHit({
                 enemy,
                 damage,
-                impactPos: projectileData?.position,
+                impactPos: projectileData?.impactPos,
                 color: projectileData?.color || "#ffffff",
                 knockbackStrength: knockback.length(),
                 explosive: projectileData?.explosive,

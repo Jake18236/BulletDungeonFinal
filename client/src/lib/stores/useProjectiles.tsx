@@ -310,7 +310,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
         const toEnemy = enemy.position.clone().sub(proj.position);
         toEnemy.y = 0; // ignore vertical for 2D plane
 
-        const enemyRadius = 0.7; 
+        const enemyRadius = 1.2; 
         const distance = toEnemy.length();
 
         
@@ -326,7 +326,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
           onHit(
             enemy.id,
             proj.damage,
-            proj.velocity.clone().normalize().multiplyScalar(1),
+            proj.velocity.clone().normalize().multiplyScalar(8),
             {
               color: proj.color,
               explosive: proj.explosive,
