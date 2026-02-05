@@ -17,6 +17,7 @@ export interface Summon {
   // Ghost-specific
   driftOffset?: THREE.Vector3;
   fireTimer?: number;
+  shootAnimTimer?: number;
 
   // Orbit-specific (scythe, spear, electrobug)
   orbitAngle?: number;
@@ -161,6 +162,7 @@ export const useSummons = create<SummonState>((set, get) => ({
         rotation: 0,
 
         fireTimer: 0,
+        shootAnimTimer: 0,
       };
 
       set(state => ({ summons: [...state.summons, summon] }));
@@ -260,9 +262,18 @@ export const useSummons = create<SummonState>((set, get) => ({
             // Optional: gentle rotation for visual effect
             updated.rotation += delta * 2;
             if (updated.fireTimer === undefined) updated.fireTimer = state.ghostFireRate;
+            if (updated.shootAnimTimer === undefined) updated.shootAnimTimer = 0;
 
             // Fire continuously at closest enemy
             updated.fireTimer! -= delta;
+            if (updated.fireTimer! <= 1 && updated.shootAnimTimer <= 0) {
+                updated.shootAnimTimer = 4;
+            }
+
+            if (updated.shootAnimTimer > 0) {
+                updated.shootAnimTimer = Math.max(0, updated.shootAnimTimer - delta);
+            }
+
             if (updated.fireTimer! <= 0 && enemies.length > 0) {
                 updated.fireTimer = state.ghostFireRate;
 
