@@ -100,6 +100,7 @@ interface ProjectilesState {
         explosive?: { radius: number; damage: number };
         chainLightning?: { chains: number; range: number; chainedEnemies: Set<string> };
         burn?: { damage: number; duration: number };
+        impactPos: THREE.Vector3;
       }
     ) => void,
     isPaused: boolean,
@@ -309,7 +310,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
         const toEnemy = enemy.position.clone().sub(proj.position);
         toEnemy.y = 0; // ignore vertical for 2D plane
 
-        const enemyRadius = 1.2; 
+        const enemyRadius = 0.7; 
         const distance = toEnemy.length();
 
         
@@ -325,13 +326,13 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
           onHit(
             enemy.id,
             proj.damage,
-            proj.velocity.clone().normalize().multiplyScalar(8),
+            proj.velocity.clone().normalize().multiplyScalar(1),
             {
               color: proj.color,
               explosive: proj.explosive,
               chainLightning: proj.chainLightning,
               burn: proj.burn,
-              impactPos,
+              impactPos: proj.position,
             }
           );
 
