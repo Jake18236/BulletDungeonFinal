@@ -580,7 +580,7 @@ export default function CanvasGame() {
               applyHit({
                 enemy,
                 damage,
-                impactPos: projectileData?.impactPos,
+                impactPos: position,
                 color: projectileData?.color || "#ffffff",
                 knockbackStrength: knockback.length(),
                 explosive: projectileData?.explosive,
@@ -1388,7 +1388,7 @@ export default function CanvasGame() {
   const drawImpactEffects = (ctx: CanvasRenderingContext2D) => {
     const impactEffects = useVisualEffects.getState().impactEffects;
     const sprite = VisualSprites.impactSheet;
-
+    if (!sprite.complete || sprite.naturalWidth === 0) return;
 
     const frameWidth = sprite.width / 2; 
     const frameHeight = sprite.height;

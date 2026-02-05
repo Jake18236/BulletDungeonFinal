@@ -29,7 +29,8 @@ export interface DamageNumber {
 
 export interface ImpactEffect {
   id: string;
-  position: THREE.Vector3;
+  x: number;
+  y: number;
   life: number;        // how long this frame has been alive
   maxLife: number;     // duration per frame
   size: number;
@@ -61,7 +62,8 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
   addImpact: (position: THREE.Vector3, size = 64) => {
     const impactEffect: ImpactEffect = {
       id: `impact_${Date.now()}`,
-      position: position.clone(),
+      x: position.x,
+      y: position.z,
       life: 0,
       maxLife: 0.15,      // 0.15 sec per frame
       size,
