@@ -8,15 +8,13 @@ import { useDungeon } from "../lib/stores/useDungeon";
 import { bounceAgainstBounds } from "../lib/collision";
 import { useGame } from "../lib/stores/useGame";
 import { useAudio } from "../lib/stores/useAudio";
-import { useInventory } from "../lib/stores/useInventory";
+
 
 import { useProjectiles } from "../lib/stores/useProjectiles";
 import { useHit } from "../lib/stores/useHit";
 import { useSummons } from "../lib/stores/useSummons";
 import { useVisualEffects } from "../lib/stores/useVisualEffects";
-import swordSrc from "/images/sword.png";
 import GameUI from "./GameUI"  
-import { any } from "zod";
 import { LevelUpScreen } from "./GameUI";
 import Darkness from "./Darkness";
 import {
@@ -27,7 +25,7 @@ import {
   SummonSprites,
   xpSprite,
   getProjectileImage,
-  enemyFlashSprite,
+  enemyFlashSpritesByType,
   VisualSprites,
   EnemySpriteType,
   enemyEyeballProjectileSprite,
@@ -270,7 +268,6 @@ export default function CanvasGame() {
   const { enemies, updateEnemies, removeEnemy } = useEnemies();
   const { currentRoom, changeRoom } = useDungeon();
   const { playHit, playSuccess } = useAudio();
-  const { items, addItem } = useInventory();
   const { summons, updateSummons, updateStatusEffects, electroMage, electroShotCounter, handleEnemyKilledBySummon } = useSummons();
   const fireTimer = useRef(0);
   const canFire = useRef(true);
@@ -1059,9 +1056,7 @@ export default function CanvasGame() {
       }
     }
   }
-
-
-
+  
   const drawDungeon = (ctx: CanvasRenderingContext2D) => {
     if (!currentRoom) return;
 
@@ -1440,7 +1435,7 @@ export default function CanvasGame() {
         const scale = 1 - t * 0.9;
 
         const p = worldToScreen(trail[i]);
-        const size = proj.size * 3 * scale;
+        const size = proj.size * 30 * scale;
 
         ctx.globalAlpha = alpha;
         ctx.drawImage(
@@ -1454,7 +1449,7 @@ export default function CanvasGame() {
 
       // --- MAIN BULLET (brightest, full size) ---
       const screen = worldToScreen(proj.position);
-      const mainSize = proj.size * 3;
+      const mainSize = proj.size * 30;
       ctx.imageSmoothingEnabled = false;
       ctx.globalAlpha = 1;
       ctx.drawImage(
@@ -1600,10 +1595,6 @@ export default function CanvasGame() {
     
     ctx.arc(0, 0, 15, 0, Math.PI * 2);
     ctx.fill();
-
-    const { items, equippedWeaponId } = useInventory.getState();
-    const weapon = items.find((i) => i.id === equippedWeaponId);
-    if (weapon) drawWeapon(ctx, weapon.name.toLowerCase());
 
     ctx.restore();
   };
@@ -1781,6 +1772,7 @@ export default function CanvasGame() {
     // ================================================================
     const enemyType: EnemySpriteType = getEnemyType(enemy);
     const bodySprite = enemySpritesByType[enemyType];
+    const flashSprite = enemyFlashSpritesByType[enemyType];
     const size = bodySprite.size * bodySprite.scale;
     const facingRight = enemy.position.x <= position.x;
     ctx.save();
@@ -1793,12 +1785,9 @@ export default function CanvasGame() {
       ctx.scale(-1, 1);
     }
 
-    // Base sprite
-    
-
     // Hit flash (white overlay)
     if (enemy.hitFlash > 0) {
-      ctx.drawImage(enemyFlashSprite.img, -size/2, -size/2, size, size);
+      ctx.drawImage(flashSprite.img, -size/2, -size/2, size, size);
     } else {ctx.drawImage(bodySprite.img, -size / 2, -size / 2, size, size);}
     
     ctx.restore();
