@@ -3,6 +3,39 @@ import * as THREE from "three";
 import { usePlayer } from "./usePlayer"
 import { useVisualEffects } from "./useVisualEffects";
 
+
+export interface EnemyTypeBehaviorConfig {
+  bodyHitRadius: number;
+  collisionRadius: number;
+  engageDistancePx?: number;
+  disengageDistancePx?: number;
+  projectileSpeed?: number;
+  projectileLife?: number;
+  projectileSize?: number;
+  projectileFireInterval?: number;
+}
+
+export const ENEMY_TYPE_CONFIG: Record<"basic" | "tank" | "eyeball", EnemyTypeBehaviorConfig> = {
+  basic: {
+    bodyHitRadius: 0.7,
+    collisionRadius: 0.95,
+  },
+  tank: {
+    bodyHitRadius: 1.2,
+    collisionRadius: 1.8,
+  },
+  eyeball: {
+    bodyHitRadius: 0.65,
+    collisionRadius: 0.9,
+    engageDistancePx: 100,
+    disengageDistancePx: 150,
+    projectileSpeed: 9,
+    projectileLife: 2.8,
+    projectileSize: 0.35,
+    projectileFireInterval: 1.1,
+  },
+};
+
 export interface XPOrb {
   id: string;
   position: THREE.Vector3;

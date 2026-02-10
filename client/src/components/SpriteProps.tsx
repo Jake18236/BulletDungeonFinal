@@ -140,6 +140,24 @@ export function getProjectileImage() {
 
 let enemyProjectileImage: HTMLImageElement | null = null;
 
+
+const createImageWithFallbacks = (sources: string[]) => {
+  const img = new Image();
+  let index = 0;
+
+  const tryNext = () => {
+    if (index >= sources.length) return;
+    img.src = sources[index++];
+  };
+
+  img.onerror = () => {
+    tryNext();
+  };
+
+  tryNext();
+  return img;
+};
+
 const createEnemySprite = (src: string, size = 32, scale = 2): SpriteDef => ({
   img: (() => {
     const img = new Image();
@@ -152,15 +170,24 @@ const createEnemySprite = (src: string, size = 32, scale = 2): SpriteDef => ({
 
 export const enemySpritesByType: Record<EnemySpriteType, SpriteDef> = {
   basic: createEnemySprite("/sprites/enemy/basic-enemy.png", 32, 2),
-  tank: createEnemySprite("/sprites/enemy/tank-enemy.png", 48, 2),
-  eyeball: createEnemySprite("/sprites/enemy/eyeball-enemy.png", 48, 2),
+  tank: createEnemySprite("/sprites/enemy/tank-enemy.png", 32, 2.5),
+  eyeball: createEnemySprite("/sprites/enemy/eyeball-enemy.png", 32, 1.8),
 };
 
 export const enemyEyeSpritesByType: Record<EnemySpriteType, SpriteDef> = {
   basic: createEnemySprite("/sprites/enemy/basic-enemy-eyes.png", 32, 2),
-  tank: createEnemySprite("/sprites/enemy/tank-enemy-eyes.png", 48, 2),
-  eyeball: createEnemySprite("/sprites/enemy/eyeball-enemy-eyes.png", 48, 2),
+  tank: createEnemySprite("/sprites/enemy/tank-enemy-eyes.png", 32, 2.5),
+  eyeball: createEnemySprite("/sprites/enemy/eyeball-enemy-eyes.png", 32, 1.8),
 };
+
+export const enemySprite = enemySpritesByType.basic;
+
+export const enemyFlashSprite: SpriteDef = {
+  img: (() => {
+    const img = new Image();
+    img.src = "/sprites/enemy-flash.png";
+    return img;
+  })(),
 
 export const enemyFlashSpritesByType: Record<EnemySpriteType, SpriteDef> = {
   basic: createEnemySprite("/sprites/enemy/basic-enemy-flash.png", 32, 2),
@@ -200,17 +227,15 @@ export const SummonSprites = {
   })(),
 };
 
-export const enemyEyeballProjectileSprite = (() => {
-  const img = new Image();
-  img.src = "/sprites/enemy/enemy-eyeball-projectile.png";
-  return img;
-})();
+export const enemyEyeballProjectileSprite = createImageWithFallbacks([
+  "/sprites/enemy/enemy-eyeball-projectile.png",
+  "/sprites/enemy-eyeball-projectile.png",
+]);
 
-export const enemyDeathSpritesheet = (() => {
-  const img = new Image();
-  img.src = "/sprites/enemy/enemy-death-spritesheet.png";
-  return img;
-})();
+export const enemyDeathSpritesheet = createImageWithFallbacks([
+  "/sprites/enemy/enemy-death-spritesheet.png",
+  "/sprites/enemy-death-spritesheet.png",
+]);
 
 export const VisualSprites = {
   impactSheet: (() => {

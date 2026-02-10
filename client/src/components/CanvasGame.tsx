@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import Matter from "matter-js";
 import { usePlayer } from "../lib/stores/usePlayer";
-import { useEnemies } from "../lib/stores/useEnemies";
+import { ENEMY_TYPE_CONFIG, useEnemies } from "../lib/stores/useEnemies";
 import { useDungeon } from "../lib/stores/useDungeon";
 import { bounceAgainstBounds } from "../lib/collision";
 import { useGame } from "../lib/stores/useGame";
@@ -37,24 +37,6 @@ export const CANVAS_WIDTH = 1490;
 export const CANVAS_HEIGHT = 750;
 const ROOM_SIZE = 200;
 
-const ENEMY_BODY_HIT_RADIUS: Record<EnemySpriteType, number> = {
-  basic: 0.7,
-  tank: 1.2,
-  eyeball: 0.65,
-};
-
-const ENEMY_COLLISION_RADIUS: Record<EnemySpriteType, number> = {
-  basic: 0.95,
-  tank: 1.8,
-  eyeball: 0.9,
-};
-
-const EYEBALL_ENGAGE_RANGE = 100 / (TILE_SIZE / 2);
-const EYEBALL_DISENGAGE_RANGE = 150 / (TILE_SIZE / 2);
-const EYEBALL_PROJECTILE_SPEED = 9;
-const EYEBALL_PROJECTILE_LIFE = 2.8;
-const EYEBALL_PROJECTILE_SIZE = 0.35;
-const EYEBALL_PROJECTILE_FIRE_INTERVAL = 1.1;
 
 interface EnemyProjectile {
   id: string;
@@ -205,11 +187,11 @@ function getEnemyType(enemy: { type?: string }): EnemySpriteType {
 }
 
 function getEnemyBodyHitRadius(enemy: { type?: string }) {
-  return ENEMY_BODY_HIT_RADIUS[getEnemyType(enemy)];
+  return ENEMY_TYPE_CONFIG[getEnemyType(enemy)].bodyHitRadius;
 }
 
 function getEnemyCollisionRadius(enemy: { type?: string }) {
-  return ENEMY_COLLISION_RADIUS[getEnemyType(enemy)];
+  return ENEMY_TYPE_CONFIG[getEnemyType(enemy)].collisionRadius;
 }
 
 export default function CanvasGame() {
@@ -374,11 +356,11 @@ export default function CanvasGame() {
     enemyProjectilesRef.current.push({
       id: crypto.randomUUID(),
       position: enemy.position.clone(),
-      velocity: direction.multiplyScalar(EYEBALL_PROJECTILE_SPEED),
+      velocity: direction.multiplyScalar(ENEMY_TYPE_CONFIG.eyeball.projectileSpeed ?? 9),
       damage: enemy.attack ?? 1,
-      life: EYEBALL_PROJECTILE_LIFE,
-      maxLife: EYEBALL_PROJECTILE_LIFE,
-      size: EYEBALL_PROJECTILE_SIZE,
+      life: ENEMY_TYPE_CONFIG.eyeball.projectileLife ?? 2.8,
+      maxLife: ENEMY_TYPE_CONFIG.eyeball.projectileLife ?? 2.8,
+      size: ENEMY_TYPE_CONFIG.eyeball.projectileSize ?? 0.35,
     });
   };
 
@@ -789,9 +771,9 @@ export default function CanvasGame() {
             enemy.rotationY = Math.atan2(dirZ, dirX);
             const isRangedAttacking = (enemy as any).isRangedAttacking ?? false;
 
-            if (distance <= EYEBALL_ENGAGE_RANGE) {
+            if (distance <= (ENEMY_TYPE_CONFIG.eyeball.engageDistancePx ?? 100) / (TILE_SIZE / 2)) {
               (enemy as any).isRangedAttacking = true;
-            } else if (distance > EYEBALL_DISENGAGE_RANGE) {
+            } else if (distance > (ENEMY_TYPE_CONFIG.eyeball.disengageDistancePx ?? 150) / (TILE_SIZE / 2)) {
               (enemy as any).isRangedAttacking = false;
             } else {
               (enemy as any).isRangedAttacking = isRangedAttacking;
@@ -801,7 +783,7 @@ export default function CanvasGame() {
               (enemy as any).rangedShotCooldown = ((enemy as any).rangedShotCooldown ?? 0) - delta;
               if ((enemy as any).rangedShotCooldown <= 0) {
                 spawnEyeballProjectile(enemy);
-                (enemy as any).rangedShotCooldown = EYEBALL_PROJECTILE_FIRE_INTERVAL;
+                (enemy as any).rangedShotCooldown = ENEMY_TYPE_CONFIG.eyeball.projectileFireInterval ?? 1.1;
               }
             } else {
               const moveAmount = enemy.speed * delta;
@@ -980,7 +962,6 @@ export default function CanvasGame() {
       }
 
       enemies.forEach(enemy => drawEnemy(ctx, enemy));
-      drawEnemyDeaths(ctx);
 
       const eyeCanvas = eyeCanvasRef.current;
       const eyeCtx = eyeCanvas?.getContext("2d");
@@ -988,14 +969,15 @@ export default function CanvasGame() {
         eyeCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         eyeCtx.imageSmoothingEnabled = false;
         enemies.forEach(enemy => drawEnemyEyes(eyeCtx, enemy));
+        drawEnemyProjectiles(eyeCtx);
+        drawEnemyDeaths(eyeCtx);
       }
 
       drawPlayer(ctx);
       drawSummons(ctx);
       drawStatusEffects(ctx);
       drawImpactEffects(ctx); // ADD - behind projectiles
-      drawProjectilesAndTrails(ctx, phase !== "playing", position); 
-      drawEnemyProjectiles(ctx);
+      drawProjectilesAndTrails(ctx, phase !== "playing", position);
       drawParticles(ctx); 
       drawDamageNumbers(ctx); 
       drawXPOrbs(ctx);
@@ -1772,7 +1754,6 @@ export default function CanvasGame() {
     // ================================================================
     const enemyType: EnemySpriteType = getEnemyType(enemy);
     const bodySprite = enemySpritesByType[enemyType];
-    const flashSprite = enemyFlashSpritesByType[enemyType];
     const size = bodySprite.size * bodySprite.scale;
     const facingRight = enemy.position.x <= position.x;
     ctx.save();
@@ -1785,9 +1766,12 @@ export default function CanvasGame() {
       ctx.scale(-1, 1);
     }
 
+    // Base sprite
+    
+
     // Hit flash (white overlay)
     if (enemy.hitFlash > 0) {
-      ctx.drawImage(flashSprite.img, -size/2, -size/2, size, size);
+      ctx.drawImage(enemyFlashSprite.img, -size/2, -size/2, size, size);
     } else {ctx.drawImage(bodySprite.img, -size / 2, -size / 2, size, size);}
     
     ctx.restore();
@@ -1856,10 +1840,9 @@ export default function CanvasGame() {
     const sprite = enemyDeathSpritesheet;
     const totalFrames = 4;
 
-    if (!(sprite.complete && sprite.naturalWidth > 0 && sprite.naturalHeight > 0)) return;
-
-    const frameWidth = sprite.naturalWidth / totalFrames;
-    const frameHeight = sprite.naturalHeight;
+    const hasSprite = sprite.complete && sprite.naturalWidth > 0 && sprite.naturalHeight > 0;
+    const frameWidth = hasSprite ? sprite.naturalWidth / totalFrames : 0;
+    const frameHeight = hasSprite ? sprite.naturalHeight : 0;
     const nextAnimations: EnemyDeathAnimation[] = [];
 
     for (const animation of enemyDeathAnimationsRef.current) {
@@ -1881,17 +1864,28 @@ export default function CanvasGame() {
       ctx.save();
       ctx.translate(screenX, screenY);
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(
-        sprite,
-        frameIndex * frameWidth,
-        0,
-        frameWidth,
-        frameHeight,
-        -drawWidth / 2,
-        -drawHeight / 2,
-        drawWidth,
-        drawHeight,
-      );
+      if (hasSprite) {
+        ctx.drawImage(
+          sprite,
+          frameIndex * frameWidth,
+          0,
+          frameWidth,
+          frameHeight,
+          -drawWidth / 2,
+          -drawHeight / 2,
+          drawWidth,
+          drawHeight,
+        );
+      } else {
+        const t = frameIndex / Math.max(1, totalFrames - 1);
+        const radius = 18 + t * 12;
+        ctx.globalAlpha = Math.max(0, 1 - t);
+        ctx.strokeStyle = "#ff8a33";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+        ctx.stroke();
+      }
       ctx.restore();
     }
 
