@@ -42,6 +42,9 @@ export interface Enemy {
   projectileCooldown?: number;
   maxProjectileCooldown?: number;
   rotationY?: number;
+
+  isRangedAttacking?: boolean;
+  rangedShotCooldown?: number;
 }
 
 export interface DamagePopup {
@@ -259,6 +262,8 @@ export const useEnemies = create<EnemiesState>((set, get) => {
         type: chosenType,
         velocity: new THREE.Vector3(0, 0, 0),
         hitFlash: 0,
+        isRangedAttacking: false,
+        rangedShotCooldown: 0,
         ...enemyData,
       };
 
