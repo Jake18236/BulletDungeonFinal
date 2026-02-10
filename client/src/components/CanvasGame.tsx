@@ -54,7 +54,7 @@ interface TerrainObstacle {
 }
 
 const { addSummon } = useSummons.getState();
-addSummon("dagger");
+addSummon("ghost");
 
 function generateRoomTerrain(roomX: number, roomY: number): TerrainObstacle[] {
   const obstacles: TerrainObstacle[] = [];
@@ -898,8 +898,7 @@ export default function CanvasGame() {
   function handleEnemyDeath(enemy: Enemy) {
     const ps = usePlayer.getState();
 
-    addXPOrb(enemy.position.clone(), 25);
-    addExplosion(enemy.position.clone(), 25);
+    addXPOrb(enemy.position.clone(), 1);
     removeEnemy(enemy.id);
     
     if (ps.splinterBullets) {
@@ -918,7 +917,7 @@ export default function CanvasGame() {
           speed: stats.speed * 1.5,
           life: 0.2,
           range: stats.range * 0.01,
-          trailLength: 0.5,
+          trailLength: 50,
           piercing: 0,
           bouncing: 0,
           homing: false,
@@ -1307,7 +1306,7 @@ export default function CanvasGame() {
         const scale = 1 - t * 0.9;
 
         const p = worldToScreen(trail[i]);
-        const size = proj.size * 60 * scale;
+        const size = proj.size * 3 * scale;
 
         ctx.globalAlpha = alpha;
         ctx.drawImage(
@@ -1321,7 +1320,7 @@ export default function CanvasGame() {
 
       // --- MAIN BULLET (brightest, full size) ---
       const screen = worldToScreen(proj.position);
-      const mainSize = proj.size * 60;
+      const mainSize = proj.size * 3;
       ctx.imageSmoothingEnabled = false;
       ctx.globalAlpha = 1;
       ctx.drawImage(
@@ -1383,8 +1382,6 @@ export default function CanvasGame() {
     ctx.restore();
   };
 
-
-
   const drawImpactEffects = (ctx: CanvasRenderingContext2D) => {
     const impactEffects = useVisualEffects.getState().impactEffects;
     const sprite = VisualSprites.impactSheet;
@@ -1410,9 +1407,6 @@ export default function CanvasGame() {
       ctx.restore();
     });
   };
-
-
-
 
   const drawDamageNumbers = (ctx: CanvasRenderingContext2D) => {
     const centerX = CANVAS_WIDTH / 2;
@@ -1652,8 +1646,7 @@ export default function CanvasGame() {
     // NORMAL SKELETON ENEMY
     // ================================================================
     const size = enemySprite.size * enemySprite.scale;
-    const facingRight = enemy.position.x >= position.x;
-
+    const facingRight = enemy.position.x <= position.x;
     ctx.save();
     ctx.translate(screenX, screenY);
     ctx.imageSmoothingEnabled = false;
@@ -1691,17 +1684,17 @@ export default function CanvasGame() {
           const frameH = sprite.naturalHeight / totalRows;
 
           const passiveFrames = 6;
-          const shootFrames = 4;
+          const shootFrames = 5;
           const inShootAnim = (summon.shootAnimTimer ?? 0) > 0;
 
           const nowSeconds = performance.now() / 1000;
-          const animFps = inShootAnim ? 10 : 6;
+          const animFps = inShootAnim ? 5 : 10;
           const frameIndex = Math.floor(nowSeconds * animFps);
 
           const sx = inShootAnim ? (frameIndex % shootFrames) * frameW : (frameIndex % passiveFrames) * frameW;
           const sy = inShootAnim ? frameH : 0;
 
-          const drawScale = 3;
+          const drawScale = 2;
           const drawW = frameW * drawScale;
           const drawH = frameH * drawScale;
 

@@ -131,7 +131,7 @@ let projectileImage: HTMLImageElement | null = null;
 export function getProjectileImage() {
   if (!projectileImage) {
     projectileImage = new Image();
-    projectileImage.src = "/sprites/bulletC.png";
+    projectileImage.src = "/sprites/bullet.png";
   }
   return projectileImage;
 }
@@ -140,7 +140,7 @@ export function getProjectileImage() {
 export const enemySprite: SpriteDef = {
   img: (() => {
     const img = new Image();
-    img.src = "/sprites/enemy-red.png";
+    img.src = "/sprites/enemy-green2.png";
     return img;
   })(),
   

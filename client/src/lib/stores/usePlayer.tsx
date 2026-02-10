@@ -735,7 +735,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   piercing: 0,
   bouncing: 0,
   accuracy: 1.0,
-  trailLength: 1,
+  trailLength: 100,
   explosive: undefined,
   chainLightning: undefined,
   

@@ -20,9 +20,9 @@ export interface Summon {
   shootAnimTimer?: number;
 
   // Orbit-specific (scythe, spear, electrobug)
-  orbitAngle?: number;
-  orbitRadius?: number;
-  orbitSpeed?: number;
+  orbitAngle: number;
+  orbitRadius: number;
+  orbitSpeed: number;
 
   // Electro bug specific
   strikeTimer?: number;
@@ -115,7 +115,7 @@ export const useSummons = create<SummonState>((set, get) => ({
 
   summonDamageMultiplier: 1.0,
 
-  ghostDamage: 20,
+  ghostDamage: 10,
   ghostFireRate: 2,
   ghostProjectiles: 1,
   ghostBurn: false,
@@ -160,7 +160,9 @@ export const useSummons = create<SummonState>((set, get) => ({
         type: "ghost",
         position: playerPos.clone().add(new THREE.Vector3(50, 0, 0)),
         rotation: 0,
-
+        orbitAngle: 0,
+        orbitRadius: 4,
+        orbitSpeed: 1.5,
         fireTimer: 0,
         shootAnimTimer: 0,
       };
@@ -238,36 +240,32 @@ export const useSummons = create<SummonState>((set, get) => ({
       const updated = { ...summon };
 
       // ========================================================================
-      // GHOST FRIEND - Stays close, drifts gently, fires at closest enemy
+      // GHOST
       // ========================================================================
         if (summon.type === "ghost") {
 
             const orbitScreenRadius = 50;
-            const orbitRadius = orbitScreenRadius / (TILE_SIZE / 2); // pixels from player
-            const orbitSpeed = 2;   // radians per second
-
-            // Initialize orbit angle if undefined
-            if (summon.orbitAngle === undefined) summon.orbitAngle = Math.random() * Math.PI * 2;
+            const orbitRadius = orbitScreenRadius / (TILE_SIZE / 2); 
+            const orbitSpeed = 0;   
 
 
-            // Advance orbit angle
-            summon.orbitAngle += orbitSpeed * delta;
-            if (summon.orbitAngle > Math.PI * 2) summon.orbitAngle -= Math.PI * 2;
+          updated.orbitAngle += updated.orbitSpeed * delta;
 
-            // Update ghost position around player
-            updated.position.x = playerPos.x + Math.cos(summon.orbitAngle) * orbitRadius;
-            updated.position.z = playerPos.z + Math.sin(summon.orbitAngle) * orbitRadius;
+          updated.position.set(
+            playerPos.x + Math.cos(updated.orbitAngle) * updated.orbitRadius,
+            0,
+            playerPos.z + Math.sin(updated.orbitAngle) * updated.orbitRadius
+          );
 
-
-            // Optional: gentle rotation for visual effect
-            updated.rotation += delta * 2;
+          updated.rotation = updated.orbitAngle + Math.PI / 2;
+          
             if (updated.fireTimer === undefined) updated.fireTimer = state.ghostFireRate;
             if (updated.shootAnimTimer === undefined) updated.shootAnimTimer = 0;
 
             // Fire continuously at closest enemy
             updated.fireTimer! -= delta;
-            if (updated.fireTimer! <= 1 && updated.shootAnimTimer <= 0) {
-                updated.shootAnimTimer = 4;
+            if (updated.fireTimer! <= 0.05 && updated.shootAnimTimer <= 0) {
+                updated.shootAnimTimer = 0.35;
             }
 
             if (updated.shootAnimTimer > 0) {
@@ -301,15 +299,14 @@ export const useSummons = create<SummonState>((set, get) => ({
 
                         addProjectile({
                             position: updated.position.clone(),
-                            size: 20,
+                            size: 14,
                             direction: dir,
-                            slotId: 0,
                             damage: state.ghostDamage * state.summonDamageMultiplier,
-                            speed: 60,
+                            speed: 20,
                             range: 100,
-                            trailLength: 10,
+                            trailLength: 0,
                             homing: false,
-                            piercing: 999,
+                            piercing: 15,
                             bouncing: 0,
                             isSummonProjectile: true,
                             burn: state.ghostBurn ? { damage: 6, duration: 1 } : undefined,
@@ -714,7 +711,7 @@ export const useSummons = create<SummonState>((set, get) => ({
     beastKills: 0,
     bloodsuckers: false,
     daggerDamage: 30,
-    daggerCount: 1,
+    daggerCount: 0,
     daggerBurn: false,
     electroBugDamage: 22,
     electroMage: false,

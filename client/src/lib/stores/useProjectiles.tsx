@@ -153,7 +153,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       color: getProjectileColor(config),
       size: config.size,
       trailColor: getTrailColor(config),
-      trailLength: config.trailLength * 100,
+      trailLength: config.trailLength,
       trailHistory: [],
 
       homing: config.homing,
