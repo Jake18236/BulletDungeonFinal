@@ -140,14 +140,6 @@ export function getProjectileImage() {
 
 let enemyProjectileImage: HTMLImageElement | null = null;
 
-export function getEnemyProjectileImage() {
-  if (!enemyProjectileImage) {
-    enemyProjectileImage = new Image();
-    enemyProjectileImage.src = "/sprites/enemy/enemy-projectile.png";
-  }
-  return projectileImage;
-}
-
 const createEnemySprite = (src: string, size = 32, scale = 2): SpriteDef => ({
   img: (() => {
     const img = new Image();
@@ -207,6 +199,18 @@ export const SummonSprites = {
     return img;
   })(),
 };
+
+export const enemyEyeballProjectileSprite = (() => {
+  const img = new Image();
+  img.src = "/sprites/enemy/enemy-eyeball-projectile.png";
+  return img;
+})();
+
+export const enemyDeathSpritesheet = (() => {
+  const img = new Image();
+  img.src = "/sprites/enemy/enemy-death-spritesheet.png";
+  return img;
+})();
 
 export const VisualSprites = {
   impactSheet: (() => {

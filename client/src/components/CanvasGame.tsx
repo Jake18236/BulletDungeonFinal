@@ -28,6 +28,8 @@ import {
   enemyFlashSpritesByType,
   VisualSprites,
   EnemySpriteType,
+  enemyEyeballProjectileSprite,
+  enemyDeathSpritesheet,
 } from "./SpriteProps";
 
 const TILE_SIZE = 50;
@@ -62,6 +64,13 @@ interface EnemyProjectile {
   life: number;
   maxLife: number;
   size: number;
+}
+
+interface EnemyDeathAnimation {
+  id: string;
+  position: THREE.Vector3;
+  startedAt: number;
+  frameDurationMs: number;
 }
 
 interface Position {
@@ -208,6 +217,7 @@ export default function CanvasGame() {
   const eyeCanvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number>();
   const enemyProjectilesRef = useRef<EnemyProjectile[]>([]);
+  const enemyDeathAnimationsRef = useRef<EnemyDeathAnimation[]>([]);
   const keysPressed = useRef<Set<string>>(new Set());
   const lastTimeRef = useRef<number>(0);
   const damagedThisFrameRef = useRef<boolean>(false);
@@ -990,6 +1000,7 @@ export default function CanvasGame() {
       }
 
       enemies.forEach(enemy => drawEnemy(ctx, enemy));
+      drawEnemyDeaths(ctx);
 
       const eyeCanvas = eyeCanvasRef.current;
       const eyeCtx = eyeCanvas?.getContext("2d");
@@ -1033,6 +1044,12 @@ export default function CanvasGame() {
     const ps = usePlayer.getState();
 
     addXPOrb(enemy.position.clone(), 1);
+    enemyDeathAnimationsRef.current.push({
+      id: crypto.randomUUID(),
+      position: enemy.position.clone(),
+      startedAt: performance.now(),
+      frameDurationMs: 85,
+    });
     removeEnemy(enemy.id);
     
     if (ps.splinterBullets) {
@@ -1796,6 +1813,7 @@ export default function CanvasGame() {
     ctx.restore();
   };
 
+
   const drawEnemyEyes = (ctx: CanvasRenderingContext2D, enemy: any) => {
     if (!enemy || !enemy.position || enemy.isBoss) return;
 
@@ -1820,24 +1838,84 @@ export default function CanvasGame() {
     ctx.restore();
   };
 
+
   const drawEnemyProjectiles = (ctx: CanvasRenderingContext2D) => {
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
+    const projectileSprite = enemyEyeballProjectileSprite;
+    const hasProjectileSprite = projectileSprite.complete && projectileSprite.naturalWidth > 0 && projectileSprite.naturalHeight > 0;
 
     for (const projectile of enemyProjectilesRef.current) {
       const screenX = centerX + ((projectile.position.x - position.x) * TILE_SIZE) / 2;
       const screenY = centerY + ((projectile.position.z - position.z) * TILE_SIZE) / 2;
-      const pixelSize = Math.max(4, projectile.size * TILE_SIZE * 0.6);
+      const pixelSize = Math.max(8, projectile.size * TILE_SIZE * 1.1);
       const lifeRatio = projectile.life / projectile.maxLife;
 
       ctx.save();
-      ctx.globalAlpha = Math.max(1, lifeRatio);
-      ctx.fillStyle = "#ff4d6d";
-      ctx.beginPath();
-      ctx.arc(screenX, screenY, pixelSize, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.globalAlpha = Math.max(0.4, lifeRatio);
+
+      if (hasProjectileSprite) {
+        const angle = Math.atan2(projectile.velocity.z, projectile.velocity.x);
+        ctx.translate(screenX, screenY);
+        ctx.rotate(angle);
+        ctx.drawImage(projectileSprite, -pixelSize / 2, -pixelSize / 2, pixelSize, pixelSize);
+      } else {
+        ctx.fillStyle = "#ff4d6d";
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, pixelSize * 0.45, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
       ctx.restore();
     }
+  };
+
+  const drawEnemyDeaths = (ctx: CanvasRenderingContext2D) => {
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
+    const sprite = enemyDeathSpritesheet;
+    const totalFrames = 4;
+
+    if (!(sprite.complete && sprite.naturalWidth > 0 && sprite.naturalHeight > 0)) return;
+
+    const frameWidth = sprite.naturalWidth / totalFrames;
+    const frameHeight = sprite.naturalHeight;
+    const nextAnimations: EnemyDeathAnimation[] = [];
+
+    for (const animation of enemyDeathAnimationsRef.current) {
+      const elapsedMs = performance.now() - animation.startedAt;
+      const frameIndex = Math.floor(elapsedMs / animation.frameDurationMs);
+
+      if (frameIndex >= totalFrames) {
+        continue;
+      }
+
+      nextAnimations.push(animation);
+
+      const screenX = centerX + ((animation.position.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((animation.position.z - position.z) * TILE_SIZE) / 2;
+      const drawScale = 2;
+      const drawWidth = frameWidth * drawScale;
+      const drawHeight = frameHeight * drawScale;
+
+      ctx.save();
+      ctx.translate(screenX, screenY);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(
+        sprite,
+        frameIndex * frameWidth,
+        0,
+        frameWidth,
+        frameHeight,
+        -drawWidth / 2,
+        -drawHeight / 2,
+        drawWidth,
+        drawHeight,
+      );
+      ctx.restore();
+    }
+
+    enemyDeathAnimationsRef.current = nextAnimations;
   };
 
   const drawSummons = (ctx: CanvasRenderingContext2D) => {
