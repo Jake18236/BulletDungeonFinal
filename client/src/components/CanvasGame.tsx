@@ -20,7 +20,8 @@ import { any } from "zod";
 import { LevelUpScreen } from "./GameUI";
 import Darkness from "./Darkness";
 import {
-  enemySprite,
+  enemySpritesByType,
+  enemyEyeSpritesByType,
   WeaponSprites,
   CursorSprite,
   SummonSprites,
@@ -28,7 +29,7 @@ import {
   getProjectileImage,
   enemyFlashSprite,
   VisualSprites,
-  
+  EnemySpriteType,
 } from "./SpriteProps";
 
 const TILE_SIZE = 50;
@@ -163,6 +164,7 @@ function checkTerrainCollision(
 
 export default function CanvasGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const eyeCanvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number>();
   const keysPressed = useRef<Set<string>>(new Set());
   const lastTimeRef = useRef<number>(0);
@@ -866,6 +868,15 @@ export default function CanvasGame() {
       }
 
       enemies.forEach(enemy => drawEnemy(ctx, enemy));
+
+      const eyeCanvas = eyeCanvasRef.current;
+      const eyeCtx = eyeCanvas?.getContext("2d");
+      if (eyeCtx) {
+        eyeCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        eyeCtx.imageSmoothingEnabled = false;
+        enemies.forEach(enemy => drawEnemyEyes(eyeCtx, enemy));
+      }
+
       drawPlayer(ctx);
       drawSummons(ctx);
       drawStatusEffects(ctx);
@@ -1645,7 +1656,9 @@ export default function CanvasGame() {
     // ================================================================
     // NORMAL SKELETON ENEMY
     // ================================================================
-    const size = enemySprite.size * enemySprite.scale;
+    const enemyType: EnemySpriteType = enemy.type === "tank" || enemy.type === "eyeball" ? enemy.type : "basic";
+    const bodySprite = enemySpritesByType[enemyType];
+    const size = bodySprite.size * bodySprite.scale;
     const facingRight = enemy.position.x <= position.x;
     ctx.save();
     ctx.translate(screenX, screenY);
@@ -1659,8 +1672,29 @@ export default function CanvasGame() {
     // Hit flash (white overlay)
     if (enemy.hitFlash > 0) {
       ctx.drawImage(enemyFlashSprite.img, -size/2, -size/2, size, size);
-    } else {ctx.drawImage(enemySprite.img, -size / 2, -size / 2, size, size);}
+    } else {ctx.drawImage(bodySprite.img, -size / 2, -size / 2, size, size);}
     
+    ctx.restore();
+  };
+
+
+  const drawEnemyEyes = (ctx: CanvasRenderingContext2D, enemy: any) => {
+    if (!enemy || !enemy.position || enemy.isBoss) return;
+
+    const enemyType: EnemySpriteType = enemy.type === "tank" || enemy.type === "eyeball" ? enemy.type : "basic";
+    const eyeSprite = enemyEyeSpritesByType[enemyType];
+    const size = eyeSprite.size * eyeSprite.scale;
+
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
+    const screenX = centerX + ((enemy.position.x - position.x) * TILE_SIZE) / 2;
+    const screenY = centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2;
+    const facingRight = enemy.position.x <= position.x;
+
+    ctx.save();
+    ctx.translate(screenX, screenY);
+    if (!facingRight) ctx.scale(-1, 1);
+    ctx.drawImage(eyeSprite.img, -size / 2, -size / 2, size, size);
     ctx.restore();
   };
 
@@ -1886,7 +1920,7 @@ export default function CanvasGame() {
     <>
       <div
         className=""
-        style={{ cursor: phase === "playing" ? "none" : "default" }}
+        style={{ cursor: phase === "playing" ? "none" : "default", position: "relative" }}
       >
       <Darkness />
       <LevelUpScreen />
@@ -1898,7 +1932,19 @@ export default function CanvasGame() {
         width={CANVAS_WIDTH}
         height={CANVAS_HEIGHT}
         className="border-2 border-gray-700"
-        
+        style={{ position: "relative", zIndex: 0 }}
+      />
+      <canvas
+        ref={eyeCanvasRef}
+        width={CANVAS_WIDTH}
+        height={CANVAS_HEIGHT}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          pointerEvents: "none",
+          zIndex: 2,
+        }}
       />
         
       <CursorSprite
