@@ -103,17 +103,6 @@ export const useHit = create<HitState>((set, get) => ({
         );
       }
 
-      if (params.chainLightning && allEnemies.length > 0) {
-        get().applyChainLightning(
-          enemy,
-          params.chainLightning.chains,
-          params.chainLightning.range,
-          damage * 0.7,
-          params.chainLightning.chainedEnemies,
-          allEnemies
-        );
-      }
-
       if (params.isSummonDamage) {
         useSummons.getState().handleEnemyKilledBySummon();
       }

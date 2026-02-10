@@ -27,12 +27,12 @@ export const ENEMY_TYPE_CONFIG: Record<"basic" | "tank" | "eyeball", EnemyTypeBe
   eyeball: {
     bodyHitRadius: 0.65,
     collisionRadius: 0.9,
-    engageDistancePx: 100,
-    disengageDistancePx: 150,
-    projectileSpeed: 9,
-    projectileLife: 2.8,
-    projectileSize: 0.35,
-    projectileFireInterval: 1.1,
+    engageDistancePx: 500,
+    disengageDistancePx: 550,
+    projectileSpeed: 4,
+    projectileLife: 5,
+    projectileSize: 1,
+    projectileFireInterval: 4.0,
   },
 };
 

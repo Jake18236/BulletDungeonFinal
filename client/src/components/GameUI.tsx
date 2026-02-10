@@ -2,17 +2,14 @@ import { useEffect, useState } from "react";
 import { useGame } from "../lib/stores/useGame";
 import { usePlayer } from "../lib/stores/usePlayer";
 import { useAudio } from "../lib/stores/useAudio";
-import { useInventory } from "../lib/stores/useInventory";
 import { useDungeon } from "../lib/stores/useDungeon";
 import { useEnemies } from "../lib/stores/useEnemies";
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from "../components/CanvasGame"
 
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
-import Inventory from "./Inventory";
-import Minimap from "./Minimap";
 import { Volume2, VolumeX } from "lucide-react";
-import { UpgradeIcon, HeartHUD, AmmoHUD, XPHUD, } from "./SpriteProps";
+import { UpgradeIcon, HeartHUD, AmmoHUD, } from "./SpriteProps";
 
 
 export function LevelUpScreen() {

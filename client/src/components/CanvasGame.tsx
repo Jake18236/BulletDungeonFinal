@@ -1754,6 +1754,7 @@ export default function CanvasGame() {
     // ================================================================
     const enemyType: EnemySpriteType = getEnemyType(enemy);
     const bodySprite = enemySpritesByType[enemyType];
+    const flashSprite = enemyFlashSpritesByType[enemyType];
     const size = bodySprite.size * bodySprite.scale;
     const facingRight = enemy.position.x <= position.x;
     ctx.save();
@@ -1771,7 +1772,7 @@ export default function CanvasGame() {
 
     // Hit flash (white overlay)
     if (enemy.hitFlash > 0) {
-      ctx.drawImage(enemyFlashSprite.img, -size/2, -size/2, size, size);
+      ctx.drawImage(flashSprite.img, -size/2, -size/2, size, size);
     } else {ctx.drawImage(bodySprite.img, -size / 2, -size / 2, size, size);}
     
     ctx.restore();
@@ -1813,23 +1814,17 @@ export default function CanvasGame() {
       const screenX = centerX + ((projectile.position.x - position.x) * TILE_SIZE) / 2;
       const screenY = centerY + ((projectile.position.z - position.z) * TILE_SIZE) / 2;
       const pixelSize = Math.max(8, projectile.size * TILE_SIZE * 1.1);
-      const lifeRatio = projectile.life / projectile.maxLife;
+      
 
       ctx.save();
-      ctx.globalAlpha = Math.max(0.4, lifeRatio);
+
 
       if (hasProjectileSprite) {
         const angle = Math.atan2(projectile.velocity.z, projectile.velocity.x);
         ctx.translate(screenX, screenY);
         ctx.rotate(angle);
         ctx.drawImage(projectileSprite, -pixelSize / 2, -pixelSize / 2, pixelSize, pixelSize);
-      } else {
-        ctx.fillStyle = "#ff4d6d";
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, pixelSize * 0.45, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
+      } 
       ctx.restore();
     }
   };
