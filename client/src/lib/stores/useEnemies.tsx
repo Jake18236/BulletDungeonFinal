@@ -223,7 +223,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
         tank: {
           health: 55,
           maxHealth: 55,
-          attack: 2,
+          attack: 1,
           speed: 2.2 + Math.random() * 0.4,
           detectionRange: 70000,
           attackRange: 1.55,

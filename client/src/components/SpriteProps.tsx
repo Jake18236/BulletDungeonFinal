@@ -151,28 +151,23 @@ const createEnemySprite = (src: string, size = 32, scale = 2): SpriteDef => ({
 
 export const enemySpritesByType: Record<EnemySpriteType, SpriteDef> = {
   basic: createEnemySprite("/sprites/enemy/basic-enemy.png", 32, 2),
-  tank: createEnemySprite("/sprites/enemy/tank-enemy.png", 32, 2.5),
-  eyeball: createEnemySprite("/sprites/enemy/eyeball-enemy.png", 32, 1.8),
+  tank: createEnemySprite("/sprites/enemy/tank-enemy.png", 48, 2),
+  eyeball: createEnemySprite("/sprites/enemy/eyeball-enemy.png", 48, 2),
 };
 
 export const enemyEyeSpritesByType: Record<EnemySpriteType, SpriteDef> = {
   basic: createEnemySprite("/sprites/enemy/basic-enemy-eyes.png", 32, 2),
-  tank: createEnemySprite("/sprites/enemy/tank-enemy-eyes.png", 32, 2.5),
-  eyeball: createEnemySprite("/sprites/enemy/eyeball-enemy-eyes.png", 32, 1.8),
+  tank: createEnemySprite("/sprites/enemy/tank-enemy-eyes.png", 48, 2),
+  eyeball: createEnemySprite("/sprites/enemy/eyeball-enemy-eyes.png", 48, 2),
+};
+
+export const enemyFlashSpritesByType: Record<EnemySpriteType, SpriteDef> = {
+  basic: createEnemySprite("/sprites/enemy/basic-enemy-flash.png", 32, 2),
+  tank: createEnemySprite("/sprites/enemy/tank-enemy-flash.png", 48, 2),
+  eyeball: createEnemySprite("/sprites/enemy/eyeball-enemy-flash.png", 48, 2),
 };
 
 export const enemySprite = enemySpritesByType.basic;
-
-export const enemyFlashSprite: SpriteDef = {
-  img: (() => {
-    const img = new Image();
-    img.src = "/sprites/enemy-flash.png";
-    return img;
-  })(),
-
-  scale: 2.0,
-  size: 32,
-};
 
 export const bossEnemySprite: SpriteDef = {
   img: enemySprite.img,
