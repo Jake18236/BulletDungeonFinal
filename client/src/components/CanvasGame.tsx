@@ -20,7 +20,8 @@ import { any } from "zod";
 import { LevelUpScreen } from "./GameUI";
 import Darkness from "./Darkness";
 import {
-  enemySprite,
+  enemySpritesByType,
+  enemyEyeSpritesByType,
   WeaponSprites,
   CursorSprite,
   SummonSprites,
@@ -28,13 +29,51 @@ import {
   getProjectileImage,
   enemyFlashSprite,
   VisualSprites,
-  
+  EnemySpriteType,
+  enemyEyeballProjectileSprite,
+  enemyDeathSpritesheet,
 } from "./SpriteProps";
 
 const TILE_SIZE = 50;
 export const CANVAS_WIDTH = 1490;
 export const CANVAS_HEIGHT = 750;
 const ROOM_SIZE = 200;
+
+const ENEMY_BODY_HIT_RADIUS: Record<EnemySpriteType, number> = {
+  basic: 0.7,
+  tank: 1.2,
+  eyeball: 0.65,
+};
+
+const ENEMY_COLLISION_RADIUS: Record<EnemySpriteType, number> = {
+  basic: 0.95,
+  tank: 1.8,
+  eyeball: 0.9,
+};
+
+const EYEBALL_ENGAGE_RANGE = 100 / (TILE_SIZE / 2);
+const EYEBALL_DISENGAGE_RANGE = 150 / (TILE_SIZE / 2);
+const EYEBALL_PROJECTILE_SPEED = 9;
+const EYEBALL_PROJECTILE_LIFE = 2.8;
+const EYEBALL_PROJECTILE_SIZE = 0.35;
+const EYEBALL_PROJECTILE_FIRE_INTERVAL = 1.1;
+
+interface EnemyProjectile {
+  id: string;
+  position: THREE.Vector3;
+  velocity: THREE.Vector3;
+  damage: number;
+  life: number;
+  maxLife: number;
+  size: number;
+}
+
+interface EnemyDeathAnimation {
+  id: string;
+  position: THREE.Vector3;
+  startedAt: number;
+  frameDurationMs: number;
+}
 
 interface Position {
   x: number;
@@ -161,9 +200,26 @@ function checkTerrainCollision(
   return { collision: false };
 }
 
+
+function getEnemyType(enemy: { type?: string }): EnemySpriteType {
+  if (enemy.type === "tank" || enemy.type === "eyeball") return enemy.type;
+  return "basic";
+}
+
+function getEnemyBodyHitRadius(enemy: { type?: string }) {
+  return ENEMY_BODY_HIT_RADIUS[getEnemyType(enemy)];
+}
+
+function getEnemyCollisionRadius(enemy: { type?: string }) {
+  return ENEMY_COLLISION_RADIUS[getEnemyType(enemy)];
+}
+
 export default function CanvasGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const eyeCanvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number>();
+  const enemyProjectilesRef = useRef<EnemyProjectile[]>([]);
+  const enemyDeathAnimationsRef = useRef<EnemyDeathAnimation[]>([]);
   const keysPressed = useRef<Set<string>>(new Set());
   const lastTimeRef = useRef<number>(0);
   const damagedThisFrameRef = useRef<boolean>(false);
@@ -314,6 +370,20 @@ export default function CanvasGame() {
       window.removeEventListener("mousemove", handleMouseMove);
     };
   }, [canInteract]);
+
+
+  const spawnEyeballProjectile = (enemy: any) => {
+    const direction = new THREE.Vector3(position.x - enemy.position.x, 0, position.z - enemy.position.z).normalize();
+    enemyProjectilesRef.current.push({
+      id: crypto.randomUUID(),
+      position: enemy.position.clone(),
+      velocity: direction.multiplyScalar(EYEBALL_PROJECTILE_SPEED),
+      damage: enemy.attack ?? 1,
+      life: EYEBALL_PROJECTILE_LIFE,
+      maxLife: EYEBALL_PROJECTILE_LIFE,
+      size: EYEBALL_PROJECTILE_SIZE,
+    });
+  };
 
   useEffect(() => {
     const gameLoop = (currentTime: number) => {
@@ -734,29 +804,70 @@ export default function CanvasGame() {
         const dx = position.x - enemy.position.x;
         const dz = position.z - enemy.position.z;
         const distance = Math.sqrt(dx * dx + dz * dz);
+        const enemyCollisionRadius = getEnemyCollisionRadius(enemy);
 
         if (distance <= enemy.detectionRange) {
           const dirX = dx / distance;
           const dirZ = dz / distance;
 
-          const moveAmount = enemy.speed * delta;
-          const newEnemyPos = new THREE.Vector3(
-            enemy.position.x + dirX * moveAmount,
-            0,
-            enemy.position.z + dirZ * moveAmount,
-          );
+          const isEyeball = enemy.type === "eyeball";
+          if (isEyeball) {
+            enemy.rotationY = Math.atan2(dirZ, dirX);
+            const isRangedAttacking = (enemy as any).isRangedAttacking ?? false;
 
-          const enemyTerrainCheck = checkTerrainCollision(
-            newEnemyPos,
-            terrainRef.current,
-            0.7,
-          );
+            if (distance <= EYEBALL_ENGAGE_RANGE) {
+              (enemy as any).isRangedAttacking = true;
+            } else if (distance > EYEBALL_DISENGAGE_RANGE) {
+              (enemy as any).isRangedAttacking = false;
+            } else {
+              (enemy as any).isRangedAttacking = isRangedAttacking;
+            }
 
-          if (!enemyTerrainCheck.collision) {
-            enemy.position.x = newEnemyPos.x;
-            enemy.position.z = newEnemyPos.z;
+            if ((enemy as any).isRangedAttacking) {
+              (enemy as any).rangedShotCooldown = ((enemy as any).rangedShotCooldown ?? 0) - delta;
+              if ((enemy as any).rangedShotCooldown <= 0) {
+                spawnEyeballProjectile(enemy);
+                (enemy as any).rangedShotCooldown = EYEBALL_PROJECTILE_FIRE_INTERVAL;
+              }
+            } else {
+              const moveAmount = enemy.speed * delta;
+              const newEnemyPos = new THREE.Vector3(
+                enemy.position.x + dirX * moveAmount,
+                0,
+                enemy.position.z + dirZ * moveAmount,
+              );
+
+              const enemyTerrainCheck = checkTerrainCollision(
+                newEnemyPos,
+                terrainRef.current,
+                enemyCollisionRadius,
+              );
+
+              if (!enemyTerrainCheck.collision) {
+                enemy.position.x = newEnemyPos.x;
+                enemy.position.z = newEnemyPos.z;
+              }
+            }
+          } else {
+            const moveAmount = enemy.speed * delta;
+            const newEnemyPos = new THREE.Vector3(
+              enemy.position.x + dirX * moveAmount,
+              0,
+              enemy.position.z + dirZ * moveAmount,
+            );
+
+            const enemyTerrainCheck = checkTerrainCollision(
+              newEnemyPos,
+              terrainRef.current,
+              enemyCollisionRadius,
+            );
+
+            if (!enemyTerrainCheck.collision) {
+              enemy.position.x = newEnemyPos.x;
+              enemy.position.z = newEnemyPos.z;
+            }
           }
-        } 
+        }
 
         if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
 
@@ -769,7 +880,7 @@ export default function CanvasGame() {
         const velTerrainCheck = checkTerrainCollision(
           velNewPos,
           terrainRef.current,
-          0.7,
+          enemyCollisionRadius,
         );
 
         if (!velTerrainCheck.collision) {
@@ -801,7 +912,7 @@ export default function CanvasGame() {
             const dx = e1.position.x - e2.position.x;
             const dz = e1.position.z - e2.position.z;
             const dist = Math.hypot(dx, dz);
-            const minDist = 2;
+            const minDist = getEnemyCollisionRadius(e1) + getEnemyCollisionRadius(e2);
             e1.position.x += Math.sin(Math.random() * 10) * 0.002;
 
             if (dist > 0 && dist < minDist) {
@@ -817,7 +928,6 @@ export default function CanvasGame() {
         }
 
         const PLAYER_RADIUS = 0.8;
-        const ENEMY_RADIUS = 0.7;
         const DAMPING = 1.5;
 
         const aliveEnemies: typeof updatedEnemies = [];
@@ -827,8 +937,9 @@ export default function CanvasGame() {
           const dz = enemy.position.z - position.z;
           const dist = Math.hypot(dx, dz);
 
-          if (dist > 0 && dist < PLAYER_RADIUS + ENEMY_RADIUS) {
-            if (enemy.canAttack && invincibilityTimer <= 0 && !damagedThisFrameRef.current) {
+          const enemyHitRadius = getEnemyBodyHitRadius(enemy);
+          if (dist > 0 && dist < PLAYER_RADIUS + enemyHitRadius) {
+            if (!(enemy.type === "eyeball" && (enemy as any).isRangedAttacking) && enemy.canAttack && invincibilityTimer <= 0 && !damagedThisFrameRef.current) {
               applyPlayerDamage(1, enemy.position);
               enemy.attackCooldown = enemy.maxAttackCooldown;
               damagedThisFrameRef.current = true;
@@ -855,6 +966,32 @@ export default function CanvasGame() {
           aliveEnemies.push(enemy);
         }
 
+
+        const updatedEnemyProjectiles: EnemyProjectile[] = [];
+        for (const projectile of enemyProjectilesRef.current) {
+          projectile.life -= delta;
+          if (projectile.life <= 0) continue;
+
+          projectile.position.add(projectile.velocity.clone().multiplyScalar(delta));
+
+          const toPlayerX = projectile.position.x - position.x;
+          const toPlayerZ = projectile.position.z - position.z;
+          const hitDistance = Math.hypot(toPlayerX, toPlayerZ);
+
+          if (hitDistance <= PLAYER_RADIUS + projectile.size && invincibilityTimer <= 0 && !damagedThisFrameRef.current) {
+            applyPlayerDamage(Math.max(1, Math.round(projectile.damage)), projectile.position);
+            damagedThisFrameRef.current = true;
+            continue;
+          }
+
+          if (Math.abs(projectile.position.x) > ROOM_SIZE || Math.abs(projectile.position.z) > ROOM_SIZE) {
+            continue;
+          }
+
+          updatedEnemyProjectiles.push(projectile);
+        }
+        enemyProjectilesRef.current = updatedEnemyProjectiles;
+
         updateXPOrbs(delta, position);
         updateEnemies(aliveEnemies);
         
@@ -866,11 +1003,22 @@ export default function CanvasGame() {
       }
 
       enemies.forEach(enemy => drawEnemy(ctx, enemy));
+      drawEnemyDeaths(ctx);
+
+      const eyeCanvas = eyeCanvasRef.current;
+      const eyeCtx = eyeCanvas?.getContext("2d");
+      if (eyeCtx) {
+        eyeCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        eyeCtx.imageSmoothingEnabled = false;
+        enemies.forEach(enemy => drawEnemyEyes(eyeCtx, enemy));
+      }
+
       drawPlayer(ctx);
       drawSummons(ctx);
       drawStatusEffects(ctx);
       drawImpactEffects(ctx); // ADD - behind projectiles
       drawProjectilesAndTrails(ctx, phase !== "playing", position); 
+      drawEnemyProjectiles(ctx);
       drawParticles(ctx); 
       drawDamageNumbers(ctx); 
       drawXPOrbs(ctx);
@@ -899,6 +1047,12 @@ export default function CanvasGame() {
     const ps = usePlayer.getState();
 
     addXPOrb(enemy.position.clone(), 1);
+    enemyDeathAnimationsRef.current.push({
+      id: crypto.randomUUID(),
+      position: enemy.position.clone(),
+      startedAt: performance.now(),
+      frameDurationMs: 85,
+    });
     removeEnemy(enemy.id);
     
     if (ps.splinterBullets) {
@@ -1645,13 +1799,19 @@ export default function CanvasGame() {
     // ================================================================
     // NORMAL SKELETON ENEMY
     // ================================================================
-    const size = enemySprite.size * enemySprite.scale;
+    const enemyType: EnemySpriteType = getEnemyType(enemy);
+    const bodySprite = enemySpritesByType[enemyType];
+    const size = bodySprite.size * bodySprite.scale;
     const facingRight = enemy.position.x <= position.x;
     ctx.save();
     ctx.translate(screenX, screenY);
     ctx.imageSmoothingEnabled = false;
 
-    if (!facingRight) ctx.scale(-1, 1);
+    if (enemyType === "eyeball") {
+      ctx.rotate(enemy.rotationY ?? 0);
+    } else if (!facingRight) {
+      ctx.scale(-1, 1);
+    }
 
     // Base sprite
     
@@ -1659,9 +1819,114 @@ export default function CanvasGame() {
     // Hit flash (white overlay)
     if (enemy.hitFlash > 0) {
       ctx.drawImage(enemyFlashSprite.img, -size/2, -size/2, size, size);
-    } else {ctx.drawImage(enemySprite.img, -size / 2, -size / 2, size, size);}
+    } else {ctx.drawImage(bodySprite.img, -size / 2, -size / 2, size, size);}
     
     ctx.restore();
+  };
+
+
+  const drawEnemyEyes = (ctx: CanvasRenderingContext2D, enemy: any) => {
+    if (!enemy || !enemy.position || enemy.isBoss) return;
+
+    const enemyType: EnemySpriteType = getEnemyType(enemy);
+    const eyeSprite = enemyEyeSpritesByType[enemyType];
+    const size = eyeSprite.size * eyeSprite.scale;
+
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
+    const screenX = centerX + ((enemy.position.x - position.x) * TILE_SIZE) / 2;
+    const screenY = centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2;
+    const facingRight = enemy.position.x <= position.x;
+
+    ctx.save();
+    ctx.translate(screenX, screenY);
+    if (enemyType === "eyeball") {
+      ctx.rotate(enemy.rotationY ?? 0);
+    } else if (!facingRight) {
+      ctx.scale(-1, 1);
+    }
+    ctx.drawImage(eyeSprite.img, -size / 2, -size / 2, size, size);
+    ctx.restore();
+  };
+
+
+  const drawEnemyProjectiles = (ctx: CanvasRenderingContext2D) => {
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
+    const projectileSprite = enemyEyeballProjectileSprite;
+    const hasProjectileSprite = projectileSprite.complete && projectileSprite.naturalWidth > 0 && projectileSprite.naturalHeight > 0;
+
+    for (const projectile of enemyProjectilesRef.current) {
+      const screenX = centerX + ((projectile.position.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((projectile.position.z - position.z) * TILE_SIZE) / 2;
+      const pixelSize = Math.max(8, projectile.size * TILE_SIZE * 1.1);
+      const lifeRatio = projectile.life / projectile.maxLife;
+
+      ctx.save();
+      ctx.globalAlpha = Math.max(0.4, lifeRatio);
+
+      if (hasProjectileSprite) {
+        const angle = Math.atan2(projectile.velocity.z, projectile.velocity.x);
+        ctx.translate(screenX, screenY);
+        ctx.rotate(angle);
+        ctx.drawImage(projectileSprite, -pixelSize / 2, -pixelSize / 2, pixelSize, pixelSize);
+      } else {
+        ctx.fillStyle = "#ff4d6d";
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, pixelSize * 0.45, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+  };
+
+  const drawEnemyDeaths = (ctx: CanvasRenderingContext2D) => {
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
+    const sprite = enemyDeathSpritesheet;
+    const totalFrames = 4;
+
+    if (!(sprite.complete && sprite.naturalWidth > 0 && sprite.naturalHeight > 0)) return;
+
+    const frameWidth = sprite.naturalWidth / totalFrames;
+    const frameHeight = sprite.naturalHeight;
+    const nextAnimations: EnemyDeathAnimation[] = [];
+
+    for (const animation of enemyDeathAnimationsRef.current) {
+      const elapsedMs = performance.now() - animation.startedAt;
+      const frameIndex = Math.floor(elapsedMs / animation.frameDurationMs);
+
+      if (frameIndex >= totalFrames) {
+        continue;
+      }
+
+      nextAnimations.push(animation);
+
+      const screenX = centerX + ((animation.position.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((animation.position.z - position.z) * TILE_SIZE) / 2;
+      const drawScale = 2;
+      const drawWidth = frameWidth * drawScale;
+      const drawHeight = frameHeight * drawScale;
+
+      ctx.save();
+      ctx.translate(screenX, screenY);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(
+        sprite,
+        frameIndex * frameWidth,
+        0,
+        frameWidth,
+        frameHeight,
+        -drawWidth / 2,
+        -drawHeight / 2,
+        drawWidth,
+        drawHeight,
+      );
+      ctx.restore();
+    }
+
+    enemyDeathAnimationsRef.current = nextAnimations;
   };
 
   const drawSummons = (ctx: CanvasRenderingContext2D) => {
@@ -1886,7 +2151,7 @@ export default function CanvasGame() {
     <>
       <div
         className=""
-        style={{ cursor: phase === "playing" ? "none" : "default" }}
+        style={{ cursor: phase === "playing" ? "none" : "default", position: "relative" }}
       >
       <Darkness />
       <LevelUpScreen />
@@ -1898,7 +2163,19 @@ export default function CanvasGame() {
         width={CANVAS_WIDTH}
         height={CANVAS_HEIGHT}
         className="border-2 border-gray-700"
-        
+        style={{ position: "relative", zIndex: 0 }}
+      />
+      <canvas
+        ref={eyeCanvasRef}
+        width={CANVAS_WIDTH}
+        height={CANVAS_HEIGHT}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          pointerEvents: "none",
+          zIndex: 2,
+        }}
       />
         
       <CursorSprite
