@@ -45,16 +45,16 @@ const ENEMY_BODY_HIT_RADIUS: Record<EnemySpriteType, number> = {
 
 const ENEMY_COLLISION_RADIUS: Record<EnemySpriteType, number> = {
   basic: 0.95,
-  tank: 1.4,
+  tank: 1.8,
   eyeball: 0.9,
 };
 
-const EYEBALL_ENGAGE_RANGE = 500 / (TILE_SIZE / 2);
-const EYEBALL_DISENGAGE_RANGE = 750 / (TILE_SIZE / 2);
-const EYEBALL_PROJECTILE_SPEED = 5;
-const EYEBALL_PROJECTILE_LIFE = 4;
-const EYEBALL_PROJECTILE_SIZE = 0.5;
-const EYEBALL_PROJECTILE_FIRE_INTERVAL = 6.1;
+const EYEBALL_ENGAGE_RANGE = 100 / (TILE_SIZE / 2);
+const EYEBALL_DISENGAGE_RANGE = 150 / (TILE_SIZE / 2);
+const EYEBALL_PROJECTILE_SPEED = 9;
+const EYEBALL_PROJECTILE_LIFE = 2.8;
+const EYEBALL_PROJECTILE_SIZE = 0.35;
+const EYEBALL_PROJECTILE_FIRE_INTERVAL = 1.1;
 
 interface EnemyProjectile {
   id: string;
@@ -656,33 +656,10 @@ export default function CanvasGame() {
                 isPlayerDamage: true,
               }, enemies);
 
-              if (enemy.health <= 0) {
+              if (enemy.health <= 0 && !(enemy as any).deathHandled) {
+                (enemy as any).deathHandled = true;
                 playSuccess();
-                const { addExplosion } = useVisualEffects.getState();
-                
-                removeEnemy(enemyId);
-
-                // Splinter bullets (stays here due to addProjectile access)
-                const ps = usePlayer.getState();
-                if (ps.splinterBullets) {
-                  for (let i = 0; i < 3; i++) {
-                    const angle = (i / 3) * Math.PI * 2 + Math.random() * 0.3;
-                    const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
-                    const stats = ps.getProjectileStats();
-                    addProjectile({
-                      position: enemy.position.clone(),
-                      direction,
-                      size: 1,
-                      damage: stats.damage * 0.1,
-                      speed: stats.speed * 0.8,
-                      range: stats.range * 0.5,
-                      trailLength: stats.trailLength,
-                      homing: false,
-                      piercing: 2,
-                      bouncing: 0,
-                    });
-                  }
-                }
+                handleEnemyDeath(enemy);
               }
             }
           }
@@ -956,7 +933,10 @@ export default function CanvasGame() {
           enemy.velocity.copy(bounced.velocity);
 
           if (enemy.health <= 0) {
-            handleEnemyDeath(enemy);
+            if (!(enemy as any).deathHandled) {
+              (enemy as any).deathHandled = true;
+              handleEnemyDeath(enemy);
+            }
             continue;
           }
 
