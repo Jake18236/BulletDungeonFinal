@@ -3,6 +3,39 @@ import * as THREE from "three";
 import { usePlayer } from "./usePlayer"
 import { useVisualEffects } from "./useVisualEffects";
 
+
+export interface EnemyTypeBehaviorConfig {
+  bodyHitRadius: number;
+  collisionRadius: number;
+  engageDistancePx?: number;
+  disengageDistancePx?: number;
+  projectileSpeed?: number;
+  projectileLife?: number;
+  projectileSize?: number;
+  projectileFireInterval?: number;
+}
+
+export const ENEMY_TYPE_CONFIG: Record<"basic" | "tank" | "eyeball", EnemyTypeBehaviorConfig> = {
+  basic: {
+    bodyHitRadius: 0.7,
+    collisionRadius: 0.95,
+  },
+  tank: {
+    bodyHitRadius: 1.2,
+    collisionRadius: 1.8,
+  },
+  eyeball: {
+    bodyHitRadius: 0.65,
+    collisionRadius: 0.9,
+    engageDistancePx: 100,
+    disengageDistancePx: 150,
+    projectileSpeed: 9,
+    projectileLife: 2.8,
+    projectileSize: 0.35,
+    projectileFireInterval: 1.1,
+  },
+};
+
 export interface XPOrb {
   id: string;
   position: THREE.Vector3;
@@ -22,7 +55,7 @@ export interface Enemy {
   canAttack: boolean;
   attackCooldown: number;
   maxAttackCooldown: number;
-  type?: string;
+  type?: "basic" | "tank" | "eyeball" | "boss";
   velocity: THREE.Vector3;
   hitFlash: number;
 
@@ -42,6 +75,9 @@ export interface Enemy {
   projectileCooldown?: number;
   maxProjectileCooldown?: number;
   rotationY?: number;
+
+  isRangedAttacking?: boolean;
+  rangedShotCooldown?: number;
 }
 
 export interface DamagePopup {
@@ -205,13 +241,42 @@ export const useEnemies = create<EnemiesState>((set, get) => {
     },
 
     addEnemy: (enemyData) => {
+      const enemyTypePool: Array<"basic" | "tank" | "eyeball"> = ["basic", "tank", "eyeball"];
       const chosenType =
-        enemyData.type || (Math.random() < 0.7 ? "grunt" : "sentry");
+        (enemyData.type as "basic" | "tank" | "eyeball" | undefined) ||
+        enemyTypePool[Math.floor(Math.random() * enemyTypePool.length)];
 
-      const baseStats: Partial<Enemy> =
-        chosenType === "sentry"
-          ? { health: 25, maxHealth: 25, attack: 1, speed: 0, detectionRange: 12, attackRange: 1.8, maxAttackCooldown: 1.5 }
-          : { health: 25, maxHealth: 25, attack: 1, speed: 3 + Math.random(), detectionRange: 70000, attackRange: 1.4, maxAttackCooldown: 1.0 };
+      const baseStatsByType: Record<"basic" | "tank" | "eyeball", Partial<Enemy>> = {
+        basic: {
+          health: 22,
+          maxHealth: 22,
+          attack: 1,
+          speed: 3.8 + Math.random() * 0.7,
+          detectionRange: 70000,
+          attackRange: 1.4,
+          maxAttackCooldown: 0.95,
+        },
+        tank: {
+          health: 55,
+          maxHealth: 55,
+          attack: 2,
+          speed: 2.2 + Math.random() * 0.4,
+          detectionRange: 70000,
+          attackRange: 1.55,
+          maxAttackCooldown: 1.25,
+        },
+        eyeball: {
+          health: 16,
+          maxHealth: 16,
+          attack: 2,
+          speed: 4.6 + Math.random() * 0.8,
+          detectionRange: 70000,
+          attackRange: 1.25,
+          maxAttackCooldown: 0.8,
+        },
+      };
+
+      const baseStats = baseStatsByType[chosenType];
 
       const defaultPosition = new THREE.Vector3(0, 0, 0);
 
@@ -230,6 +295,8 @@ export const useEnemies = create<EnemiesState>((set, get) => {
         type: chosenType,
         velocity: new THREE.Vector3(0, 0, 0),
         hitFlash: 0,
+        isRangedAttacking: false,
+        rangedShotCooldown: 0,
         ...enemyData,
       };
 
@@ -289,7 +356,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
           0,
           (Math.random() - 0.5) * 15
         );
-        addEnemy({ position: pos, type: "grunt" });
+        addEnemy({ position: pos });
       }
     },
 
@@ -316,7 +383,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
               playerPos.z + Math.sin(angle) * distance
             );
 
-            get().addEnemy({ position: spawnPos, type: "grunt" });
+            get().addEnemy({ position: spawnPos });
           }
         }
 
