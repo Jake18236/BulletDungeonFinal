@@ -43,16 +43,16 @@ const ENEMY_BODY_HIT_RADIUS: Record<EnemySpriteType, number> = {
 
 const ENEMY_COLLISION_RADIUS: Record<EnemySpriteType, number> = {
   basic: 0.95,
-  tank: 1.8,
+  tank: 1.4,
   eyeball: 0.9,
 };
 
-const EYEBALL_ENGAGE_RANGE = 100 / (TILE_SIZE / 2);
-const EYEBALL_DISENGAGE_RANGE = 150 / (TILE_SIZE / 2);
-const EYEBALL_PROJECTILE_SPEED = 9;
-const EYEBALL_PROJECTILE_LIFE = 2.8;
-const EYEBALL_PROJECTILE_SIZE = 0.35;
-const EYEBALL_PROJECTILE_FIRE_INTERVAL = 1.1;
+const EYEBALL_ENGAGE_RANGE = 500 / (TILE_SIZE / 2);
+const EYEBALL_DISENGAGE_RANGE = 750 / (TILE_SIZE / 2);
+const EYEBALL_PROJECTILE_SPEED = 5;
+const EYEBALL_PROJECTILE_LIFE = 4;
+const EYEBALL_PROJECTILE_SIZE = 0.5;
+const EYEBALL_PROJECTILE_FIRE_INTERVAL = 6.1;
 
 interface EnemyProjectile {
   id: string;
@@ -1059,9 +1059,7 @@ export default function CanvasGame() {
       }
     }
   }
-
-
-
+  
   const drawDungeon = (ctx: CanvasRenderingContext2D) => {
     if (!currentRoom) return;
 
@@ -1777,6 +1775,7 @@ export default function CanvasGame() {
     // ================================================================
     const enemyType: EnemySpriteType = getEnemyType(enemy);
     const bodySprite = enemySpritesByType[enemyType];
+    const flashSprite = enemyFlashSpritesByType[enemyType];
     const size = bodySprite.size * bodySprite.scale;
     const facingRight = enemy.position.x <= position.x;
     ctx.save();
@@ -1791,12 +1790,11 @@ export default function CanvasGame() {
 
     // Hit flash (white overlay)
     if (enemy.hitFlash > 0) {
-      ctx.drawImage(enemyFlashSprite.img, -size/2, -size/2, size, size);
+      ctx.drawImage(flashSprite.img, -size/2, -size/2, size, size);
     } else {ctx.drawImage(bodySprite.img, -size / 2, -size / 2, size, size);}
     
     ctx.restore();
   };
-
 
   const drawEnemyEyes = (ctx: CanvasRenderingContext2D, enemy: any) => {
     if (!enemy || !enemy.position || enemy.isBoss) return;
@@ -1822,7 +1820,6 @@ export default function CanvasGame() {
     ctx.restore();
   };
 
-
   const drawEnemyProjectiles = (ctx: CanvasRenderingContext2D) => {
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
@@ -1834,7 +1831,7 @@ export default function CanvasGame() {
       const lifeRatio = projectile.life / projectile.maxLife;
 
       ctx.save();
-      ctx.globalAlpha = Math.max(0.35, lifeRatio);
+      ctx.globalAlpha = Math.max(1, lifeRatio);
       ctx.fillStyle = "#ff4d6d";
       ctx.beginPath();
       ctx.arc(screenX, screenY, pixelSize, 0, Math.PI * 2);
