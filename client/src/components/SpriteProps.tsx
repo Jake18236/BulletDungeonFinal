@@ -138,6 +138,7 @@ export function getProjectileImage() {
   return projectileImage;
 }
 
+let enemyProjectileImage: HTMLImageElement | null = null;
 
 
 const createImageWithFallbacks = (sources: string[]) => {
@@ -188,9 +189,13 @@ export const enemyFlashSprite: SpriteDef = {
     return img;
   })(),
 
-  scale: 2.0,
-  size: 32,
+export const enemyFlashSpritesByType: Record<EnemySpriteType, SpriteDef> = {
+  basic: createEnemySprite("/sprites/enemy/basic-enemy-flash.png", 32, 2),
+  tank: createEnemySprite("/sprites/enemy/tank-enemy-flash.png", 48, 2),
+  eyeball: createEnemySprite("/sprites/enemy/eyeball-enemy-flash.png", 48, 2),
 };
+
+export const enemySprite = enemySpritesByType.basic;
 
 export const bossEnemySprite: SpriteDef = {
   img: enemySprite.img,
