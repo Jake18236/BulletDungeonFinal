@@ -9,6 +9,8 @@ export type SpriteDef = {
   scale: number;    // relative world/UI size
 };
 
+export type EnemySpriteType = "basic" | "tank" | "eyeball";
+
 export const WeaponSprites = {
   revolver: (() => {
     const img = new Image();
@@ -137,16 +139,29 @@ export function getProjectileImage() {
 }
 
 
-export const enemySprite: SpriteDef = {
+const createEnemySprite = (src: string, size = 32, scale = 2): SpriteDef => ({
   img: (() => {
     const img = new Image();
-    img.src = "/sprites/enemy-green2.png";
+    img.src = src;
     return img;
   })(),
-  
-  scale: 2.0,
-  size: 32,
+  size,
+  scale,
+});
+
+export const enemySpritesByType: Record<EnemySpriteType, SpriteDef> = {
+  basic: createEnemySprite("/sprites/enemy/basic-enemy.png", 32, 2),
+  tank: createEnemySprite("/sprites/enemy/tank-enemy.png", 32, 2.5),
+  eyeball: createEnemySprite("/sprites/enemy/eyeball-enemy.png", 32, 1.8),
 };
+
+export const enemyEyeSpritesByType: Record<EnemySpriteType, SpriteDef> = {
+  basic: createEnemySprite("/sprites/enemy/basic-enemy-eyes.png", 32, 2),
+  tank: createEnemySprite("/sprites/enemy/tank-enemy-eyes.png", 32, 2.5),
+  eyeball: createEnemySprite("/sprites/enemy/eyeball-enemy-eyes.png", 32, 1.8),
+};
+
+export const enemySprite = enemySpritesByType.basic;
 
 export const enemyFlashSprite: SpriteDef = {
   img: (() => {
@@ -216,4 +231,3 @@ type XPHUDProps = {
   xp: number;
   xpToNextLevel: number;
 };
-
