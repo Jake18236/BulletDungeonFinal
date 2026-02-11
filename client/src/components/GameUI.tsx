@@ -34,8 +34,8 @@ export function LevelUpScreen() {
   const [beamFrame, setBeamFrame] = useState(0);
   
   useEffect(() => {
-    if (showLevelUpScreen) {
-      // Force immediate state reset
+    if (showLevelUpScreen && animationPhase !== "beam" && beamProgress === 0) {
+      // Force immediate state reset ONLY if we're not already in an animation cycle
       setAnimationPhase("beam");
       setBeamProgress(0);
       setBeamFrame(0);
@@ -50,7 +50,7 @@ export function LevelUpScreen() {
         setBeamProgress(prev => {
           if (prev >= 1) {
             clearInterval(interval);
-            setTimeout(() => setAnimationPhase("dropdown"), 100);
+            setTimeout(() => setAnimationPhase("dropdown"), 0);
             return 1;
           }
           return prev + 0.02;
@@ -65,7 +65,7 @@ export function LevelUpScreen() {
 
     const interval = setInterval(() => {
       setBeamFrame((prev) => (prev + 1) % 6);
-    }, 70);
+    }, 100);
 
     return () => clearInterval(interval);
   }, [animationPhase, showLevelUpScreen]);
@@ -99,21 +99,20 @@ export function LevelUpScreen() {
           style={{
             left: `${playerScreenX}px`,
             top: `${playerScreenY}px`,
-            width: "240px",
-            height: "360px",
+            width: "128px",
+            height: "460px",
             transform: "translate(-50%, -100%)",
-            imageRendering: "pixelated",
+
             backgroundImage: `url(${LEVEL_UP_BEAM_SPRITESHEET})`,
             backgroundRepeat: "no-repeat",
             backgroundSize: "600% 100%",
             backgroundPosition: `${(beamFrame / 5) * 100}% 0%`,
-            opacity: Math.min(1, beamProgress * 1.5),
-            filter: `drop-shadow(0 0 16px rgba(255,255,255,${0.55 * beamProgress}))`,
+            opacity: 1,
+            filter: "none",
           }}
         />
       )}
 
-      {/* FIXED: Only render main content after beam completes */}
       {animationPhase !== "beam" && (
         <div
           className="absolute left-1/2 w-full max-w-3xl px-4 pointer-events-auto"
