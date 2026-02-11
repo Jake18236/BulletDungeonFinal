@@ -49,6 +49,8 @@ interface EnemyProjectile {
   life: number;
   maxLife: number;
   size: number;
+  kind?: "orb" | "laser";
+  frame?: number;
 }
 
 interface EnemyDeathAnimation {
@@ -364,6 +366,20 @@ export default function CanvasGame() {
       life: ENEMY_TYPE_CONFIG.eyeball.projectileLife ?? 2.8,
       maxLife: ENEMY_TYPE_CONFIG.eyeball.projectileLife ?? 2.8,
       size: ENEMY_TYPE_CONFIG.eyeball.projectileSize ?? 0.35,
+    });
+  };
+
+  const spawnBossLaserProjectile = (enemy: any, direction: THREE.Vector3) => {
+    enemyProjectilesRef.current.push({
+      id: crypto.randomUUID(),
+      position: enemy.position.clone().add(direction.clone().multiplyScalar(2.2)),
+      velocity: direction.clone().multiplyScalar(enemy.isEnraged ? 22 : 18),
+      damage: enemy.isEnraged ? 2 : 1,
+      life: enemy.isEnraged ? 1.2 : 1,
+      maxLife: enemy.isEnraged ? 1.2 : 1,
+      size: enemy.isEnraged ? 0.8 : 0.7,
+      kind: "laser",
+      frame: Math.floor(Math.random() * 6),
     });
   };
 
@@ -1750,7 +1766,9 @@ export default function CanvasGame() {
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
     const projectileSprite = enemyEyeballProjectileSprite;
+    const laserSprite = bossLaserSpriteSheet;
     const hasProjectileSprite = projectileSprite.complete && projectileSprite.naturalWidth > 0 && projectileSprite.naturalHeight > 0;
+    const hasLaserSprite = laserSprite.complete && laserSprite.naturalWidth > 0 && laserSprite.naturalHeight > 0;
 
     for (const projectile of enemyProjectilesRef.current) {
       const screenX = centerX + ((projectile.position.x - position.x) * TILE_SIZE) / 2;
