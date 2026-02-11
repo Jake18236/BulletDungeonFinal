@@ -75,6 +75,7 @@ export interface Enemy {
   projectileCooldown?: number;
   maxProjectileCooldown?: number;
   rotationY?: number;
+  laserBaseRotation?: number;
 
   isRangedAttacking?: boolean;
   rangedShotCooldown?: number;
@@ -339,6 +340,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
         projectileCooldown: 4.5,
         maxProjectileCooldown: 4.5,
         rotationY: 0,
+        laserBaseRotation: 0,
       };
 
       set((state) => ({ enemies: [...state.enemies, boss] }));
