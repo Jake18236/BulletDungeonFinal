@@ -1005,7 +1005,7 @@ export default function CanvasGame() {
   function handleEnemyDeath(enemy: Enemy) {
     const ps = usePlayer.getState();
 
-    addXPOrb(enemy.position.clone(), 1);
+    addXPOrb(enemy.position.clone(), 25);
     enemyDeathAnimationsRef.current.push({
       id: crypto.randomUUID(),
       position: enemy.position.clone(),
@@ -1871,15 +1871,6 @@ export default function CanvasGame() {
           drawWidth,
           drawHeight,
         );
-      } else {
-        const t = frameIndex / Math.max(1, totalFrames - 1);
-        const radius = 18 + t * 12;
-        ctx.globalAlpha = Math.max(0, 1 - t);
-        ctx.strokeStyle = "#ff8a33";
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(0, 0, radius, 0, Math.PI * 2);
-        ctx.stroke();
       }
       ctx.restore();
     }

@@ -85,7 +85,7 @@ export interface DamagePopup {
   x: number;
   y: number;
   value: number;
-  life: number; // 0 → 1
+  life: number; 
 }
 
 interface SpawnScheduleEntry {

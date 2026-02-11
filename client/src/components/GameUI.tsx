@@ -34,8 +34,8 @@ export function LevelUpScreen() {
   const [beamFrame, setBeamFrame] = useState(0);
   
   useEffect(() => {
-    if (showLevelUpScreen && animationPhase !== "beam" && beamProgress === 0) {
-      // Force immediate state reset ONLY if we're not already in an animation cycle
+    if (showLevelUpScreen) {
+      // Force immediate state reset
       setAnimationPhase("beam");
       setBeamProgress(0);
       setBeamFrame(0);
@@ -48,7 +48,7 @@ export function LevelUpScreen() {
     if (animationPhase === "beam" && showLevelUpScreen) {
       const interval = setInterval(() => {
         setBeamProgress(prev => {
-          if (prev >= 1) {
+          if (prev >= 0.480) {
             clearInterval(interval);
             setTimeout(() => setAnimationPhase("dropdown"), 0);
             return 1;
@@ -65,7 +65,7 @@ export function LevelUpScreen() {
 
     const interval = setInterval(() => {
       setBeamFrame((prev) => (prev + 1) % 6);
-    }, 100);
+    }, 80);
 
     return () => clearInterval(interval);
   }, [animationPhase, showLevelUpScreen]);
@@ -73,7 +73,7 @@ export function LevelUpScreen() {
   // Dropdown animation → ready
   useEffect(() => {
     if (animationPhase === "dropdown") {
-      const timeout = setTimeout(() => setAnimationPhase("ready"), 600);
+      const timeout = setTimeout(() => setAnimationPhase("ready"), 100);
       return () => clearTimeout(timeout);
     }
   }, [animationPhase]);
@@ -167,8 +167,8 @@ export function LevelUpScreen() {
                   onMouseLeave={() => setHoveredIndex(null)}
                   className="relative cursor-pointer"
                   style={{
-                    width: "108px",
-                    height: "108px",
+                    width: "96px",
+                    height: "96px",
                     pointerEvents: isReady ? "auto" : "none",
                     transform: `scale(${isHovered ? 1.2 : 1})`,
                     opacity: isReady ? 1 : 0,
@@ -278,60 +278,19 @@ export function LevelUpScreen() {
 
         .upgrade-container-sprite,
         .upgrade-filler-sprite {
+          gap: 5px;
           position: absolute;
           inset: 0;
           background-size: 200% 200%;
           background-repeat: no-repeat;
-          image-rendering: pixelated;
+          
           pointer-events: none;
+          image-rendering: pixelated;
         }
 
         .upgrade-filler-sprite {
-          opacity: 0.95;
-          transform: scale(0.82);
+          opacity: 1;
           pointer-events: none;
-        }
-
-        .upgrade-slot {
-          width: 72px;
-          height: 72px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .upgrade-card {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-
-          transition:
-            transform 120ms ease,
-            filter 120ms ease,
-            opacity 120ms ease;
-        }
-
-        .upgrade-card:hover {
-          transform: scale(1.08);
-          filter: drop-shadow(0 0 6px rgba(255,255,255,0.4));
-        }
-
-        .upgrade-card.selected {
-          filter: drop-shadow(0 0 10px rgba(255,255,255,0.8))
-            brightness(0.15)
-            contrast(1.1)
-            saturate(1.25)
-            hue-rotate(-8deg);
-        }
-        .upgrade-selected {
-          filter:
-            brightness(0.15)
-            contrast(1.1)
-            saturate(1.25)
-            hue-rotate(-8deg);
-        }
-        .upgrade-card.locked {
-          opacity: 0.35;
-          filter: grayscale(1);
         }
         
 
