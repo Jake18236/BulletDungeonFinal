@@ -9,7 +9,19 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from "../components/CanvasGame"
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
 import { Volume2, VolumeX } from "lucide-react";
-import { UpgradeIcon, HeartHUD, AmmoHUD, } from "./SpriteProps";
+import { HeartHUD, AmmoHUD, } from "./SpriteProps";
+
+const LEVEL_UP_BEAM_SPRITESHEET = "/sprites/upgrades/level-up-spritesheet.png";
+const CONTAINER_SPRITESHEET = "/sprites/upgrades/containers-spritesheet.png";
+const UPGRADES_SPRITESHEET = "/sprites/upgrades/upgrades-spritesheet.png";
+
+const hashText = (text: string) => {
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+  }
+  return hash;
+};
 
 
 export function LevelUpScreen() {
@@ -19,12 +31,14 @@ export function LevelUpScreen() {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [animationPhase, setAnimationPhase] = useState<"beam" | "dropdown" | "ready">("beam");
   const [beamProgress, setBeamProgress] = useState(0);
+  const [beamFrame, setBeamFrame] = useState(0);
   
   useEffect(() => {
     if (showLevelUpScreen) {
       // Force immediate state reset
       setAnimationPhase("beam");
       setBeamProgress(0);
+      setBeamFrame(0);
       setSelectedIndex(0);
       setHoveredIndex(null);
     }
@@ -46,6 +60,16 @@ export function LevelUpScreen() {
     }
   }, [animationPhase, showLevelUpScreen]);
 
+  useEffect(() => {
+    if (animationPhase !== "beam" || !showLevelUpScreen) return;
+
+    const interval = setInterval(() => {
+      setBeamFrame((prev) => (prev + 1) % 6);
+    }, 70);
+
+    return () => clearInterval(interval);
+  }, [animationPhase, showLevelUpScreen]);
+
   // Dropdown animation → ready
   useEffect(() => {
     if (animationPhase === "dropdown") {
@@ -57,6 +81,8 @@ export function LevelUpScreen() {
   if (!showLevelUpScreen || availableUpgrades.length === 0) return null;
 
   const displayedUpgrade = availableUpgrades[hoveredIndex ?? selectedIndex];
+  const playerScreenX = (window.innerWidth - CANVAS_WIDTH) / 2 + CANVAS_WIDTH / 2;
+  const playerScreenY = (window.innerHeight - CANVAS_HEIGHT) / 2 + CANVAS_HEIGHT / 2;
 
   return (
     <div className="fixed inset-0 z-[20] font-pixel pointer-events-none">
@@ -69,30 +95,22 @@ export function LevelUpScreen() {
       {/* Beam animation */}
       {animationPhase === "beam" && (
         <div
-          className="absolute left-1/2 top-0 w-48 h-full"
+          className="absolute pointer-events-none"
           style={{
-            transform: "translateX(-50%)",
-            background: `linear-gradient(to bottom,
-              rgba(255,255,255,${beamProgress * 0.3}) 0%,
-              rgba(255,255,255,${beamProgress * 0.1}) 50%,
-              rgba(255,255,255,0) 100%
-            )`,
-            boxShadow: `0 0 80px 40px rgba(255,255,255,${beamProgress * 0.2})`,
+            left: `${playerScreenX}px`,
+            top: `${playerScreenY}px`,
+            width: "240px",
+            height: "360px",
+            transform: "translate(-50%, -100%)",
+            imageRendering: "pixelated",
+            backgroundImage: `url(${LEVEL_UP_BEAM_SPRITESHEET})`,
+            backgroundRepeat: "no-repeat",
+            backgroundSize: "600% 100%",
+            backgroundPosition: `${(beamFrame / 5) * 100}% 0%`,
+            opacity: Math.min(1, beamProgress * 1.5),
+            filter: `drop-shadow(0 0 16px rgba(255,255,255,${0.55 * beamProgress}))`,
           }}
-        >
-          {[...Array(20)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute w-2 h-2 bg-white rounded-sm"
-              style={{
-                left: `${20 + Math.sin(i * 3) * 30}%`,
-                top: `${(i * 5 - beamProgress * 100) % 100}%`,
-                opacity: beamProgress * 0.6,
-                boxShadow: "0 0 10px 2px rgba(255,255,255,0.5)",
-              }}
-            />
-          ))}
-        </div>
+        />
       )}
 
       {/* FIXED: Only render main content after beam completes */}
@@ -137,6 +155,10 @@ export function LevelUpScreen() {
               const isSelected = i === selectedIndex;
               const isHovered = i === hoveredIndex;
               const isReady = animationPhase === "ready";
+              const iconSeed = hashText(`${upgrade.id}-${i}`);
+              const iconRow = iconSeed % 4;
+              const iconCol = Math.floor(iconSeed / 4) % 4;
+              const containerRow = isSelected || isHovered ? 1 : 0;
 
               return (
                 <div
@@ -146,19 +168,35 @@ export function LevelUpScreen() {
                   onMouseLeave={() => setHoveredIndex(null)}
                   className="relative cursor-pointer"
                   style={{
-                    width: "72px",
-                    height: "72px",
+                    width: "108px",
+                    height: "108px",
                     pointerEvents: isReady ? "auto" : "none",
-                    transform: `scale(${isHovered ? 1.3 : 1})`,
+                    transform: `scale(${isHovered ? 1.2 : 1})`,
                     opacity: isReady ? 1 : 0,
-                    
-                    
+                    transition: "transform 140ms ease",
                   }}
                 >
-                  <UpgradeIcon
-                    icon={upgrade.icon}
-                    selected={isSelected}
+                  <div
+                    className="upgrade-container-sprite"
+                    style={{
+                      backgroundImage: `url(${CONTAINER_SPRITESHEET})`,
+                      backgroundPosition: `0% ${containerRow * 100}%`,
+                    }}
+                  />
+                  <div
+                    className="upgrade-filler-sprite"
+                    style={{
+                      backgroundImage: `url(${CONTAINER_SPRITESHEET})`,
+                      backgroundPosition: `100% ${containerRow * 100}%`,
+                    }}
+                  />
+                  <div
                     className="upgrade-sprite"
+                    style={{
+                      backgroundImage: `url(${UPGRADES_SPRITESHEET})`,
+                      backgroundSize: "400% 400%",
+                      backgroundPosition: `${(iconCol / 3) * 100}% ${(iconRow / 3) * 100}%`,
+                    }}
                   />
                 </div>
               );
@@ -228,9 +266,30 @@ export function LevelUpScreen() {
       <style jsx>{`
         
         .upgrade-sprite {
-          width: calc(32px * 3);
-          height: calc(32px * 3);
-          object-fit: contain;
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          width: 64px;
+          height: 64px;
+          transform: translate(-50%, -50%);
+          background-repeat: no-repeat;
+          image-rendering: pixelated;
+          pointer-events: none;
+        }
+
+        .upgrade-container-sprite,
+        .upgrade-filler-sprite {
+          position: absolute;
+          inset: 0;
+          background-size: 200% 200%;
+          background-repeat: no-repeat;
+          image-rendering: pixelated;
+          pointer-events: none;
+        }
+
+        .upgrade-filler-sprite {
+          opacity: 0.95;
+          transform: scale(0.82);
           pointer-events: none;
         }
 
