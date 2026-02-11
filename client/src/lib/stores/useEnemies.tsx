@@ -36,6 +36,19 @@ export const ENEMY_TYPE_CONFIG: Record<"basic" | "tank" | "eyeball", EnemyTypeBe
   },
 };
 
+export const SHOGGOTH_CONFIG = {
+  idealDistance: 12,
+  minDistance: 8,
+  maxDistance: 16,
+  beamLengthScale: 10,
+  beamHalfWidthWorld: 0.75,
+  beamDamageInterval: 0.14,
+  rotationSpeed: Math.PI * 0.9,
+  fireDuration: 0.95,
+  beamOriginOffsetPx: 18,
+  beamAngles: [0, (Math.PI * 2) / 5, (Math.PI * 4) / 5, (Math.PI * 6) / 5, (Math.PI * 8) / 5] as const,
+} as const;
+
 export interface XPOrb {
   id: string;
   position: THREE.Vector3;
@@ -75,6 +88,7 @@ export interface Enemy {
   projectileCooldown?: number;
   maxProjectileCooldown?: number;
   rotationY?: number;
+  laserBaseRotation?: number;
 
   isRangedAttacking?: boolean;
   rangedShotCooldown?: number;
@@ -339,6 +353,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
         projectileCooldown: 4.5,
         maxProjectileCooldown: 4.5,
         rotationY: 0,
+        laserBaseRotation: 0,
       };
 
       set((state) => ({ enemies: [...state.enemies, boss] }));

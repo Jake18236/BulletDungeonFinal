@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import Matter from "matter-js";
 import { usePlayer } from "../lib/stores/usePlayer";
-import { ENEMY_TYPE_CONFIG, useEnemies } from "../lib/stores/useEnemies";
+import { ENEMY_TYPE_CONFIG, SHOGGOTH_CONFIG, useEnemies } from "../lib/stores/useEnemies";
 import { useDungeon } from "../lib/stores/useDungeon";
 import { bounceAgainstBounds } from "../lib/collision";
 import { useGame } from "../lib/stores/useGame";
@@ -39,6 +39,8 @@ const TILE_SIZE = 50;
 export const CANVAS_WIDTH = 1490;
 export const CANVAS_HEIGHT = 750;
 const ROOM_SIZE = 200;
+const SHOGGOTH_BASE_BEAM_LENGTH_WORLD = (304 * 4) / (TILE_SIZE / 2);
+const SHOGGOTH_BEAM_LENGTH_WORLD = SHOGGOTH_BASE_BEAM_LENGTH_WORLD * SHOGGOTH_CONFIG.beamLengthScale;
 
 
 interface EnemyProjectile {
@@ -685,15 +687,26 @@ export default function CanvasGame() {
           const dirToPlayer = new THREE.Vector3().subVectors(position, updated.position);
           const distanceToPlayer = dirToPlayer.length();
           const safeDirection = distanceToPlayer > 0.001 ? dirToPlayer.clone().normalize() : new THREE.Vector3(1, 0, 0);
+          const orbitDirection = new THREE.Vector3(-safeDirection.z, 0, safeDirection.x);
+
+          const canAdvance = distanceToPlayer > SHOGGOTH_CONFIG.idealDistance;
+          const canRetreat = distanceToPlayer < SHOGGOTH_CONFIG.minDistance;
 
           if (updated.attackState === "chasing") {
-            if (distanceToPlayer > 8) {
-              updated.position.add(safeDirection.clone().multiplyScalar(updated.speed * delta));
+            let moveDirection = new THREE.Vector3();
+            if (canAdvance) {
+              moveDirection.copy(safeDirection);
+            } else if (canRetreat) {
+              moveDirection.copy(safeDirection).multiplyScalar(-0.65);
+            }
+
+            if (moveDirection.lengthSq() > 0) {
+              updated.position.add(moveDirection.normalize().multiplyScalar(updated.speed * delta));
             }
 
             updated.rotationY = Math.atan2(safeDirection.z, safeDirection.x);
-            updated.projectileCooldown! -= delta;
-            if (updated.projectileCooldown! <= 0 && distanceToPlayer > 4) {
+            updated.projectileCooldown = (updated.projectileCooldown ?? 0) - delta;
+            if (updated.projectileCooldown <= 0 && distanceToPlayer <= SHOGGOTH_CONFIG.maxDistance) {
               updated.attackState = "laser_windup";
               updated.windUpTimer = 0;
               updated.clawWindUp = 0;
@@ -701,8 +714,8 @@ export default function CanvasGame() {
               updated.dashDirection = safeDirection.clone();
             }
           } else if (updated.attackState === "laser_windup") {
-            updated.windUpTimer! += delta;
-            const windupProgress = Math.min(updated.windUpTimer! / updated.maxWindUpTime!, 1);
+            updated.windUpTimer = (updated.windUpTimer ?? 0) + delta;
+            const windupProgress = Math.min(updated.windUpTimer / (updated.maxWindUpTime ?? 1), 1);
             const lockedDirection = (updated.dashDirection && updated.dashDirection.lengthSq() > 0)
               ? updated.dashDirection.clone().normalize()
               : safeDirection;
@@ -712,51 +725,65 @@ export default function CanvasGame() {
             updated.clawGlowIntensity = windupProgress;
             updated.velocity.multiplyScalar(0.82);
 
-            if (updated.windUpTimer! >= updated.maxWindUpTime!) {
+            if (updated.windUpTimer >= (updated.maxWindUpTime ?? 1)) {
               updated.attackState = "laser_firing";
               updated.windUpTimer = 0;
+              updated.laserBaseRotation = updated.rotationY ?? Math.atan2(lockedDirection.z, lockedDirection.x);
+              updated.projectileCooldown = SHOGGOTH_CONFIG.beamDamageInterval;
               playHit();
             }
           } else if (updated.attackState === "laser_firing") {
-            updated.windUpTimer! += delta;
-            const frameDuration = 0.06;
-            const fireDuration = frameDuration * 6;
-            const lockedDirection = (updated.dashDirection && updated.dashDirection.lengthSq() > 0)
-              ? updated.dashDirection.clone().normalize()
-              : safeDirection;
+            updated.windUpTimer = (updated.windUpTimer ?? 0) + delta;
+            const fireDuration = SHOGGOTH_CONFIG.fireDuration;
+            const spinAmount = (updated.windUpTimer ?? 0) * SHOGGOTH_CONFIG.rotationSpeed;
+            const baseRotation = updated.laserBaseRotation ?? updated.rotationY ?? 0;
+            const currentRotation = baseRotation + spinAmount;
+            updated.rotationY = currentRotation;
 
-            updated.rotationY = Math.atan2(lockedDirection.z, lockedDirection.x);
+            const circleStrafe = orbitDirection.clone().multiplyScalar(updated.speed * 0.42 * delta);
+            updated.position.add(circleStrafe);
 
-            const beamLengthWorld = 304 * 4 / (TILE_SIZE / 2);
-            const toPlayer = new THREE.Vector3().subVectors(position, updated.position);
-            const along = toPlayer.dot(lockedDirection);
-            const lateral = toPlayer.clone().sub(lockedDirection.clone().multiplyScalar(along)).length();
+            updated.projectileCooldown = (updated.projectileCooldown ?? 0) - delta;
+            if (updated.projectileCooldown <= 0) {
+              const beamOriginOffsetWorld = SHOGGOTH_CONFIG.beamOriginOffsetPx / (TILE_SIZE / 2);
+              for (const beamOffset of SHOGGOTH_CONFIG.beamAngles) {
+                const beamAngle = currentRotation + beamOffset;
+                const beamDirection = new THREE.Vector3(Math.cos(beamAngle), 0, Math.sin(beamAngle));
+                const beamOrigin = updated.position.clone().add(beamDirection.clone().multiplyScalar(beamOriginOffsetWorld));
+                const toPlayer = new THREE.Vector3().subVectors(position, beamOrigin);
+                const along = toPlayer.dot(beamDirection);
+                const lateral = toPlayer.clone().sub(beamDirection.clone().multiplyScalar(along)).length();
 
-            if (
-              along >= 0.5 &&
-              along <= beamLengthWorld &&
-              lateral <= 0.75 &&
-              invincibilityTimer <= 0 &&
-              !damagedThisFrameRef.current
-            ) {
-              applyPlayerDamage(
-                updated.isEnraged ? 1 : 1,
-                updated.position.clone().add(lockedDirection.clone().multiplyScalar(Math.min(along, beamLengthWorld))),
-              );
-              damagedThisFrameRef.current = true;
+                if (
+                  along >= 0.35 &&
+                  along <= SHOGGOTH_BEAM_LENGTH_WORLD &&
+                  lateral <= SHOGGOTH_CONFIG.beamHalfWidthWorld &&
+                  invincibilityTimer <= 0 &&
+                  !damagedThisFrameRef.current
+                ) {
+                  applyPlayerDamage(
+                    updated.isEnraged ? 1 : 1,
+                    beamOrigin.clone().add(beamDirection.clone().multiplyScalar(Math.min(along, SHOGGOTH_BEAM_LENGTH_WORLD))),
+                  );
+                  damagedThisFrameRef.current = true;
+                }
+              }
+
+              updated.projectileCooldown = SHOGGOTH_CONFIG.beamDamageInterval;
             }
 
-            if (updated.windUpTimer! >= fireDuration) {
+            if (updated.windUpTimer >= fireDuration) {
               updated.attackState = "recovering";
               updated.windUpTimer = updated.isEnraged ? 0.35 : 0.5;
-              updated.projectileCooldown = updated.maxProjectileCooldown!;
+              updated.projectileCooldown = updated.maxProjectileCooldown ?? 3.8;
+              updated.laserBaseRotation = updated.rotationY;
             }
           } else if (updated.attackState === "recovering") {
-            updated.windUpTimer! -= delta;
+            updated.windUpTimer = (updated.windUpTimer ?? 0) - delta;
             updated.clawGlowIntensity = Math.max((updated.clawGlowIntensity ?? 0) - delta * 2.8, 0);
             updated.clawWindUp = Math.max((updated.clawWindUp ?? 0) - delta * 2.8, 0);
 
-            if (updated.windUpTimer! <= 0) {
+            if (updated.windUpTimer <= 0) {
               updated.attackState = "chasing";
             }
           }
@@ -875,16 +902,12 @@ export default function CanvasGame() {
             const dz = e1.position.z - e2.position.z;
             const dist = Math.hypot(dx, dz);
             const minDist = getEnemyCollisionRadius(e1) + getEnemyCollisionRadius(e2);
-            e1.position.x += Math.sin(Math.random() * 10) * 0.002;
 
             if (dist > 0 && dist < minDist) {
-              const push = (minDist - dist) / 2;
-              const nx = dx / dist;
-              const nz = dz / dist;
-              e1.position.x += nx * push;
-              e1.position.z += nz * push;
-              e2.position.x -= nx * push;
-              e2.position.z -= nz * push;
+              const overlapRatio = (minDist - dist) / minDist;
+              const slowFactor = Math.max(0.1, 1 - overlapRatio * 0.9);
+              e1.velocity.multiplyScalar(slowFactor);
+              e2.velocity.multiplyScalar(slowFactor);
             }
           }
         }
@@ -1650,74 +1673,118 @@ export default function CanvasGame() {
         const gasFrameIndex = 3;
         const gasSourceX = (gasFrameIndex % 3) * frameW;
         const gasSourceY = Math.floor(gasFrameIndex / 3) * frameH;
+        const bodyRotation = (enemy.rotationY ?? 0) + Math.PI / 2;
 
         ctx.save();
-        ctx.globalAlpha = enemy.attackState === "laser_firing" ? 1 : 1;
+        ctx.translate(screenX, screenY);
+        ctx.rotate(bodyRotation);
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(bossSheet, gasSourceX, gasSourceY, frameW, frameH, screenX - drawSize / 2, screenY - drawSize / 2, drawSize, drawSize);
+        ctx.drawImage(bossSheet, gasSourceX, gasSourceY, frameW, frameH, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
         ctx.restore();
 
         ctx.save();
+        ctx.translate(screenX, screenY);
+        ctx.rotate(bodyRotation);
         ctx.imageSmoothingEnabled = false;
         if (enemy.hitFlash > 0) ctx.filter = "brightness(8)";
-        ctx.drawImage(bossSheet, bodyFrame * frameW, 0, frameW, frameH, screenX - drawSize / 2, screenY - drawSize / 2, drawSize, drawSize);
+        ctx.drawImage(bossSheet, bodyFrame * frameW, 0, frameW, frameH, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
         ctx.filter = "none";
         ctx.restore();
       }
 
-      const aimAngle = enemy.rotationY;
-      const beamLengthPx = 304 * 4;
+      const aimAngle = enemy.rotationY ?? 0;
+      const beamLengthPx = 304 * 4 * SHOGGOTH_CONFIG.beamLengthScale;
       const beamWidthPx = 32;
+      const beamOriginOffsetPx = SHOGGOTH_CONFIG.beamOriginOffsetPx;
+      const laserBaseRotation = enemy.laserBaseRotation ?? aimAngle;
 
-      const beamOriginOffsetPx = 18;
-      const beamOriginX = screenX + Math.cos(aimAngle) * beamOriginOffsetPx;
-      const beamOriginY = screenY + Math.sin(aimAngle) * beamOriginOffsetPx;
+      const drawTiledBeam = (
+        sheet: HTMLImageElement,
+        sourceX: number,
+        sourceW: number,
+        sourceH: number,
+        beamAngle: number,
+        startX: number,
+        startY: number,
+      ) => {
+        const tileDrawH = sourceH * 4;
+        const tileStep = tileDrawH * 0.92;
+        const tileCount = Math.max(1, Math.ceil(beamLengthPx / tileStep));
+
+        ctx.save();
+        ctx.translate(startX, startY);
+        ctx.rotate(beamAngle + Math.PI / 2);
+        ctx.imageSmoothingEnabled = false;
+
+        for (let tile = 0; tile < tileCount; tile++) {
+          const drawY = -tileStep * (tile + 1);
+          ctx.drawImage(
+            sheet,
+            sourceX,
+            0,
+            sourceW,
+            sourceH,
+            -beamWidthPx / 2,
+            drawY,
+            beamWidthPx,
+            tileDrawH,
+          );
+        }
+
+        ctx.restore();
+      };
 
       if (enemy.attackState === "laser_windup" && hasWindupSheet) {
         const pulse = 0.82 + Math.sin(Date.now() / 85) * 0.16;
-        ctx.save();
-        ctx.translate(beamOriginX, beamOriginY);
-        ctx.rotate(aimAngle + Math.PI / 2);
-        ctx.globalAlpha = Math.max(0.6, Math.min(1, pulse));
-        ctx.imageSmoothingEnabled = false;
-        
-        ctx.drawImage(
-          windupSheet,
-          0,
-          0,
-          windupSheet.naturalWidth,
-          windupSheet.naturalHeight,
-          -(beamWidthPx) / 2,
-          -(beamLengthPx),
-          beamWidthPx,
-          beamLengthPx,
 
-        );
-        ctx.restore();
+        for (const beamOffset of SHOGGOTH_CONFIG.beamAngles) {
+          const beamAngle = aimAngle + beamOffset;
+          const startX = screenX + Math.cos(beamAngle) * beamOriginOffsetPx;
+          const startY = screenY + Math.sin(beamAngle) * beamOriginOffsetPx;
+
+          ctx.save();
+          ctx.globalAlpha = Math.max(0.55, Math.min(0.95, pulse));
+          drawTiledBeam(
+            windupSheet,
+            0,
+            windupSheet.naturalWidth,
+            windupSheet.naturalHeight,
+            beamAngle,
+            startX,
+            startY,
+          );
+          ctx.restore();
+        }
       }
 
       if (enemy.attackState === "laser_firing" && hasLaserSheet) {
         const frameW = laserSheet.naturalWidth / 6;
         const frameH = laserSheet.naturalHeight;
-        const frameDuration = 0.06;
-        const frame = Math.min(5, Math.floor((enemy.windUpTimer ?? 0) / frameDuration));
+        const fireProgress = Math.min(1, (enemy.windUpTimer ?? 0) / SHOGGOTH_CONFIG.fireDuration);
 
-        ctx.save();
-        ctx.translate(beamOriginX, beamOriginY);
-        ctx.rotate(aimAngle + Math.PI / 2);
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(
-          laserSheet,
-          frame * frameW,
-          0,
-          frameW,
-          frameH,
-          -frameW*4 / 2,
-          -frameH*4,
-          frameW*4,
-          frameH*4,
-        );
-        ctx.restore();
+        let frame = 1;
+        if (fireProgress < 0.03) {
+          frame = 0;
+        } else if (fireProgress > 0.92) {
+          const dissipationProgress = Math.min(1, (fireProgress - 0.92) / 0.08);
+          frame = Math.min(5, 2 + Math.floor(dissipationProgress * 4));
+        }
+
+        for (const beamOffset of SHOGGOTH_CONFIG.beamAngles) {
+          const beamAngle = laserBaseRotation + ((enemy.windUpTimer ?? 0) * SHOGGOTH_CONFIG.rotationSpeed) + beamOffset;
+          const startX = screenX + Math.cos(beamAngle) * beamOriginOffsetPx;
+          const startY = screenY + Math.sin(beamAngle) * beamOriginOffsetPx;
+
+          drawTiledBeam(
+            laserSheet,
+            frame * frameW,
+            frameW,
+            frameH,
+            beamAngle,
+            startX,
+            startY,
+          );
+        }
       }
 
       const barW = 110;
