@@ -902,16 +902,12 @@ export default function CanvasGame() {
             const dz = e1.position.z - e2.position.z;
             const dist = Math.hypot(dx, dz);
             const minDist = getEnemyCollisionRadius(e1) + getEnemyCollisionRadius(e2);
-            e1.position.x += Math.sin(Math.random() * 10) * 0.002;
 
             if (dist > 0 && dist < minDist) {
-              const push = (minDist - dist) / 2;
-              const nx = dx / dist;
-              const nz = dz / dist;
-              e1.position.x += nx * push;
-              e1.position.z += nz * push;
-              e2.position.x -= nx * push;
-              e2.position.z -= nz * push;
+              const overlapRatio = (minDist - dist) / minDist;
+              const slowFactor = Math.max(0.1, 1 - overlapRatio * 0.9);
+              e1.velocity.multiplyScalar(slowFactor);
+              e2.velocity.multiplyScalar(slowFactor);
             }
           }
         }
@@ -1677,17 +1673,21 @@ export default function CanvasGame() {
         const gasFrameIndex = 3;
         const gasSourceX = (gasFrameIndex % 3) * frameW;
         const gasSourceY = Math.floor(gasFrameIndex / 3) * frameH;
+        const bodyRotation = (enemy.rotationY ?? 0) + Math.PI / 2;
 
         ctx.save();
-        ctx.globalAlpha = enemy.attackState === "laser_firing" ? 1 : 1;
+        ctx.translate(screenX, screenY);
+        ctx.rotate(bodyRotation);
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(bossSheet, gasSourceX, gasSourceY, frameW, frameH, screenX - drawSize / 2, screenY - drawSize / 2, drawSize, drawSize);
+        ctx.drawImage(bossSheet, gasSourceX, gasSourceY, frameW, frameH, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
         ctx.restore();
 
         ctx.save();
+        ctx.translate(screenX, screenY);
+        ctx.rotate(bodyRotation);
         ctx.imageSmoothingEnabled = false;
         if (enemy.hitFlash > 0) ctx.filter = "brightness(8)";
-        ctx.drawImage(bossSheet, bodyFrame * frameW, 0, frameW, frameH, screenX - drawSize / 2, screenY - drawSize / 2, drawSize, drawSize);
+        ctx.drawImage(bossSheet, bodyFrame * frameW, 0, frameW, frameH, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
         ctx.filter = "none";
         ctx.restore();
       }
@@ -1763,10 +1763,10 @@ export default function CanvasGame() {
         const fireProgress = Math.min(1, (enemy.windUpTimer ?? 0) / SHOGGOTH_CONFIG.fireDuration);
 
         let frame = 1;
-        if (fireProgress < 0.08) {
+        if (fireProgress < 0.03) {
           frame = 0;
-        } else if (fireProgress > 0.82) {
-          const dissipationProgress = Math.min(1, (fireProgress - 0.82) / 0.18);
+        } else if (fireProgress > 0.92) {
+          const dissipationProgress = Math.min(1, (fireProgress - 0.92) / 0.08);
           frame = Math.min(5, 2 + Math.floor(dissipationProgress * 4));
         }
 
