@@ -212,6 +212,18 @@ export const enemyDeathSpritesheet = (() => {
   return img;
 })();
 
+export const shoggothBossSpriteSheet = (() => {
+  const img = new Image();
+  img.src = "/sprites/enemy/shoggoth-boss.png";
+  return img;
+})();
+
+export const bossLaserSpriteSheet = (() => {
+  const img = new Image();
+  img.src = "/sprites/enemy/boss-laser.png";
+  return img;
+})();
+
 export const VisualSprites = {
   impactSheet: (() => {
     const img = new Image();

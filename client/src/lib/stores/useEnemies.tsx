@@ -61,12 +61,12 @@ export interface Enemy {
 
   // BOSSS PROPERTIES:
   isBoss?: boolean;
-  bossType?: "deer";
+  bossType?: "shoggoth";
   dashCooldown?: number;
   maxDashCooldown?: number;
   windUpTimer?: number;
   maxWindUpTime?: number;
-  attackState?: "chasing" | "winding_up" | "dashing" | "recovering" | "projectile_attack";
+  attackState?: "chasing" | "laser_windup" | "laser_firing" | "recovering";
   dashDirection?: THREE.Vector3;
   isDashing?: boolean;
   clawWindUp?: number;
@@ -109,7 +109,7 @@ interface EnemiesState {
   elapsedTime: number;
   updateAutoSpawn: (delta: number, playerPos: THREE.Vector3) => void;
   updateDamagePopups: (delta: number) => void;
-  spawnDeerBoss: (position: THREE.Vector3) => void;
+  spawnShoggothBoss: (position: THREE.Vector3) => void;
 }
 
 export const useEnemies = create<EnemiesState>((set, get) => {
@@ -306,38 +306,38 @@ export const useEnemies = create<EnemiesState>((set, get) => {
     removeEnemy: (id) =>
       set((state) => ({ enemies: state.enemies.filter((e) => e.id !== id) })),
 
-    spawnDeerBoss: (position) => {
+    spawnShoggothBoss: (position) => {
       const boss: Enemy = {
-        id: "boss_deer_" + Date.now(),
+        id: "boss_shoggoth_" + Date.now(),
         position: position.clone(),
-        health: 500,
-        maxHealth: 500,
+        health: 420,
+        maxHealth: 420,
         attack: 1,
-        speed: 8,
+        speed: 3.5,
         detectionRange: 999999,
-        attackRange: 2.5,
+        attackRange: 2.9,
         canAttack: true,
         attackCooldown: 0,
-        maxAttackCooldown: 0.1,
+        maxAttackCooldown: 0.5,
         type: "boss",
         velocity: new THREE.Vector3(),
         hitFlash: 0,
 
         isBoss: true,
-        bossType: "deer",
+        bossType: "shoggoth",
 
-        dashCooldown: 3.0,
-        maxDashCooldown: 3.0,
+        dashCooldown: 3.2,
+        maxDashCooldown: 3.2,
         windUpTimer: 0,
-        maxWindUpTime: 0.65,
+        maxWindUpTime: 1.05,
         attackState: "chasing",
         dashDirection: new THREE.Vector3(),
         isDashing: false,
         clawWindUp: 0,
         clawGlowIntensity: 0,
         isEnraged: false,
-        projectileCooldown: 5.0,
-        maxProjectileCooldown: 5.0,
+        projectileCooldown: 4.5,
+        maxProjectileCooldown: 4.5,
         rotationY: 0,
       };
 

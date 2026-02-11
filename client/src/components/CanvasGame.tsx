@@ -30,6 +30,8 @@ import {
   EnemySpriteType,
   enemyEyeballProjectileSprite,
   enemyDeathSpritesheet,
+  shoggothBossSpriteSheet,
+  bossLaserSpriteSheet,
 } from "./SpriteProps";
 
 const TILE_SIZE = 50;
@@ -46,6 +48,8 @@ interface EnemyProjectile {
   life: number;
   maxLife: number;
   size: number;
+  kind?: "orb" | "laser";
+  frame?: number;
 }
 
 interface EnemyDeathAnimation {
@@ -289,7 +293,7 @@ export default function CanvasGame() {
     
     if (e.code === "KeyB") {
       const spawnPos = position.clone().add(new THREE.Vector3(20, 0, 0));
-      useEnemies.getState().spawnDeerBoss(spawnPos);
+      useEnemies.getState().spawnShoggothBoss(spawnPos);
     }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -361,6 +365,20 @@ export default function CanvasGame() {
       life: ENEMY_TYPE_CONFIG.eyeball.projectileLife ?? 2.8,
       maxLife: ENEMY_TYPE_CONFIG.eyeball.projectileLife ?? 2.8,
       size: ENEMY_TYPE_CONFIG.eyeball.projectileSize ?? 0.35,
+    });
+  };
+
+  const spawnBossLaserProjectile = (enemy: any, direction: THREE.Vector3) => {
+    enemyProjectilesRef.current.push({
+      id: crypto.randomUUID(),
+      position: enemy.position.clone().add(direction.clone().multiplyScalar(2.2)),
+      velocity: direction.clone().multiplyScalar(enemy.isEnraged ? 22 : 18),
+      damage: enemy.isEnraged ? 2 : 1,
+      life: enemy.isEnraged ? 1.2 : 1,
+      maxLife: enemy.isEnraged ? 1.2 : 1,
+      size: enemy.isEnraged ? 0.8 : 0.7,
+      kind: "laser",
+      frame: Math.floor(Math.random() * 6),
     });
   };
 
@@ -653,106 +671,77 @@ export default function CanvasGame() {
 
 
         // #########################################################################
-        if (enemy.isBoss && enemy.bossType === "deer") {
+        if (enemy.isBoss && enemy.bossType === "shoggoth") {
           const updated = { ...enemy };
 
-          // Phase 2 at 50% HP
-          if (!updated.isEnraged && updated.health < updated.maxHealth * 0.5) {
+          if (!updated.isEnraged && updated.health < updated.maxHealth * 0.45) {
             updated.isEnraged = true;
-            updated.maxDashCooldown = 2.0;
-            updated.speed *= 1.3;
-            updated.maxWindUpTime = 0.5;
+            updated.maxProjectileCooldown = 3.2;
+            updated.maxWindUpTime = 0.85;
+            updated.speed *= 1.2;
           }
-          const dirToPlayer = new THREE.Vector3()
-            .subVectors(position, updated.position)
-            .normalize();
-          const distanceToPlayer = updated.position.distanceTo(position);
 
-          
-          updated.rotationY = Math.atan2(dirToPlayer.x, dirToPlayer.z);
+          const dirToPlayer = new THREE.Vector3().subVectors(position, updated.position);
+          const distanceToPlayer = dirToPlayer.length();
+          const safeDirection = distanceToPlayer > 0.001 ? dirToPlayer.clone().normalize() : new THREE.Vector3(1, 0, 0);
+
+          updated.rotationY = Math.atan2(safeDirection.z, safeDirection.x);
+
           if (updated.attackState === "chasing") {
-            
             const moveAmount = updated.speed * delta;
-            updated.position.add(dirToPlayer.clone().multiplyScalar(moveAmount));
+            if (distanceToPlayer > 8) {
+              updated.position.add(safeDirection.clone().multiplyScalar(moveAmount));
+            }
 
-            // dash trigger
-            updated.dashCooldown! -= delta;
-            if (updated.dashCooldown! <= 0 && distanceToPlayer < 30 && distanceToPlayer > 8) {
-              updated.attackState = "winding_up";
+            updated.projectileCooldown! -= delta;
+            if (updated.projectileCooldown! <= 0 && distanceToPlayer > 6) {
+              updated.attackState = "laser_windup";
               updated.windUpTimer = 0;
               updated.clawWindUp = 0;
-              updated.dashDirection = dirToPlayer.clone();
             }
-
-            // Projectile attack cooldown
-            updated.projectileCooldown! -= delta;
-            if (updated.projectileCooldown! <= 0 && distanceToPlayer > 15) {
-              updated.attackState = "projectile_attack";
-              updated.projectileCooldown = updated.maxProjectileCooldown!;
-            }
-          }
-
-          else if (updated.attackState === "winding_up") {
+          } else if (updated.attackState === "laser_windup") {
             updated.windUpTimer! += delta;
-            updated.clawWindUp = Math.min(updated.windUpTimer! / updated.maxWindUpTime!, 1);
-            updated.clawGlowIntensity = updated.clawWindUp;
-            updated.position.add(dirToPlayer.clone().multiplyScalar(-2 * delta));
+            const windupProgress = Math.min(updated.windUpTimer! / updated.maxWindUpTime!, 1);
+            updated.clawWindUp = windupProgress;
+            updated.clawGlowIntensity = windupProgress;
+            updated.velocity.multiplyScalar(0.86);
 
             if (updated.windUpTimer! >= updated.maxWindUpTime!) {
-              updated.attackState = "dashing";
-              updated.isDashing = true;
-              updated.velocity = updated.dashDirection!.clone().multiplyScalar(180);
+              updated.attackState = "laser_firing";
+              updated.windUpTimer = 0;
               playHit();
             }
-          }
+          } else if (updated.attackState === "laser_firing") {
+            updated.windUpTimer! += delta;
+            const fireDuration = updated.isEnraged ? 1.0 : 0.75;
+            const burstInterval = updated.isEnraged ? 0.09 : 0.12;
+            const bursts = Math.floor(updated.windUpTimer! / burstInterval);
+            const prevBursts = Math.floor((updated.windUpTimer! - delta) / burstInterval);
+            const burstCount = Math.max(0, bursts - Math.max(0, prevBursts));
 
-          else if (updated.attackState === "dashing") {
-            const dashMove = updated.velocity.clone().multiplyScalar(delta);
-            updated.position.add(dashMove);
-            updated.velocity.multiplyScalar(0.52);
-
-            if (updated.velocity.length() < 10) {
-              updated.attackState = "recovering";
-              updated.isDashing = false;
+            for (let b = 0; b < burstCount; b++) {
+              const t = Math.min(updated.windUpTimer! / fireDuration, 1);
+              const sweepRange = updated.isEnraged ? 1.1 : 0.8;
+              const sweep = Math.sin((t + b * 0.05) * Math.PI) * sweepRange;
+              const baseAngle = Math.atan2(position.z - updated.position.z, position.x - updated.position.x);
+              const shotAngle = baseAngle + sweep;
+              const direction = new THREE.Vector3(Math.cos(shotAngle), 0, Math.sin(shotAngle));
+              spawnBossLaserProjectile(updated, direction);
             }
-          }
 
-          else if (updated.attackState === "recovering") {
-            updated.clawGlowIntensity = Math.max(updated.clawGlowIntensity! - delta * 3, 0);
-            updated.clawWindUp = Math.max(updated.clawWindUp! - delta * 3, 0);
-            updated.windUpTimer! -= delta * 2;
+            if (updated.windUpTimer! >= fireDuration) {
+              updated.attackState = "recovering";
+              updated.windUpTimer = updated.isEnraged ? 0.42 : 0.55;
+              updated.projectileCooldown = updated.maxProjectileCooldown!;
+            }
+          } else if (updated.attackState === "recovering") {
+            updated.windUpTimer! -= delta;
+            updated.clawGlowIntensity = Math.max((updated.clawGlowIntensity ?? 0) - delta * 2.5, 0);
+            updated.clawWindUp = Math.max((updated.clawWindUp ?? 0) - delta * 2.5, 0);
 
             if (updated.windUpTimer! <= 0) {
               updated.attackState = "chasing";
-              updated.dashCooldown = updated.maxDashCooldown;
-              updated.velocity.set(0, 0, 0);
             }
-          }
-
-          else if (updated.attackState === "projectile_attack") {
-            const projectileCount = updated.isEnraged ? 16 : 12;
-
-            for (let i = 0; i < projectileCount; i++) {
-              const angle = (i / projectileCount) * Math.PI * 2;
-              const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
-
-              addProjectile({
-                position: updated.position.clone().add(direction.clone().multiplyScalar(2)),
-                direction,
-                size: 4,
-                damage: 1,
-                speed: 40,
-                range: 80,
-                trailLength: 15,
-                homing: false,
-                piercing: 0,
-                bouncing: 0,
-              });
-            }
-
-            playHit();
-            updated.attackState = "recovering";
-            updated.windUpTimer = 0.3;
           }
 
           return updated;
@@ -1600,7 +1589,7 @@ export default function CanvasGame() {
     const wind = easeOut(
       typeof enemy.clawWindUp === "number"
         ? clamp(enemy.clawWindUp)
-        : enemy.attackState === "winding_up"
+        : enemy.attackState === "laser_windup"
         ? 1
         : 0
     );
@@ -1614,127 +1603,68 @@ export default function CanvasGame() {
     );
 
     // ================================================================
-    // SKELETON BOSS
+    // SHOGGOTH BOSS
     // ================================================================
-    if (enemy.isBoss && enemy.bossType === "deer") {
-      const baseRadius = 24;
-      const radius = enemy.isEnraged ? baseRadius * 1.15 : baseRadius;
-      const bob = Math.sin(Date.now() / 120) * 1.2;
-
-      const smearStrength = Math.max(wind, dash);
-      const smearLen = 52 * smearStrength;
+    if (enemy.isBoss && enemy.bossType === "shoggoth") {
+      const bossSheet = shoggothBossSpriteSheet;
+      const hasBossSheet = bossSheet.complete && bossSheet.naturalWidth > 0 && bossSheet.naturalHeight > 0;
+      const spriteCols = 3;
+      const spriteRows = 2;
+      const frameW = hasBossSheet ? bossSheet.naturalWidth / spriteCols : 0;
+      const frameH = hasBossSheet ? bossSheet.naturalHeight / spriteRows : 0;
+      const animFrame = Math.floor(Date.now() / 130) % 3;
+      const bodyFrame = enemy.attackState === "laser_windup" || enemy.attackState === "laser_firing" ? 2 : animFrame;
+      const drawSize = 170;
 
       ctx.save();
-      ctx.translate(screenX, screenY + bob);
-      ctx.rotate(enemy.rotationY ?? 0);
+      ctx.translate(screenX, screenY);
+      ctx.imageSmoothingEnabled = false;
 
-      // ---------------- Shadow ----------------
-
-      ctx.fillStyle = "rgba(0,0,0,0.5)";
-      ctx.beginPath();
-      ctx.ellipse(0, 7, radius * 1.15, radius * 0.55, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // ---------------- Smear (charge motion) ----------------
-      if (smearLen > 1) {
-        for (let i = 4; i >= 1; i--) {
-          const t = i / 4;
-          ctx.globalAlpha = 0.2 * (1 - t);
-          ctx.beginPath();
-          ctx.ellipse(
-            -smearLen * t,
-            0,
-            radius + smearLen * 0.15 * t,
-            radius * (0.85 - 0.1 * t),
-            0,
-            0,
-            Math.PI * 2
-          );
-          ctx.fillStyle = "#d6d6d6";
-          ctx.fill();
+      if (hasBossSheet) {
+        if (enemy.hitFlash > 0) {
+          ctx.filter = "brightness(1.8)";
         }
+        ctx.drawImage(
+          bossSheet,
+          bodyFrame * frameW,
+          0,
+          frameW,
+          frameH,
+          -drawSize / 2,
+          -drawSize / 2,
+          drawSize,
+          drawSize,
+        );
+        ctx.filter = "none";
+      } else {
+        ctx.fillStyle = "#98ff7a";
+        ctx.beginPath();
+        ctx.arc(0, 0, 28, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      if (enemy.attackState === "laser_windup" || enemy.attackState === "laser_firing") {
+        const aimAngle = enemy.rotationY ?? 0;
+        const pulse = 0.4 + Math.sin(Date.now() / 60) * 0.2;
+        ctx.rotate(aimAngle);
+        ctx.globalAlpha = 0.5 + pulse;
+        ctx.fillStyle = enemy.isEnraged ? "#ff5a5a" : "#ff3131";
+        ctx.fillRect(8, -6, 160, 12);
         ctx.globalAlpha = 1;
       }
 
-      // ---------------- Skull ----------------
-      ctx.fillStyle = enemy.isEnraged ? "#e6e6e6" : "#f2f2f2";
-      ctx.beginPath();
-      ctx.arc(0, 0, radius, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = "#444";
-      ctx.stroke();
-
-      // ---------------- Cracks ----------------
-      ctx.strokeStyle = "#666";
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(-6, -6);
-      ctx.lineTo(-12, -12);
-      ctx.moveTo(4, -10);
-      ctx.lineTo(8, -18);
-      ctx.stroke();
-
-      // ---------------- Eye sockets ----------------
-      ctx.fillStyle = enemy.isEnraged ? "#ff2a2a" : "#000";
-      ctx.beginPath();
-      ctx.arc(-7, -4, 4, 0, Math.PI * 2);
-      ctx.arc(7, -4, 4, 0, Math.PI * 2);
-      ctx.fill();
-
-      // ---------------- Nasal cavity ----------------
-      ctx.beginPath();
-      ctx.moveTo(0, -2);
-      ctx.lineTo(-2, 4);
-      ctx.lineTo(2, 4);
-      ctx.closePath();
-      ctx.fill();
-
-      // ---------------- Jaw notch ----------------
-      ctx.strokeStyle = "#555";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(-8, 10);
-      ctx.lineTo(8, 10);
-      ctx.stroke();
-
       ctx.restore();
 
-      // ---------------- Impact flash ----------------
-      if (dash > 0.6) {
-        const t = clamp((dash - 0.6) / 0.4);
-        ctx.save();
-        ctx.globalAlpha = Math.sin(t * Math.PI) * 0.8;
-        ctx.fillStyle = "#ffffff";
-        ctx.beginPath();
-        ctx.ellipse(
-          screenX + Math.cos(enemy.rotationY ?? 0) * radius * 1.4,
-          screenY + Math.sin(enemy.rotationY ?? 0) * radius * 1.4,
-          18 * t,
-          12 * t,
-          0,
-          0,
-          Math.PI * 2
-        );
-        ctx.fill();
-        ctx.restore();
-      }
-
-      // ---------------- Health Bar ----------------
-      const barW = 80;
-      const barH = 8;
-      const barY = screenY - radius - 30;
+      const barW = 110;
+      const barH = 9;
+      const barY = screenY - drawSize / 2 - 24;
       const hpPct = Math.max(0, enemy.health / enemy.maxHealth);
 
-      ctx.fillStyle = "rgba(0,0,0,0.7)";
+      ctx.fillStyle = "rgba(0,0,0,0.72)";
       ctx.fillRect(screenX - barW / 2 - 2, barY - 2, barW + 4, barH + 4);
-
-      ctx.fillStyle = "#ff0000";
+      ctx.fillStyle = "#400";
       ctx.fillRect(screenX - barW / 2, barY, barW, barH);
-
-      ctx.fillStyle =
-        hpPct > 0.5 ? "#00ff00" : hpPct > 0.25 ? "#ffaa00" : "#ff4444";
+      ctx.fillStyle = hpPct > 0.45 ? "#5DFF63" : "#ffc642";
       ctx.fillRect(screenX - barW / 2, barY, barW * hpPct, barH);
 
       ctx.strokeStyle = "#fff";
@@ -1744,7 +1674,7 @@ export default function CanvasGame() {
       ctx.font = "bold 14px monospace";
       ctx.fillStyle = "#fff";
       ctx.textAlign = "center";
-      ctx.fillText("SKELETON COLOSSUS", screenX, barY - 10);
+      ctx.fillText("SHOGGOTH", screenX, barY - 10);
 
       return;
     }
@@ -1780,7 +1710,42 @@ export default function CanvasGame() {
 
 
   const drawEnemyEyes = (ctx: CanvasRenderingContext2D, enemy: any) => {
-    if (!enemy || !enemy.position || enemy.isBoss) return;
+    if (!enemy || !enemy.position) return;
+
+    if (enemy.isBoss && enemy.bossType === "shoggoth") {
+      const centerX = CANVAS_WIDTH / 2;
+      const centerY = CANVAS_HEIGHT / 2;
+      const screenX = centerX + ((enemy.position.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2;
+      const bossSheet = shoggothBossSpriteSheet;
+      const hasBossSheet = bossSheet.complete && bossSheet.naturalWidth > 0 && bossSheet.naturalHeight > 0;
+
+      if (hasBossSheet) {
+        const frameW = bossSheet.naturalWidth / 3;
+        const frameH = bossSheet.naturalHeight / 2;
+        const gasFrameIndex = 3;
+        const sourceX = (gasFrameIndex % 3) * frameW;
+        const sourceY = Math.floor(gasFrameIndex / 3) * frameH;
+
+        ctx.save();
+        ctx.globalAlpha = enemy.attackState === "laser_firing" ? 0.95 : 0.75;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(
+          bossSheet,
+          sourceX,
+          sourceY,
+          frameW,
+          frameH,
+          screenX - 85,
+          screenY - 85,
+          170,
+          170,
+        );
+        ctx.restore();
+      }
+
+      return;
+    }
 
     const enemyType: EnemySpriteType = getEnemyType(enemy);
     const eyeSprite = enemyEyeSpritesByType[enemyType];
@@ -1808,23 +1773,31 @@ export default function CanvasGame() {
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
     const projectileSprite = enemyEyeballProjectileSprite;
+    const laserSprite = bossLaserSpriteSheet;
     const hasProjectileSprite = projectileSprite.complete && projectileSprite.naturalWidth > 0 && projectileSprite.naturalHeight > 0;
+    const hasLaserSprite = laserSprite.complete && laserSprite.naturalWidth > 0 && laserSprite.naturalHeight > 0;
 
     for (const projectile of enemyProjectilesRef.current) {
       const screenX = centerX + ((projectile.position.x - position.x) * TILE_SIZE) / 2;
       const screenY = centerY + ((projectile.position.z - position.z) * TILE_SIZE) / 2;
       const pixelSize = Math.max(8, projectile.size * TILE_SIZE * 1.1);
-      
+      const angle = Math.atan2(projectile.velocity.z, projectile.velocity.x);
 
       ctx.save();
+      ctx.translate(screenX, screenY);
+      ctx.rotate(angle);
 
-
-      if (hasProjectileSprite) {
-        const angle = Math.atan2(projectile.velocity.z, projectile.velocity.x);
-        ctx.translate(screenX, screenY);
-        ctx.rotate(angle);
+      if (projectile.kind === "laser" && hasLaserSprite) {
+        const frames = 6;
+        const frameW = laserSprite.naturalWidth / frames;
+        const frameH = laserSprite.naturalHeight;
+        const frame = (projectile.frame ?? Math.floor((Date.now() / 55) % frames)) % frames;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(laserSprite, frame * frameW, 0, frameW, frameH, -pixelSize * 0.8, -pixelSize * 0.5, pixelSize * 1.6, pixelSize);
+      } else if (hasProjectileSprite) {
         ctx.drawImage(projectileSprite, -pixelSize / 2, -pixelSize / 2, pixelSize, pixelSize);
-      } 
+      }
+
       ctx.restore();
     }
   };
