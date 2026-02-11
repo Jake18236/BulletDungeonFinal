@@ -32,6 +32,7 @@ import {
   enemyDeathSpritesheet,
   shoggothBossSpriteSheet,
   bossLaserSpriteSheet,
+  bossLaserWindupSprite,
 } from "./SpriteProps";
 
 const TILE_SIZE = 50;
@@ -1668,13 +1669,16 @@ export default function CanvasGame() {
       const aimAngle = enemy.rotationY ?? 0;
       const beamLengthPx = 304;
       const beamWidthPx = 32;
+      const beamOriginOffsetPx = 18;
+      const beamOriginX = screenX + Math.cos(aimAngle) * beamOriginOffsetPx;
+      const beamOriginY = screenY + Math.sin(aimAngle) * beamOriginOffsetPx;
 
       if (enemy.attackState === "laser_windup" && hasWindupSheet) {
-        const pulse = 0.45 + Math.sin(Date.now() / 70) * 0.2;
+        const pulse = 0.82 + Math.sin(Date.now() / 85) * 0.16;
         ctx.save();
-        ctx.translate(screenX, screenY);
-        ctx.rotate(aimAngle);
-        ctx.globalAlpha = Math.max(0.25, Math.min(1, pulse));
+        ctx.translate(beamOriginX, beamOriginY);
+        ctx.rotate(aimAngle + Math.PI / 2);
+        ctx.globalAlpha = Math.max(0.6, Math.min(1, pulse));
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(
           windupSheet,
@@ -1682,10 +1686,10 @@ export default function CanvasGame() {
           0,
           windupSheet.naturalWidth,
           windupSheet.naturalHeight,
-          8,
-          -beamWidthPx / 2,
-          beamLengthPx,
-          beamWidthPx,
+          -(windupSheet.naturalWidth || beamWidthPx) / 2,
+          -(windupSheet.naturalHeight || beamLengthPx),
+          windupSheet.naturalWidth || beamWidthPx,
+          windupSheet.naturalHeight || beamLengthPx,
         );
         ctx.restore();
       }
@@ -1697,8 +1701,8 @@ export default function CanvasGame() {
         const frame = Math.min(5, Math.floor((enemy.windUpTimer ?? 0) / frameDuration));
 
         ctx.save();
-        ctx.translate(screenX, screenY);
-        ctx.rotate(aimAngle);
+        ctx.translate(beamOriginX, beamOriginY);
+        ctx.rotate(aimAngle + Math.PI / 2);
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(
           laserSheet,
@@ -1706,10 +1710,10 @@ export default function CanvasGame() {
           0,
           frameW,
           frameH,
-          8,
-          -beamWidthPx / 2,
-          beamLengthPx,
-          beamWidthPx,
+          -frameW / 2,
+          -frameH,
+          frameW,
+          frameH,
         );
         ctx.restore();
       }
