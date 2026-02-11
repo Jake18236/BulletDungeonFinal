@@ -224,6 +224,12 @@ export const bossLaserSpriteSheet = (() => {
   return img;
 })();
 
+export const bossLaserWindupSprite = (() => {
+  const img = new Image();
+  img.src = "/sprites/enemy/boss-laser-windup.png";
+  return img;
+})();
+
 export const VisualSprites = {
   impactSheet: (() => {
     const img = new Image();
