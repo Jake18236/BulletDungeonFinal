@@ -727,7 +727,7 @@ export default function CanvasGame() {
 
             updated.rotationY = Math.atan2(lockedDirection.z, lockedDirection.x);
 
-            const beamLengthWorld = 304 / (TILE_SIZE / 2);
+            const beamLengthWorld = 304 * 4 / (TILE_SIZE / 2);
             const toPlayer = new THREE.Vector3().subVectors(position, updated.position);
             const along = toPlayer.dot(lockedDirection);
             const lateral = toPlayer.clone().sub(lockedDirection.clone().multiplyScalar(along)).length();
@@ -740,7 +740,7 @@ export default function CanvasGame() {
               !damagedThisFrameRef.current
             ) {
               applyPlayerDamage(
-                updated.isEnraged ? 2 : 1,
+                updated.isEnraged ? 1 : 1,
                 updated.position.clone().add(lockedDirection.clone().multiplyScalar(Math.min(along, beamLengthWorld))),
               );
               damagedThisFrameRef.current = true;
@@ -1626,7 +1626,6 @@ export default function CanvasGame() {
     ctx.restore();
   };
 
-
   const drawEnemyEyes = (ctx: CanvasRenderingContext2D, enemy: any) => {
     if (!enemy || !enemy.position) return;
 
@@ -1653,22 +1652,23 @@ export default function CanvasGame() {
         const gasSourceY = Math.floor(gasFrameIndex / 3) * frameH;
 
         ctx.save();
-        ctx.globalAlpha = enemy.attackState === "laser_firing" ? 0.95 : 0.75;
+        ctx.globalAlpha = enemy.attackState === "laser_firing" ? 1 : 1;
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(bossSheet, gasSourceX, gasSourceY, frameW, frameH, screenX - drawSize / 2, screenY - drawSize / 2, drawSize, drawSize);
         ctx.restore();
 
         ctx.save();
         ctx.imageSmoothingEnabled = false;
-        if (enemy.hitFlash > 0) ctx.filter = "brightness(1.8)";
+        if (enemy.hitFlash > 0) ctx.filter = "brightness(8)";
         ctx.drawImage(bossSheet, bodyFrame * frameW, 0, frameW, frameH, screenX - drawSize / 2, screenY - drawSize / 2, drawSize, drawSize);
         ctx.filter = "none";
         ctx.restore();
       }
 
-      const aimAngle = enemy.rotationY ?? 0;
-      const beamLengthPx = 304;
+      const aimAngle = enemy.rotationY;
+      const beamLengthPx = 304 * 4;
       const beamWidthPx = 32;
+
       const beamOriginOffsetPx = 18;
       const beamOriginX = screenX + Math.cos(aimAngle) * beamOriginOffsetPx;
       const beamOriginY = screenY + Math.sin(aimAngle) * beamOriginOffsetPx;
@@ -1680,16 +1680,18 @@ export default function CanvasGame() {
         ctx.rotate(aimAngle + Math.PI / 2);
         ctx.globalAlpha = Math.max(0.6, Math.min(1, pulse));
         ctx.imageSmoothingEnabled = false;
+        
         ctx.drawImage(
           windupSheet,
           0,
           0,
           windupSheet.naturalWidth,
           windupSheet.naturalHeight,
-          -(windupSheet.naturalWidth || beamWidthPx) / 2,
-          -(windupSheet.naturalHeight || beamLengthPx),
-          windupSheet.naturalWidth || beamWidthPx,
-          windupSheet.naturalHeight || beamLengthPx,
+          -(beamWidthPx) / 2,
+          -(beamLengthPx),
+          beamWidthPx,
+          beamLengthPx,
+
         );
         ctx.restore();
       }
@@ -1710,10 +1712,10 @@ export default function CanvasGame() {
           0,
           frameW,
           frameH,
-          -frameW / 2,
-          -frameH,
-          frameW,
-          frameH,
+          -frameW*4 / 2,
+          -frameH*4,
+          frameW*4,
+          frameH*4,
         );
         ctx.restore();
       }
@@ -1761,14 +1763,11 @@ export default function CanvasGame() {
     ctx.restore();
   };
 
-
   const drawEnemyProjectiles = (ctx: CanvasRenderingContext2D) => {
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
     const projectileSprite = enemyEyeballProjectileSprite;
-    const laserSprite = bossLaserSpriteSheet;
     const hasProjectileSprite = projectileSprite.complete && projectileSprite.naturalWidth > 0 && projectileSprite.naturalHeight > 0;
-    const hasLaserSprite = laserSprite.complete && laserSprite.naturalWidth > 0 && laserSprite.naturalHeight > 0;
 
     for (const projectile of enemyProjectilesRef.current) {
       const screenX = centerX + ((projectile.position.x - position.x) * TILE_SIZE) / 2;
@@ -1786,7 +1785,7 @@ export default function CanvasGame() {
       ctx.restore();
     }
   };
-
+  
   const drawEnemyDeaths = (ctx: CanvasRenderingContext2D) => {
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
