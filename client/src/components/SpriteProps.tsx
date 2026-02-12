@@ -133,7 +133,7 @@ let projectileImage: HTMLImageElement | null = null;
 export function getProjectileImage() {
   if (!projectileImage) {
     projectileImage = new Image();
-    projectileImage.src = "/sprites/bulletB.png";
+    projectileImage.src = "/sprites/bulletD.png";
   }
   return projectileImage;
 }

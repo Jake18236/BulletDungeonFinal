@@ -37,11 +37,10 @@ import {
 } from "./SpriteProps";
 
 const TILE_SIZE = 50;
-const WORLD_TO_SCREEN_SCALE = TILE_SIZE;
 export const CANVAS_WIDTH = 1490;
 export const CANVAS_HEIGHT = 750;
 const ROOM_SIZE = 200;
-const SHOGGOTH_BASE_BEAM_LENGTH_WORLD = (304 * 4) / WORLD_TO_SCREEN_SCALE;
+const SHOGGOTH_BASE_BEAM_LENGTH_WORLD = (304 * 4) / (TILE_SIZE / 2);
 const SHOGGOTH_BEAM_LENGTH_WORLD = SHOGGOTH_BASE_BEAM_LENGTH_WORLD * SHOGGOTH_CONFIG.beamLengthScale;
 
 
@@ -511,7 +510,7 @@ export default function CanvasGame() {
                 const handOffset = 8;
                 const barrelLength = 28;
                 const totalOffsetPixels = handOffset + barrelLength;
-                const totalOffset = totalOffsetPixels / WORLD_TO_SCREEN_SCALE;
+                const totalOffset = totalOffsetPixels / (TILE_SIZE / 2);
                 
                 const barrelPosition = ps.position.clone().add(
                   new THREE.Vector3(
@@ -747,7 +746,7 @@ export default function CanvasGame() {
 
             updated.projectileCooldown = (updated.projectileCooldown ?? 0) - delta;
             if (updated.projectileCooldown <= 0) {
-              const beamOriginOffsetWorld = SHOGGOTH_CONFIG.beamOriginOffsetPx / WORLD_TO_SCREEN_SCALE;
+              const beamOriginOffsetWorld = SHOGGOTH_CONFIG.beamOriginOffsetPx / (TILE_SIZE / 2);
               for (const beamOffset of SHOGGOTH_CONFIG.beamAngles) {
                 const beamAngle = currentRotation + beamOffset;
                 const beamDirection = new THREE.Vector3(Math.cos(beamAngle), 0, Math.sin(beamAngle));
@@ -806,9 +805,9 @@ export default function CanvasGame() {
             enemy.rotationY = Math.atan2(dirZ, dirX);
             const isRangedAttacking = (enemy as any).isRangedAttacking ?? false;
 
-            if (distance <= (ENEMY_TYPE_CONFIG.eyeball.engageDistancePx ?? 100) / WORLD_TO_SCREEN_SCALE) {
+            if (distance <= (ENEMY_TYPE_CONFIG.eyeball.engageDistancePx ?? 100) / (TILE_SIZE / 2)) {
               (enemy as any).isRangedAttacking = true;
-            } else if (distance > (ENEMY_TYPE_CONFIG.eyeball.disengageDistancePx ?? 150) / WORLD_TO_SCREEN_SCALE) {
+            } else if (distance > (ENEMY_TYPE_CONFIG.eyeball.disengageDistancePx ?? 150) / (TILE_SIZE / 2)) {
               (enemy as any).isRangedAttacking = false;
             } else {
               (enemy as any).isRangedAttacking = isRangedAttacking;
@@ -1081,8 +1080,8 @@ export default function CanvasGame() {
 
     const floorSize = ROOM_SIZE * TILE_SIZE;
 
-    const offsetX = (-position.x * WORLD_TO_SCREEN_SCALE);
-    const offsetZ = (-position.z * WORLD_TO_SCREEN_SCALE);
+    const offsetX = (-position.x * TILE_SIZE) / 2;
+    const offsetZ = (-position.z * TILE_SIZE) / 2;
 
     // ============================================
     // DARK STONE FLOOR (20MTD Style - OPTIMIZED)
@@ -1166,10 +1165,10 @@ export default function CanvasGame() {
     // ============================================
 
     terrainRef.current.forEach((obstacle) => {
-      const screenX = centerX + ((obstacle.x - position.x) * WORLD_TO_SCREEN_SCALE);
-      const screenY = centerY + ((obstacle.z - position.z) * WORLD_TO_SCREEN_SCALE);
-      const w = (obstacle.width * WORLD_TO_SCREEN_SCALE);
-      const h = (obstacle.height * WORLD_TO_SCREEN_SCALE);
+      const screenX = centerX + ((obstacle.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((obstacle.z - position.z) * TILE_SIZE) / 2;
+      const w = (obstacle.width * TILE_SIZE) / 2;
+      const h = (obstacle.height * TILE_SIZE) / 2;
 
       if (obstacle.type === "rock") {
         // Dark rock
@@ -1245,8 +1244,8 @@ export default function CanvasGame() {
     const centerY = CANVAS_HEIGHT / 2;
 
     xpOrbs.forEach((orb) => {
-      const screenX = centerX + ((orb.position.x - position.x) * WORLD_TO_SCREEN_SCALE);
-      const screenY = centerY + ((orb.position.z - position.z) * WORLD_TO_SCREEN_SCALE);
+      const screenX = centerX + ((orb.position.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((orb.position.z - position.z) * TILE_SIZE) / 2;
 
       const sprite = xpSprite; // assume you imported or loaded xp.png as xpImage
 
@@ -1427,8 +1426,8 @@ export default function CanvasGame() {
     const centerY = CANVAS_HEIGHT / 2;
     
     const worldToScreen = (pos: THREE.Vector3) => ({
-      x: centerX + ((pos.x - playerPos.x) * WORLD_TO_SCREEN_SCALE),
-      y: centerY + ((pos.z - playerPos.z) * WORLD_TO_SCREEN_SCALE),
+      x: centerX + ((pos.x - playerPos.x) * TILE_SIZE) / 2,
+      y: centerY + ((pos.z - playerPos.z) * TILE_SIZE) / 2,
     });
 
     ctx.save();
@@ -1441,11 +1440,11 @@ export default function CanvasGame() {
       for (let i = 0; i < trail.length; i++) {
         const t = i / trail.length; // 0 = head, 1 = tail
         const alpha = 1;
-        const scale = 1 - t * 0.95;
-
+        const scale = 1 - t * 0.99;
+  
         const p = worldToScreen(trail[i]);
         const size = proj.size * 30 * scale;
-
+        
         ctx.globalAlpha = alpha;
         ctx.drawImage(
           img,
@@ -1482,8 +1481,8 @@ export default function CanvasGame() {
     ctx.save();
 
     particles.forEach(particle => {
-      const screenX = centerX + ((particle.position.x - position.x) * WORLD_TO_SCREEN_SCALE);
-      const screenY = centerY + ((particle.position.z - position.z) * WORLD_TO_SCREEN_SCALE);
+      const screenX = centerX + ((particle.position.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((particle.position.z - position.z) * TILE_SIZE) / 2;
 
       ctx.globalAlpha = particle.alpha;
 
@@ -1529,8 +1528,8 @@ export default function CanvasGame() {
     const frameHeight = sprite.height;
 
     impactEffects.forEach(impact => {
-      const screenX = CANVAS_WIDTH/2 + ((impact.x - position.x) * WORLD_TO_SCREEN_SCALE);
-      const screenY = CANVAS_HEIGHT/2 + ((impact.y - position.z) * WORLD_TO_SCREEN_SCALE);
+      const screenX = CANVAS_WIDTH/2 + ((impact.x - position.x) * TILE_SIZE)/2;
+      const screenY = CANVAS_HEIGHT/2 + ((impact.y - position.z) * TILE_SIZE)/2;
 
       ctx.save();
       ctx.imageSmoothingEnabled = false;
@@ -1555,8 +1554,8 @@ export default function CanvasGame() {
     ctx.textBaseline = "middle";
 
     damageNumbers.forEach(dmg => {
-      const screenX = centerX + ((dmg.x - position.x) * WORLD_TO_SCREEN_SCALE);
-      const screenY = centerY + ((dmg.y - position.z) * WORLD_TO_SCREEN_SCALE);
+      const screenX = centerX + ((dmg.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((dmg.y - position.z) * TILE_SIZE) / 2;
 
       const lifePercent = dmg.life / dmg.maxLife;
       const alpha = lifePercent < 0.7 ? 1 : (1 - (lifePercent - 0.7) / 0.3);
@@ -1619,8 +1618,8 @@ export default function CanvasGame() {
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
 
-    const screenX = centerX + ((enemy.position.x - position.x) * WORLD_TO_SCREEN_SCALE);
-    const screenY = centerY + ((enemy.position.z - position.z) * WORLD_TO_SCREEN_SCALE);
+    const screenX = centerX + ((enemy.position.x - position.x) * TILE_SIZE) / 2;
+    const screenY = centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2;
 
     const enemyType: EnemySpriteType = getEnemyType(enemy);
     const bodySprite = enemySpritesByType[enemyType];
@@ -1653,8 +1652,8 @@ export default function CanvasGame() {
     if (enemy.isBoss && enemy.bossType === "shoggoth") {
       const centerX = CANVAS_WIDTH / 2;
       const centerY = CANVAS_HEIGHT / 2;
-      const screenX = centerX + ((enemy.position.x - position.x) * WORLD_TO_SCREEN_SCALE);
-      const screenY = centerY + ((enemy.position.z - position.z) * WORLD_TO_SCREEN_SCALE);
+      const screenX = centerX + ((enemy.position.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2;
       const bossSheet = shoggothBossSpriteSheet;
       const windupSheet = bossLaserWindupSprite;
       const laserSheet = bossLaserSpriteSheet;
@@ -1832,8 +1831,8 @@ export default function CanvasGame() {
 
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
-    const screenX = centerX + ((enemy.position.x - position.x) * WORLD_TO_SCREEN_SCALE);
-    const screenY = centerY + ((enemy.position.z - position.z) * WORLD_TO_SCREEN_SCALE);
+    const screenX = centerX + ((enemy.position.x - position.x) * TILE_SIZE) / 2;
+    const screenY = centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2;
     const facingRight = enemy.position.x <= position.x;
 
     ctx.save();
@@ -1854,8 +1853,8 @@ export default function CanvasGame() {
     const hasProjectileSprite = projectileSprite.complete && projectileSprite.naturalWidth > 0 && projectileSprite.naturalHeight > 0;
 
     for (const projectile of enemyProjectilesRef.current) {
-      const screenX = centerX + ((projectile.position.x - position.x) * WORLD_TO_SCREEN_SCALE);
-      const screenY = centerY + ((projectile.position.z - position.z) * WORLD_TO_SCREEN_SCALE);
+      const screenX = centerX + ((projectile.position.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((projectile.position.z - position.z) * TILE_SIZE) / 2;
       const pixelSize = Math.max(8, projectile.size * TILE_SIZE * 1.1);
 
       ctx.save();
@@ -1891,8 +1890,8 @@ export default function CanvasGame() {
 
       nextAnimations.push(animation);
 
-      const screenX = centerX + ((animation.position.x - position.x) * WORLD_TO_SCREEN_SCALE);
-      const screenY = centerY + ((animation.position.z - position.z) * WORLD_TO_SCREEN_SCALE);
+      const screenX = centerX + ((animation.position.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((animation.position.z - position.z) * TILE_SIZE) / 2;
       const drawScale = 2;
       const drawWidth = frameWidth * drawScale;
       const drawHeight = frameHeight * drawScale;
@@ -1924,8 +1923,8 @@ export default function CanvasGame() {
     const centerY = CANVAS_HEIGHT / 2;
     
     summons.forEach(summon => {
-      const screenX = centerX + ((summon.position.x - position.x) * WORLD_TO_SCREEN_SCALE);
-      const screenY = centerY + ((summon.position.z - position.z) * WORLD_TO_SCREEN_SCALE);
+      const screenX = centerX + ((summon.position.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((summon.position.z - position.z) * TILE_SIZE) / 2;
 
 
       if (summon.type === "ghost") {
@@ -2023,8 +2022,8 @@ export default function CanvasGame() {
               for (let i = summon.trail.length - 1; i >= 0; i--) {
                 const p = summon.trail[i];
 
-                const x = centerX + ((p.x - position.x) * WORLD_TO_SCREEN_SCALE);
-                const y = centerY + ((p.z - position.z) * WORLD_TO_SCREEN_SCALE);
+                const x = centerX + ((p.x - position.x) * TILE_SIZE) / 2;
+                const y = centerY + ((p.z - position.z) * TILE_SIZE) / 2;
 
                 const t = i / summon.trail.length;
                 const size = 120 * (1 - t * 0.9);
@@ -2040,9 +2039,9 @@ export default function CanvasGame() {
             if (!canDrawDagger) return; // ← safe here ONLY if this is inside a dagger block
 
             const screenX =
-              centerX + ((summon.position.x - position.x) * WORLD_TO_SCREEN_SCALE);
+              centerX + ((summon.position.x - position.x) * TILE_SIZE) / 2;
             const screenY =
-              centerY + ((summon.position.z - position.z) * WORLD_TO_SCREEN_SCALE);
+              centerY + ((summon.position.z - position.z) * TILE_SIZE) / 2;
 
             const scale = 2;
             const w = sprite.naturalWidth * scale;
@@ -2107,8 +2106,8 @@ export default function CanvasGame() {
       const enemy = enemies.find(e => e.id === effect.enemyId);
       if (!enemy) return;
 
-      const screenX = centerX + ((enemy.position.x - position.x) * WORLD_TO_SCREEN_SCALE);
-      const screenY = centerY + ((enemy.position.z - position.z) * WORLD_TO_SCREEN_SCALE);
+      const screenX = centerX + ((enemy.position.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2;
 
       if (effect.type === "burn") {
         // Flame particles

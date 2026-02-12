@@ -218,8 +218,8 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
 
       const lastPos = proj.trailHistory[0] ?? proj.position.clone();
       const dist = proj.position.distanceTo(lastPos);
-      if (dist > 0.20) {
-        const steps = Math.ceil(dist / 0.10);
+      if (dist > 0.60) {
+        const steps = Math.ceil(dist / 0.60);
         for (let s = 1; s <= steps; s++) {
           const interpolated = lastPos.clone().lerp(proj.position, s / steps);
           proj.trailHistory.unshift(interpolated);
