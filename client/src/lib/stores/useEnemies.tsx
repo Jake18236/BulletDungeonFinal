@@ -92,6 +92,7 @@ export interface Enemy {
 
   isRangedAttacking?: boolean;
   rangedShotCooldown?: number;
+  spawnSessionId?: string;
 }
 
 export interface DamagePopup {
@@ -102,10 +103,17 @@ export interface DamagePopup {
   life: number; 
 }
 
-interface SpawnScheduleEntry {
-  time: number;
-  interval: number;
-  count: number;
+type SpawnSessionEnemyType = "basic" | "tank" | "eyeball" | "shoggoth";
+
+interface SpawnSession {
+  id: string;
+  enemy: SpawnSessionEnemyType;
+  start: number;
+  end: number;
+  hp: number;
+  max: number;
+  spawnCD: number;
+  numPerSpawn: number;
 }
 
 interface EnemiesState {
@@ -127,15 +135,54 @@ interface EnemiesState {
 }
 
 export const useEnemies = create<EnemiesState>((set, get) => {
-  const spawnSchedule: SpawnScheduleEntry[] = [
-    { time: 0, interval: 3, count: 20 },
-    { time: 10, interval: 4, count: 2 },
-    { time: 20, interval: 5, count: 3 },
-    { time: 40, interval: 6, count: 20 },
-    { time: 60, interval: 2, count: 30 },
+  const toSeconds = (time: string) => {
+    const [minutes, seconds] = time.split(":").map((part) => Number(part));
+    return minutes * 60 + seconds;
+  };
+
+  const createSession = (
+    id: string,
+    enemy: SpawnSessionEnemyType,
+    start: string,
+    end: string,
+    hp: number,
+    max: number,
+    numPerSpawn: number,
+    spawnCD: number,
+  ): SpawnSession => {
+    const startSeconds = toSeconds(start);
+    const rawEndSeconds = toSeconds(end);
+    const normalizedEnd = rawEndSeconds <= startSeconds
+      ? startSeconds + rawEndSeconds
+      : rawEndSeconds;
+
+    return {
+      id,
+      enemy,
+      start: startSeconds,
+      end: normalizedEnd,
+      hp,
+      max,
+      spawnCD,
+      numPerSpawn,
+    };
+  };
+
+  const spawnSessions: SpawnSession[] = [
+    createSession("basic_0_1", "basic", "0:00", "1:00", 30, 20, 4, 3),
+    createSession("basic_1_2", "basic", "1:00", "2:00", 36, 40, 10, 4),
+    createSession("eyeball_1_6", "eyeball", "1:00", "6:00", 50, 40, 6, 2),
+    createSession("basic_2_6", "basic", "2:00", "6:00", 48, 40, 7, 2),
+    createSession("tank_3_6", "tank", "3:00", "6:00", 100, 4, 1, 2),
+    createSession("shoggoth_5_10", "shoggoth", "5:00", "5:00", 2500, 1, 1, 2),
+    createSession("eyeball_6_9", "eyeball", "6:00", "9:00", 50, 20, 2, 2),
+    createSession("tank_6_9", "tank", "6:00", "3:00", 200, 10, 2, 2),
   ];
 
-  let spawnTimer = 0;
+  let spawnSessionTimers = spawnSessions.reduce<Record<string, number>>((acc, session) => {
+    acc[session.id] = 0;
+    return acc;
+  }, {});
 
   return {
     enemies: [],
@@ -376,36 +423,77 @@ export const useEnemies = create<EnemiesState>((set, get) => {
     },
 
     updateAutoSpawn: (delta, playerPos) => {
-      set((state) => {
-        let elapsedTime = state.elapsedTime + delta;
-        let currentConfig = spawnSchedule[0];
+      const elapsedTime = get().elapsedTime + delta;
+      const activeSessions = spawnSessions.filter(
+        (session) => elapsedTime >= session.start && elapsedTime <= session.end,
+      );
 
-        for (let i = 0; i < spawnSchedule.length; i++) {
-          if (elapsedTime >= spawnSchedule[i].time) currentConfig = spawnSchedule[i];
-          else break;
+      for (const session of spawnSessions) {
+        if (!activeSessions.some((active) => active.id === session.id)) {
+          spawnSessionTimers[session.id] = 0;
+          continue;
         }
 
-        spawnTimer += delta;
+        spawnSessionTimers[session.id] += delta;
+        if (spawnSessionTimers[session.id] < session.spawnCD) continue;
 
-        if (spawnTimer >= currentConfig.interval) {
-          spawnTimer = 0;
-          for (let i = 0; i < currentConfig.count; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            const distance = 30 + Math.random() * 20;
-            const spawnPos = new THREE.Vector3(
-              playerPos.x + Math.cos(angle) * distance,
-              0,
-              playerPos.z + Math.sin(angle) * distance
-            );
+        spawnSessionTimers[session.id] = 0;
 
-            get().addEnemy({ position: spawnPos });
+        const aliveFromSession = get().enemies.filter((enemy) => enemy.spawnSessionId === session.id).length;
+        if (aliveFromSession >= session.max) continue;
+
+        const availableSlots = session.max - aliveFromSession;
+        const enemiesToSpawn = Math.min(session.numPerSpawn, availableSlots);
+
+        for (let i = 0; i < enemiesToSpawn; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const distance = 30 + Math.random() * 20;
+          const spawnPos = new THREE.Vector3(
+            playerPos.x + Math.cos(angle) * distance,
+            0,
+            playerPos.z + Math.sin(angle) * distance,
+          );
+
+          if (session.enemy === "shoggoth") {
+            get().spawnShoggothBoss(spawnPos);
+            const currentEnemies = get().enemies;
+            const spawnedBoss = currentEnemies[currentEnemies.length - 1];
+            if (!spawnedBoss) continue;
+
+            set({
+              enemies: currentEnemies.map((enemy) =>
+                enemy.id === spawnedBoss.id
+                  ? {
+                      ...enemy,
+                      health: session.hp,
+                      maxHealth: session.hp,
+                      spawnSessionId: session.id,
+                    }
+                  : enemy,
+              ),
+            });
+            continue;
           }
-        }
 
-        return { elapsedTime };
-      });
+          get().addEnemy({
+            position: spawnPos,
+            type: session.enemy,
+            health: session.hp,
+            maxHealth: session.hp,
+            spawnSessionId: session.id,
+          });
+        }
+      }
+
+      set({ elapsedTime });
     },
 
-    reset: () => set({ enemies: [], xpOrbs: [], damagePopups: [], elapsedTime: 0 }),
+    reset: () => {
+      spawnSessionTimers = spawnSessions.reduce<Record<string, number>>((acc, session) => {
+        acc[session.id] = 0;
+        return acc;
+      }, {});
+      set({ enemies: [], xpOrbs: [], damagePopups: [], elapsedTime: 0 });
+    },
   };
 });
