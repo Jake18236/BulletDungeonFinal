@@ -5,6 +5,7 @@ import { useEnemies } from "../lib/stores/useEnemies";
 const CANVAS_WIDTH = 1490;
 const CANVAS_HEIGHT = 750;
 const TILE_SIZE = 50;
+const WORLD_TO_SCREEN_SCALE = TILE_SIZE;
 
 export default function Darkness() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -56,7 +57,7 @@ export default function Darkness() {
 
       // --- XP LIGHTS (correct world → screen mapping) ---
       xpOrbs.forEach((orb) => {
-        const WORLD_SCALE = TILE_SIZE / 2;
+        const WORLD_SCALE = WORLD_TO_SCREEN_SCALE;
 
         const x =
           centerX + (orb.position.x - playerPosition.x) * WORLD_SCALE;
