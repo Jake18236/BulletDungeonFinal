@@ -1714,6 +1714,9 @@ export default function CanvasGame() {
         startX: number,
         startY: number,
         continueSheet?: HTMLImageElement,
+        continueSourceX?: number,
+        continueSourceW?: number,
+        continueSourceH?: number,
       ) => {
         const tileDrawH = sourceH;
         const tileStep = tileDrawH * 0.92;
@@ -1725,16 +1728,18 @@ export default function CanvasGame() {
         ctx.imageSmoothingEnabled = false;
 
         for (let tile = 0; tile < tileCount; tile++) {
-          const beamSheet = tile === 0 || !continueSheet ? firstSheet : continueSheet;
-          const continueSourceW = continueSheet ? continueSheet.naturalWidth : sourceW;
-          const continueSourceH = continueSheet ? continueSheet.naturalHeight : sourceH;
+          const useContinueSheet = tile > 0 && !!continueSheet;
+          const beamSheet = useContinueSheet ? continueSheet : firstSheet;
+          const drawSourceX = useContinueSheet ? (continueSourceX ?? sourceX) : sourceX;
+          const drawSourceW = useContinueSheet ? (continueSourceW ?? sourceW) : sourceW;
+          const drawSourceH = useContinueSheet ? (continueSourceH ?? sourceH) : sourceH;
           const drawY = -tileStep * (tile + 1);
           ctx.drawImage(
             beamSheet,
-            tile === 0 || !continueSheet ? sourceX : 0,
+            drawSourceX,
             0,
-            tile === 0 || !continueSheet ? sourceW : continueSourceW,
-            tile === 0 || !continueSheet ? sourceH : continueSourceH,
+            drawSourceW,
+            drawSourceH,
             -beamWidthPx / 2,
             drawY,
             beamWidthPx,
@@ -1771,6 +1776,8 @@ export default function CanvasGame() {
       if (enemy.attackState === "laser_firing" && hasLaserSheet) {
         const frameW = laserSheet.naturalWidth / 6;
         const frameH = laserSheet.naturalHeight;
+        const continueFrameW = hasLaserContinueSheet ? laserContinueSheet.naturalWidth / 6 : frameW;
+        const continueFrameH = hasLaserContinueSheet ? laserContinueSheet.naturalHeight : frameH;
         const fireProgress = Math.min(1, (enemy.windUpTimer ?? 0) / SHOGGOTH_CONFIG.fireDuration);
 
         let frame = 1;
@@ -1795,6 +1802,9 @@ export default function CanvasGame() {
             startX,
             startY,
             hasLaserContinueSheet ? laserContinueSheet : undefined,
+            frame * continueFrameW,
+            continueFrameW,
+            continueFrameH,
           );
         }
       }
