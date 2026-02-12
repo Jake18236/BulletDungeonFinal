@@ -902,12 +902,15 @@ export default function CanvasGame() {
             const dz = e1.position.z - e2.position.z;
             const dist = Math.hypot(dx, dz);
             const minDist = getEnemyCollisionRadius(e1) + getEnemyCollisionRadius(e2);
-
+            e1.position.x += Math.sin(Math.random() * 10) * 0.002;
             if (dist > 0 && dist < minDist) {
-              const overlapRatio = (minDist - dist) / minDist;
-              const slowFactor = Math.max(0.1, 1 - overlapRatio * 0.9);
-              e1.velocity.multiplyScalar(slowFactor);
-              e2.velocity.multiplyScalar(slowFactor);
+              const push = (minDist - dist) / 2;
+              const nx = dx / dist;
+              const nz = dz / dist;
+              e1.position.x += nx * push;
+              e1.position.z += nz * push;
+              e2.position.x -= nx * push;
+              e2.position.z -= nz * push;
             }
           }
         }

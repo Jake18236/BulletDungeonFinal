@@ -38,14 +38,14 @@ export const ENEMY_TYPE_CONFIG: Record<"basic" | "tank" | "eyeball", EnemyTypeBe
 
 export const SHOGGOTH_CONFIG = {
   idealDistance: 12,
-  minDistance: 8,
-  maxDistance: 16,
+  minDistance: 4,
+  maxDistance: 26,
   beamLengthScale: 10,
-  beamHalfWidthWorld: 0.75,
-  beamDamageInterval: 0.14,
-  rotationSpeed: Math.PI * 0.9,
-  fireDuration: 0.95,
-  beamOriginOffsetPx: 18,
+  beamHalfWidthWorld: 0.5,
+  beamDamageInterval: 0.01,
+  rotationSpeed: Math.PI * 0.12,
+  fireDuration: 4,
+  beamOriginOffsetPx: 80,
   beamAngles: [0, (Math.PI * 2) / 5, (Math.PI * 4) / 5, (Math.PI * 6) / 5, (Math.PI * 8) / 5] as const,
 } as const;
 
