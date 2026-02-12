@@ -226,7 +226,7 @@ export const bossLaserSpriteSheet = (() => {
 
 export const bossLaserContinueSprite = (() => {
   const img = new Image();
-  img.src = "/sprites/enemy/boss-laser-continue.png";
+  img.src = "/sprites/enemy/boss-laser-continued.png";
   return img;
 })();
 
