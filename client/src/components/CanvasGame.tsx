@@ -32,6 +32,7 @@ import {
   enemyDeathSpritesheet,
   shoggothBossSpriteSheet,
   bossLaserSpriteSheet,
+  bossLaserContinueSprite,
   bossLaserWindupSprite,
 } from "./SpriteProps";
 
@@ -1663,9 +1664,12 @@ export default function CanvasGame() {
       const bossSheet = shoggothBossSpriteSheet;
       const windupSheet = bossLaserWindupSprite;
       const laserSheet = bossLaserSpriteSheet;
+      const laserContinueSheet = bossLaserContinueSprite;
       const hasBossSheet = bossSheet.complete && bossSheet.naturalWidth > 0 && bossSheet.naturalHeight > 0;
       const hasWindupSheet = windupSheet.complete && windupSheet.naturalWidth > 0 && windupSheet.naturalHeight > 0;
       const hasLaserSheet = laserSheet.complete && laserSheet.naturalWidth > 0 && laserSheet.naturalHeight > 0;
+      const hasLaserContinueSheet =
+        laserContinueSheet.complete && laserContinueSheet.naturalWidth > 0 && laserContinueSheet.naturalHeight > 0;
 
       const drawSize = 170;
       if (hasBossSheet) {
@@ -1702,13 +1706,14 @@ export default function CanvasGame() {
       const laserBaseRotation = enemy.laserBaseRotation ?? aimAngle;
 
       const drawTiledBeam = (
-        sheet: HTMLImageElement,
+        firstSheet: HTMLImageElement,
         sourceX: number,
         sourceW: number,
         sourceH: number,
         beamAngle: number,
         startX: number,
         startY: number,
+        continueSheet?: HTMLImageElement,
       ) => {
         const tileDrawH = sourceH;
         const tileStep = tileDrawH * 0.92;
@@ -1720,13 +1725,16 @@ export default function CanvasGame() {
         ctx.imageSmoothingEnabled = false;
 
         for (let tile = 0; tile < tileCount; tile++) {
+          const beamSheet = tile === 0 || !continueSheet ? firstSheet : continueSheet;
+          const continueSourceW = continueSheet ? continueSheet.naturalWidth : sourceW;
+          const continueSourceH = continueSheet ? continueSheet.naturalHeight : sourceH;
           const drawY = -tileStep * (tile + 1);
           ctx.drawImage(
-            sheet,
-            sourceX,
+            beamSheet,
+            tile === 0 || !continueSheet ? sourceX : 0,
             0,
-            sourceW,
-            sourceH,
+            tile === 0 || !continueSheet ? sourceW : continueSourceW,
+            tile === 0 || !continueSheet ? sourceH : continueSourceH,
             -beamWidthPx / 2,
             drawY,
             beamWidthPx,
@@ -1786,6 +1794,7 @@ export default function CanvasGame() {
             beamAngle,
             startX,
             startY,
+            hasLaserContinueSheet ? laserContinueSheet : undefined,
           );
         }
       }
