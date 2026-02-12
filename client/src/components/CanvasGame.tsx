@@ -1726,13 +1726,15 @@ export default function CanvasGame() {
 
         for (let tile = 0; tile < tileCount; tile++) {
           const beamSheet = tile === 0 || !continueSheet ? firstSheet : continueSheet;
+          const continueSourceW = continueSheet ? continueSheet.naturalWidth : sourceW;
+          const continueSourceH = continueSheet ? continueSheet.naturalHeight : sourceH;
           const drawY = -tileStep * (tile + 1);
           ctx.drawImage(
             beamSheet,
-            sourceX,
+            tile === 0 || !continueSheet ? sourceX : 0,
             0,
-            sourceW,
-            sourceH,
+            tile === 0 || !continueSheet ? sourceW : continueSourceW,
+            tile === 0 || !continueSheet ? sourceH : continueSourceH,
             -beamWidthPx / 2,
             drawY,
             beamWidthPx,
