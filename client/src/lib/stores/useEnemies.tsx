@@ -43,8 +43,8 @@ export const SHOGGOTH_CONFIG = {
   beamLengthScale: 10,
   beamHalfWidthWorld: 0.5,
   beamDamageInterval: 0.05,
-  rotationSpeed: Math.PI * 0.02,
-  fireDuration: 8,
+  rotationSpeed: Math.PI * 0.03,
+  fireDuration: 4,
   beamOriginOffsetPx: 80,
   beamAngles: [0, (Math.PI * 2) / 5, (Math.PI * 4) / 5, (Math.PI * 6) / 5, (Math.PI * 8) / 5] as const,
 } as const;
@@ -169,14 +169,21 @@ export const useEnemies = create<EnemiesState>((set, get) => {
   };
 
   const spawnSessions: SpawnSession[] = [
-    createSession("basic_0_1", "basic", "0:00", "1:00", 30, 20, 4, 3),
+    createSession("basic_0_1", "basic", "0:00", "0:30", 28, 20, 4, 3),
     createSession("basic_1_2", "basic", "0:30", "1:00", 36, 40, 10, 4),
-    createSession("eyeball_1_6", "eyeball", "0:30", "2:00", 50, 10, 6, 1),
-    createSession("basic_2_6", "basic", "1:00", "6:00", 48, 40, 7, 2),
+    createSession("basic_2_6", "basic", "1:00", "6:00", 48, 40, 7, 4),
+    //eyes
+    createSession("eyeball_1_6", "eyeball", "0:30", "2:00", 20, 10, 6, 1),
+    createSession("eyeball_6_9", "eyeball", "2:00", "30:00", 50, 20, 5, 3),
+    createSession("eyeball_6_2", "eyeball", "0:01", "30:00", 50, 2000, 1, 30),
+    //tanks
     createSession("tank_3_6", "tank", "1:00", "2:00", 100, 4, 1, 2),
-    createSession("shoggoth_5_10", "shoggoth", "2:00", "2:00", 2500, 1, 0, 1),
-    createSession("eyeball_6_9", "eyeball", "6:00", "9:00", 50, 20, 2, 2),
-    createSession("tank_6_9", "tank", "6:00", "3:00", 200, 10, 2, 2),
+    createSession("tank_6_9", "tank", "2:00", "3:00", 200, 6, 2, 2),
+    createSession("tank_6_2", "tank", "3:00", "30:00", 500, 8, 2, 1),
+    //boss
+    createSession("shoggoth_5_10", "shoggoth", "1:00", "3:00", 2500, 1, 0.1, 1),
+    
+    
   ];
 
   let spawnSessionTimers = spawnSessions.reduce<Record<string, number>>((acc, session) => {

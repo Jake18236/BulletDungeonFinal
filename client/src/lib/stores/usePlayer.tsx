@@ -847,7 +847,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     return { fanFireTimer: newTimer };
   }),
 
-  fireMuzzleFlash: () => set({ muzzleFlashTimer: 0.1 }),
+  fireMuzzleFlash: () => set({ muzzleFlashTimer: 0.02 }),
 
   updateMuzzleFlash: (delta) => set((state) => {
     if (state.muzzleFlashTimer <= 0) return {};

@@ -1375,45 +1375,38 @@ export default function CanvasGame() {
       ctx.scale(-scale, scale);
       
       if (flipGun) ctx.scale(1, -1);
+
+      // ===========================
+      // MUZZLE FLASH
+      // ===========================
+      
+      if (muzzleFlashTimer > 0) {
+        const sprite = VisualSprites.muzzleFlash;
+        
+        ctx.save();
+        ctx.scale(-1,1)
+        ctx.translate(10 / scale, -3 / scale);
+        
+        const w = sprite.width;
+        const h = sprite.height;
+
+        ctx.drawImage(sprite, w, h / 2, w, -h);
+
+        ctx.restore();
+      }
+      
       // ===========================
       // REVOLVER SPRITE
       // ===========================
       const sprite = WeaponSprites.revolver;
       if (sprite.complete) {
+        
         ctx.save();
         const w = sprite.width;
         const h = sprite.height;
 
         // Grip anchor: left-middle of sprite
         ctx.drawImage(sprite, -w, -h / 2, w, h);
-
-        ctx.restore();
-      }
-      // ===========================
-      // MUZZLE FLASH
-      // ===========================
-      if (muzzleFlashTimer > 0) {
-        ctx.scale(scale, scale)
-        const flashAlpha = muzzleFlashTimer / 0.1;
-        const flashSize = 5 + (1 - flashAlpha) * 2.5;
-
-        ctx.save();
-        ctx.globalAlpha = flashAlpha * 0.8;
-
-        
-        const flashX = 15; // scale adjustment
-        const flashY = 0;
-
-        const gradient = ctx.createRadialGradient(-flashX, -flashY, 0, -flashX, -flashY, flashSize);
-        gradient.addColorStop(0, "#ffffff");
-        gradient.addColorStop(0.4, "#ffff88");
-        gradient.addColorStop(0.7, "#ff8800");
-        gradient.addColorStop(1, "rgba(255,136,0,0)");
-
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.arc(-flashX, -flashY, flashSize, 0, Math.PI * 2);
-        ctx.fill();
 
         ctx.restore();
       }
@@ -1447,7 +1440,7 @@ export default function CanvasGame() {
       for (let i = 0; i < trail.length; i++) {
         const t = i / trail.length; // 0 = head, 1 = tail
         const alpha = 1;
-        const scale = 1 - t * 0.9;
+        const scale = 1 - t * 0.95;
 
         const p = worldToScreen(trail[i]);
         const size = proj.size * 30 * scale;
@@ -1677,7 +1670,7 @@ export default function CanvasGame() {
         const frameH = bossSheet.naturalHeight / 2;
         const animFrame = Math.floor(Date.now() / 130) % 3;
         const bodyFrame = enemy.attackState === "laser_windup" || enemy.attackState === "laser_firing" ? 2 : animFrame;
-        const gasFrameIndex = 3;
+        const gasFrameIndex = 4;
         const gasSourceX = (gasFrameIndex % 3) * frameW;
         const gasSourceY = Math.floor(gasFrameIndex / 3) * frameH;
         const bodyRotation = (enemy.rotationY ?? 0) + Math.PI / 2;
@@ -1719,14 +1712,15 @@ export default function CanvasGame() {
         continueSourceH?: number,
       ) => {
         const tileDrawH = sourceH;
-        const tileStep = tileDrawH * 0.92;
+        const tileStep = tileDrawH - 0.2;
         const tileCount = Math.max(1, Math.ceil(beamLengthPx / tileStep));
 
         ctx.save();
         ctx.translate(startX, startY);
         ctx.rotate(beamAngle + Math.PI / 2);
         ctx.imageSmoothingEnabled = false;
-
+        
+        
         for (let tile = 0; tile < tileCount; tile++) {
           const useContinueSheet = tile > 0 && !!continueSheet;
           const beamSheet = useContinueSheet ? continueSheet : firstSheet;
@@ -1740,10 +1734,10 @@ export default function CanvasGame() {
             0,
             drawSourceW,
             drawSourceH,
-            -beamWidthPx / 2,
-            drawY,
-            beamWidthPx,
-            tileDrawH,
+            -beamWidthPx * 2 / 2,
+            drawY * 2,
+            beamWidthPx * 2,
+            tileDrawH * 2,
           );
         }
 
@@ -1792,7 +1786,7 @@ export default function CanvasGame() {
           const beamAngle = laserBaseRotation + ((enemy.windUpTimer ?? 0) * SHOGGOTH_CONFIG.rotationSpeed) + beamOffset;
           const startX = screenX + Math.cos(beamAngle) * beamOriginOffsetPx;
           const startY = screenY + Math.sin(beamAngle) * beamOriginOffsetPx;
-
+          
           drawTiledBeam(
             laserSheet,
             frame * frameW,
@@ -1801,7 +1795,7 @@ export default function CanvasGame() {
             beamAngle,
             startX,
             startY,
-            hasLaserContinueSheet ? laserContinueSheet : undefined,
+            laserContinueSheet,
             frame * continueFrameW,
             continueFrameW,
             continueFrameH,

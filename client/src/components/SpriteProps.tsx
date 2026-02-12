@@ -133,7 +133,7 @@ let projectileImage: HTMLImageElement | null = null;
 export function getProjectileImage() {
   if (!projectileImage) {
     projectileImage = new Image();
-    projectileImage.src = "/sprites/bullet.png";
+    projectileImage.src = "/sprites/bulletB.png";
   }
   return projectileImage;
 }
@@ -226,7 +226,7 @@ export const bossLaserSpriteSheet = (() => {
 
 export const bossLaserContinueSprite = (() => {
   const img = new Image();
-  img.src = "/sprites/enemy/boss-laser-continue.png";
+  img.src = "/sprites/enemy/boss-laser-continued.png";
   return img;
 })();
 
@@ -240,6 +240,11 @@ export const VisualSprites = {
   impactSheet: (() => {
     const img = new Image();
     img.src = "/sprites/impact-spritesheet.png"; // your spritesheet
+    return img;
+  })(),
+  muzzleFlash: (() => {
+    const img = new Image();
+    img.src = "/sprites/muzzle-flash.png";
     return img;
   })(),
 };

@@ -98,16 +98,16 @@ export function LevelUpScreen() {
           className="absolute pointer-events-none"
           style={{
             left: `${playerScreenX}px`,
-            top: `${playerScreenY}px`,
+            top: `${playerScreenY + 24}px`,
             width: "128px",
-            height: "460px",
+            height: "420px",
             transform: "translate(-50%, -100%)",
 
             backgroundImage: `url(${LEVEL_UP_BEAM_SPRITESHEET})`,
             backgroundRepeat: "no-repeat",
             backgroundSize: "600% 100%",
             backgroundPosition: `${(beamFrame / 5) * 100}% 0%`,
-            opacity: 1,
+            opacity: 1.5,
             filter: "none",
           }}
         />
