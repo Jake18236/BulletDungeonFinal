@@ -679,7 +679,7 @@ export default function CanvasGame() {
 
           if (!updated.isEnraged && updated.health < updated.maxHealth * 0.45) {
             updated.isEnraged = true;
-            updated.maxProjectileCooldown = 2.9;
+            updated.maxProjectileCooldown = 1;
             updated.maxWindUpTime = 0.8;
             updated.speed *= 1.15;
           }
@@ -1696,7 +1696,7 @@ export default function CanvasGame() {
       }
 
       const aimAngle = enemy.rotationY ?? 0;
-      const beamLengthPx = 304 * 4 * SHOGGOTH_CONFIG.beamLengthScale;
+      const beamLengthPx = 304 * SHOGGOTH_CONFIG.beamLengthScale;
       const beamWidthPx = 32;
       const beamOriginOffsetPx = SHOGGOTH_CONFIG.beamOriginOffsetPx;
       const laserBaseRotation = enemy.laserBaseRotation ?? aimAngle;
@@ -1710,7 +1710,7 @@ export default function CanvasGame() {
         startX: number,
         startY: number,
       ) => {
-        const tileDrawH = sourceH * 4;
+        const tileDrawH = sourceH;
         const tileStep = tileDrawH * 0.92;
         const tileCount = Math.max(1, Math.ceil(beamLengthPx / tileStep));
 
