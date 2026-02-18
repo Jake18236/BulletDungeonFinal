@@ -125,8 +125,6 @@ export const useHit = create<HitState>((set, get) => ({
         enemy.health = 0;
 
         const { addImpact } = useVisualEffects.getState();
-        addImpact(enemy.position.clone());
-        addImpact(enemy.position.clone());
 
         return true;
       }

@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { CANVAS_WIDTH, CANVAS_HEIGHT, TILE_SIZE } from "../components/CanvasGame"
 import { usePlayer } from "./usePlayer";
 import * as THREE from "three";
 import { Enemy } from "./useEnemies";
@@ -36,6 +35,7 @@ export interface Projectile {
   color: string;
   size: number;
   trailColor: string;
+  trailColorSecondary: string;
   trailLength: number;
   trailHistory: THREE.Vector3[];
 
@@ -153,6 +153,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       color: getProjectileColor(config),
       size: config.size,
       trailColor: getTrailColor(config),
+      trailColorSecondary: getTrailColor(config),
       trailLength: config.trailLength,
       trailHistory: [],
 
@@ -217,9 +218,9 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       if (!proj.trailHistory) proj.trailHistory = [];
 
       const lastPos = proj.trailHistory[0] ?? proj.position.clone();
-      const dist = proj.position.distanceTo(lastPos);
-      if (dist > 0.60) {
-        const steps = Math.ceil(dist / 0.60);
+      const dist = Math.ceil(proj.position.distanceTo(lastPos));
+      if (dist > 0.20) {
+        const steps = Math.ceil(dist / 0.20);
         for (let s = 1; s <= steps; s++) {
           const interpolated = lastPos.clone().lerp(proj.position, s / steps);
           proj.trailHistory.unshift(interpolated);

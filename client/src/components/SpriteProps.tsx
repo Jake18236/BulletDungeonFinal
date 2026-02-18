@@ -108,9 +108,7 @@ type CursorSpriteProps = {
 };
 
 export function CursorSprite({ x, y }: CursorSpriteProps) {
-
-  const scale = 0.5;
-  const size = 32 * BASE_SCALE * scale;
+  const size = 32;
   const half = size / 2;
 
   return (
@@ -121,8 +119,8 @@ export function CursorSprite({ x, y }: CursorSpriteProps) {
       style={{
         width: size,
         height: size,
-        left: Math.round(x - half),
-        top: Math.round(y - half),
+        left: Math.floor(x - half),
+        top: Math.floor(y - half),
       }}
     />
   );
@@ -173,7 +171,7 @@ export const enemySprite = enemySpritesByType.basic;
 export const bossEnemySprite: SpriteDef = {
   img: enemySprite.img,
   size: 32,
-  scale: 2.2,
+  scale: 2,
 };
 
 export const xpSprite = (() => {

@@ -37,6 +37,8 @@ export const ENEMY_TYPE_CONFIG: Record<"basic" | "tank" | "eyeball", EnemyTypeBe
 };
 
 export const SHOGGOTH_CONFIG = {
+  bodyHitRadius: 10.65,
+  collisionRadius: 10,
   idealDistance: 12,
   minDistance: 4,
   maxDistance: 26,

@@ -2,6 +2,7 @@
 import { create } from "zustand";
 import * as THREE from "three";
 import { VisualSprites } from "../../components/SpriteProps";
+import { useProjectiles } from "./useProjectiles"
 // ---------------- Types ----------------
 export interface Particle {
   id: string;
@@ -59,7 +60,7 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
   impactEffects: [],
 
   // ---------------- Impact Effects ----------------
-  addImpact: (position: THREE.Vector3, size = 64) => {
+  addImpact: (position: THREE.Vector3, size = 48) => {
     const impactEffect: ImpactEffect = {
       id: `impact_${Date.now()}`,
       x: position.x,

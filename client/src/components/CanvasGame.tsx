@@ -68,9 +68,7 @@ interface Position {
   y: number;
   z: number;
 }
-const img = new Image();
-img.src = "/sprites/bullet.png";
-img.onload = () => console.log("Circle loaded");
+
 
 interface TerrainObstacle {
   x: number;
@@ -398,7 +396,7 @@ export default function CanvasGame() {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      ctx.imageSmoothingEnabled = false;
+      
       
 
       ctx.fillStyle = "#1a1a1a";
@@ -445,7 +443,6 @@ export default function CanvasGame() {
             if (enemy.health <= 0) {
               handleEnemyKilledBySummon();
 
-              // SPLINTER BULLETS HERE
               const ps = usePlayer.getState();
               if (ps.splinterBullets) {
                 const stats = ps.getProjectileStats();
@@ -458,7 +455,7 @@ export default function CanvasGame() {
                   addProjectile({
                     position: enemy.position.clone(),
                     direction,
-                    size: 1,
+                    size: 32,
                     damage: stats.damage * 0.1,
                     speed: stats.speed * 1.5,
                     life: stats.life,
@@ -1421,10 +1418,10 @@ export default function CanvasGame() {
     isPaused: boolean,
     playerPos: THREE.Vector3
   ) => {
-    const { projectiles } = useProjectiles.getState();
+    const { projectiles, trailGhosts } = useProjectiles.getState();
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
-    
+
     const worldToScreen = (pos: THREE.Vector3) => ({
       x: centerX + ((pos.x - playerPos.x) * TILE_SIZE) / 2,
       y: centerY + ((pos.z - playerPos.z) * TILE_SIZE) / 2,
@@ -1432,34 +1429,31 @@ export default function CanvasGame() {
 
     ctx.save();
     const img = getProjectileImage();
-
+    
+    // --- DRAW ACTIVE PROJECTILES ---
     projectiles.forEach((proj) => {
       const trail = proj.trailHistory;
+        for (let i = 0; i < trail.length; i++) {
+          const t = i / trail.length; // 0 = head, 1 = tail
+          const scale = 1 - t * 0.99;
+          const maxSize = Math.ceil(proj.size);
+          const step = 0.5; // shrink by 1 pixel per segment
 
-      // --- SPRITE TRAIL ---
-      for (let i = 0; i < trail.length; i++) {
-        const t = i / trail.length; // 0 = head, 1 = tail
-        const alpha = 1;
-        const scale = 1 - t * 0.99;
-  
-        const p = worldToScreen(trail[i]);
-        const size = proj.size * 30 * scale;
-        
-        ctx.globalAlpha = alpha;
-        ctx.drawImage(
-          img,
-          p.x - size / 2,
-          p.y - size / 2,
-          size,
-          size
-        );
-      }
+          const size = Math.max(
+            1,
+            Math.floor(maxSize - i * step)
+          );
+          const p = worldToScreen(trail[i]);
+          
+
+          ctx.drawImage(img, p.x - size / 2, p.y - size / 2, size, size);
+        }
+      
 
       // --- MAIN BULLET (brightest, full size) ---
       const screen = worldToScreen(proj.position);
-      const mainSize = proj.size * 30;
-      ctx.imageSmoothingEnabled = false;
-      ctx.globalAlpha = 1;
+      const mainSize = Math.floor(proj.size);
+      ctx.globalAlpha = 1.5;
       ctx.drawImage(
         img,
         screen.x - mainSize / 2,
@@ -1468,11 +1462,10 @@ export default function CanvasGame() {
         mainSize
       );
     });
-
     ctx.globalAlpha = 1;
-
     ctx.restore();
   };
+
 
   const drawParticles = (ctx: CanvasRenderingContext2D) => {
     const centerX = CANVAS_WIDTH / 2;
@@ -1640,7 +1633,7 @@ export default function CanvasGame() {
     if (enemy.hitFlash > 0) {
       ctx.drawImage(flashSprite.img, -size / 2, -size / 2, size, size);
     } else {
-      ctx.drawImage(bodySprite.img, -size / 2, -size / 2, size, size);
+      ctx.drawImage(bodySprite.img, Math.floor(-size / 2), Math.floor(-size / 2), Math.floor(size), Math.floor(size));
     }
 
     ctx.restore();
@@ -1842,7 +1835,7 @@ export default function CanvasGame() {
     } else if (!facingRight) {
       ctx.scale(-1, 1);
     }
-    ctx.drawImage(eyeSprite.img, -size / 2, -size / 2, size, size);
+    ctx.drawImage(eyeSprite.img, Math.floor(-size / 2), Math.floor(-size / 2), Math.floor(size), Math.floor(size));
     ctx.restore();
   };
 
