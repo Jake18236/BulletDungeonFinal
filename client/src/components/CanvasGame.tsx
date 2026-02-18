@@ -1432,35 +1432,85 @@ export default function CanvasGame() {
     
     // --- DRAW ACTIVE PROJECTILES ---
     projectiles.forEach((proj) => {
+      const head = worldToScreen(proj.position);
       const trail = proj.trailHistory;
-        for (let i = 0; i < trail.length; i++) {
-          const t = i / trail.length; // 0 = head, 1 = tail
-          const scale = 1 - t * 0.99;
-          const maxSize = Math.ceil(proj.size);
-          const step = 0.5; // shrink by 1 pixel per segment
 
-          const size = Math.max(
-            1,
-            Math.floor(maxSize - i * step)
-          );
-          const p = worldToScreen(trail[i]);
-          
+      const velocity2D = {
+        x: proj.velocity.x,
+        y: proj.velocity.z,
+      };
+      const velocityLen = Math.hypot(velocity2D.x, velocity2D.y) || 1;
+      const dir = {
+        x: velocity2D.x / velocityLen,
+        y: velocity2D.y / velocityLen,
+      };
 
-          ctx.drawImage(img, p.x - size / 2, p.y - size / 2, size, size);
+      const maxTrailPx = Math.max(16, Math.min(44, proj.size * 1.25));
+      let remaining = maxTrailPx;
+      let tail = {
+        x: head.x - dir.x * maxTrailPx,
+        y: head.y - dir.y * maxTrailPx,
+      };
+
+      if (trail.length > 1) {
+        let prev = worldToScreen(trail[0]);
+        for (let i = 1; i < trail.length; i++) {
+          const current = worldToScreen(trail[i]);
+          const segDx = current.x - prev.x;
+          const segDy = current.y - prev.y;
+          const segLen = Math.hypot(segDx, segDy);
+
+          if (segLen >= remaining) {
+            const t = remaining / Math.max(segLen, 0.0001);
+            tail = {
+              x: prev.x + segDx * t,
+              y: prev.y + segDy * t,
+            };
+            remaining = 0;
+            break;
+          }
+
+          remaining -= segLen;
+          tail = current;
+          prev = current;
         }
-      
+      }
 
-      // --- MAIN BULLET (brightest, full size) ---
-      const screen = worldToScreen(proj.position);
-      const mainSize = Math.floor(proj.size);
-      ctx.globalAlpha = 1.5;
+      const dx = head.x - tail.x;
+      const dy = head.y - tail.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len;
+      const ny = dx / len;
+      const headRadius = Math.max(2.5, Math.min(7, proj.size * 0.12));
+
+      const gradient = ctx.createLinearGradient(head.x, head.y, tail.x, tail.y);
+      gradient.addColorStop(0, "rgba(255, 244, 228, 0.98)");
+      gradient.addColorStop(0.5, "rgba(255, 240, 218, 0.88)");
+      gradient.addColorStop(1, "rgba(255, 238, 212, 0)");
+
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.moveTo(head.x + nx * headRadius, head.y + ny * headRadius);
+      ctx.lineTo(head.x - nx * headRadius, head.y - ny * headRadius);
+      ctx.lineTo(tail.x, tail.y);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = "rgba(255, 244, 228, 1)";
+      ctx.beginPath();
+      ctx.arc(head.x, head.y, headRadius * 0.92, 0, Math.PI * 2);
+      ctx.fill();
+
+      const spriteSize = Math.max(2, Math.floor(headRadius * 2));
+      ctx.globalAlpha = 0.45;
       ctx.drawImage(
         img,
-        screen.x - mainSize / 2,
-        screen.y - mainSize / 2,
-        mainSize,
-        mainSize
+        head.x - spriteSize / 2,
+        head.y - spriteSize / 2,
+        spriteSize,
+        spriteSize
       );
+      ctx.globalAlpha = 1;
     });
     ctx.globalAlpha = 1;
     ctx.restore();
