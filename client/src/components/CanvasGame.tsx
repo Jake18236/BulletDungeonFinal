@@ -1428,39 +1428,86 @@ export default function CanvasGame() {
     });
 
     ctx.save();
-    const img = getProjectileImage();
-    
+    ctx.imageSmoothingEnabled = false;
+
     // --- DRAW ACTIVE PROJECTILES ---
     projectiles.forEach((proj) => {
+      const head = worldToScreen(proj.position);
       const trail = proj.trailHistory;
-        for (let i = 0; i < trail.length; i++) {
-          const t = i / trail.length; // 0 = head, 1 = tail
-          const scale = 1 - t * 0.99;
-          const maxSize = Math.ceil(proj.size);
-          const step = 0.5; // shrink by 1 pixel per segment
 
-          const size = Math.max(
-            1,
-            Math.floor(maxSize - i * step)
-          );
-          const p = worldToScreen(trail[i]);
-          
+      const velocity2D = {
+        x: proj.velocity.x,
+        y: proj.velocity.z,
+      };
+      const velocityLen = Math.hypot(velocity2D.x, velocity2D.y) || 1;
+      const dir = {
+        x: velocity2D.x / velocityLen,
+        y: velocity2D.y / velocityLen,
+      };
 
-          ctx.drawImage(img, p.x - size / 2, p.y - size / 2, size, size);
+      const maxTrailPx = Math.max(14, Math.min(42, proj.size * 1.2));
+      let remaining = maxTrailPx;
+      let tail = {
+        x: head.x - dir.x * maxTrailPx,
+        y: head.y - dir.y * maxTrailPx,
+      };
+
+      if (trail.length > 1) {
+        let prev = worldToScreen(trail[0]);
+        for (let i = 1; i < trail.length; i++) {
+          const current = worldToScreen(trail[i]);
+          const segDx = current.x - prev.x;
+          const segDy = current.y - prev.y;
+          const segLen = Math.hypot(segDx, segDy);
+
+          if (segLen >= remaining) {
+            const t = remaining / Math.max(segLen, 0.0001);
+            tail = {
+              x: prev.x + segDx * t,
+              y: prev.y + segDy * t,
+            };
+            break;
+          }
+
+          remaining -= segLen;
+          tail = current;
+          prev = current;
         }
-      
+      }
 
-      // --- MAIN BULLET (brightest, full size) ---
-      const screen = worldToScreen(proj.position);
-      const mainSize = Math.floor(proj.size);
-      ctx.globalAlpha = 1.5;
-      ctx.drawImage(
-        img,
-        screen.x - mainSize / 2,
-        screen.y - mainSize / 2,
-        mainSize,
-        mainSize
-      );
+      const dx = head.x - tail.x;
+      const dy = head.y - tail.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len;
+      const ny = dx / len;
+
+      const headRadius = Math.max(2, Math.min(6, Math.round(proj.size * 0.11)));
+      const samples = Math.max(6, Math.round(len));
+
+      ctx.fillStyle = "#f8eee2";
+      for (let i = 0; i <= samples; i++) {
+        const t = i / samples;
+        const px = Math.round(head.x - (dx * t));
+        const py = Math.round(head.y - (dy * t));
+        const width = Math.max(1, Math.round(headRadius * 2 * (1 - t * 0.94)));
+        const halfW = Math.floor(width / 2);
+
+        for (let w = -halfW; w <= halfW; w++) {
+          const sx = Math.round(px + nx * w);
+          const sy = Math.round(py + ny * w);
+          ctx.fillRect(sx, sy, 1, 1);
+        }
+      }
+
+      // blunt, brighter pixel head
+      ctx.fillStyle = "#fff6ea";
+      for (let y = -headRadius; y <= headRadius; y++) {
+        for (let x = -headRadius; x <= headRadius; x++) {
+          if ((x * x) + (y * y) <= headRadius * headRadius) {
+            ctx.fillRect(Math.round(head.x) + x, Math.round(head.y) + y, 1, 1);
+          }
+        }
+      }
     });
     ctx.globalAlpha = 1;
     ctx.restore();
