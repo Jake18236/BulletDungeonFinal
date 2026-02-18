@@ -1428,8 +1428,8 @@ export default function CanvasGame() {
     });
 
     ctx.save();
-    const img = getProjectileImage();
-    
+    ctx.imageSmoothingEnabled = false;
+
     // --- DRAW ACTIVE PROJECTILES ---
     projectiles.forEach((proj) => {
       const head = worldToScreen(proj.position);
@@ -1445,7 +1445,7 @@ export default function CanvasGame() {
         y: velocity2D.y / velocityLen,
       };
 
-      const maxTrailPx = Math.max(16, Math.min(44, proj.size * 1.25));
+      const maxTrailPx = Math.max(14, Math.min(42, proj.size * 1.2));
       let remaining = maxTrailPx;
       let tail = {
         x: head.x - dir.x * maxTrailPx,
@@ -1466,7 +1466,6 @@ export default function CanvasGame() {
               x: prev.x + segDx * t,
               y: prev.y + segDy * t,
             };
-            remaining = 0;
             break;
           }
 
@@ -1481,36 +1480,34 @@ export default function CanvasGame() {
       const len = Math.hypot(dx, dy) || 1;
       const nx = -dy / len;
       const ny = dx / len;
-      const headRadius = Math.max(2.5, Math.min(7, proj.size * 0.12));
 
-      const gradient = ctx.createLinearGradient(head.x, head.y, tail.x, tail.y);
-      gradient.addColorStop(0, "rgba(255, 244, 228, 0.98)");
-      gradient.addColorStop(0.5, "rgba(255, 240, 218, 0.88)");
-      gradient.addColorStop(1, "rgba(255, 238, 212, 0)");
+      const headRadius = Math.max(2, Math.min(6, Math.round(proj.size * 0.11)));
+      const samples = Math.max(6, Math.round(len));
 
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.moveTo(head.x + nx * headRadius, head.y + ny * headRadius);
-      ctx.lineTo(head.x - nx * headRadius, head.y - ny * headRadius);
-      ctx.lineTo(tail.x, tail.y);
-      ctx.closePath();
-      ctx.fill();
+      ctx.fillStyle = "#f8eee2";
+      for (let i = 0; i <= samples; i++) {
+        const t = i / samples;
+        const px = Math.round(head.x - (dx * t));
+        const py = Math.round(head.y - (dy * t));
+        const width = Math.max(1, Math.round(headRadius * 2 * (1 - t * 0.94)));
+        const halfW = Math.floor(width / 2);
 
-      ctx.fillStyle = "rgba(255, 244, 228, 1)";
-      ctx.beginPath();
-      ctx.arc(head.x, head.y, headRadius * 0.92, 0, Math.PI * 2);
-      ctx.fill();
+        for (let w = -halfW; w <= halfW; w++) {
+          const sx = Math.round(px + nx * w);
+          const sy = Math.round(py + ny * w);
+          ctx.fillRect(sx, sy, 1, 1);
+        }
+      }
 
-      const spriteSize = Math.max(2, Math.floor(headRadius * 2));
-      ctx.globalAlpha = 0.45;
-      ctx.drawImage(
-        img,
-        head.x - spriteSize / 2,
-        head.y - spriteSize / 2,
-        spriteSize,
-        spriteSize
-      );
-      ctx.globalAlpha = 1;
+      // blunt, brighter pixel head
+      ctx.fillStyle = "#fff6ea";
+      for (let y = -headRadius; y <= headRadius; y++) {
+        for (let x = -headRadius; x <= headRadius; x++) {
+          if ((x * x) + (y * y) <= headRadius * headRadius) {
+            ctx.fillRect(Math.round(head.x) + x, Math.round(head.y) + y, 1, 1);
+          }
+        }
+      }
     });
     ctx.globalAlpha = 1;
     ctx.restore();
