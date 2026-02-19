@@ -104,7 +104,7 @@ function generateRoomTerrain(roomX: number, roomY: number): TerrainObstacle[] {
     return x - Math.floor(x);
   };
 
-  const numOutcrops = 4;
+  const numOutcrops = 400;
   for (let i = 0; i < numOutcrops; i++) {
     const side = Math.floor(seededRandom(i * 20) * 4);
     const position = seededRandom(i * 10 - 10) * 70 - 35;
@@ -1095,7 +1095,7 @@ export default function CanvasGame() {
     const offsetZ = (-position.z * TILE_SIZE) / 2;
 
     // Base floor color under textures
-    ctx.fillStyle = "#1a1a1c";
+    ctx.fillStyle = "#272030";
     ctx.fillRect(
       centerX - floorSize / 2 + offsetX,
       centerY - floorSize / 2 + offsetZ,
@@ -1109,11 +1109,8 @@ export default function CanvasGame() {
     const crackFrameSize = 16;
     const crackCols = 3;
     const crackRows = 3;
-    const tileFrameSize = 16;
-    const tileCols = 4;
-    const tileRows = 5;
     const worldTileStep = 1;
-    const drawSize = 24;
+    const drawSize = 32;
 
     const halfCanvasWorldW = CANVAS_WIDTH / TILE_SIZE;
     const halfCanvasWorldH = CANVAS_HEIGHT / TILE_SIZE;
@@ -1137,40 +1134,7 @@ export default function CanvasGame() {
         const crackSY = Math.floor(crackIndex / crackCols) * crackFrameSize;
 
         if (cracksSheet.complete && cracksSheet.naturalWidth > 0) {
-          ctx.drawImage(
-            cracksSheet,
-            crackSX,
-            crackSY,
-            crackFrameSize,
-            crackFrameSize,
-            screenX - drawSize / 2,
-            screenY - drawSize / 2,
-            drawSize,
-            drawSize,
-          );
-        }
-
-        const clusterX = Math.floor(worldX / 4);
-        const clusterZ = Math.floor(worldZ / 4);
-        const clusterValue = seededTileRandom(seed, clusterX, clusterZ, 2);
-        const inCluster = clusterValue > 0.58;
-        const edgeVariation = seededTileRandom(seed, worldX, worldZ, 3) > 0.22;
-
-        if (inCluster && edgeVariation && tilesSheet.complete && tilesSheet.naturalWidth > 0) {
-          const tileIndex = Math.floor(seededTileRandom(seed, worldX, worldZ, 4) * (tileCols * tileRows));
-          const tileSX = (tileIndex % tileCols) * tileFrameSize;
-          const tileSY = Math.floor(tileIndex / tileCols) * tileFrameSize;
-          ctx.drawImage(
-            tilesSheet,
-            tileSX,
-            tileSY,
-            tileFrameSize,
-            tileFrameSize,
-            screenX - drawSize / 2,
-            screenY - drawSize / 2,
-            drawSize,
-            drawSize,
-          );
+          
         }
       }
     }
@@ -1202,20 +1166,20 @@ export default function CanvasGame() {
     terrainRef.current.forEach((obstacle) => {
       const screenX = centerX + ((obstacle.x - position.x) * TILE_SIZE) / 2;
       const screenY = centerY + ((obstacle.z - position.z) * TILE_SIZE) / 2;
-      const w = (obstacle.width * TILE_SIZE) / 2;
-      const h = (obstacle.height * TILE_SIZE) / 2;
-
-      if (urnSprite.complete && urnSprite.naturalWidth > 0) {
-        const spriteSize = Math.max(18, Math.max(w, h) * 1.25);
+      const w = urnSprite.naturalWidth*2;
+      const h = urnSprite.naturalHeight;
+    
+      if (urnSprite.complete) {
+        const spriteSize = Math.max(1, w);
         ctx.drawImage(
           urnSprite,
           screenX - spriteSize / 2,
-          screenY - spriteSize / 2,
+          screenY - spriteSize*1.5 / 2,
           spriteSize,
-          spriteSize,
+          spriteSize*1.5,
         );
       } else {
-        ctx.fillStyle = "#3a3a3c";
+        ctx.fillStyle = "#ffffff";
         ctx.beginPath();
         ctx.arc(screenX, screenY, w / 2, 0, Math.PI * 2);
         ctx.fill();
