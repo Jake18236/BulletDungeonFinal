@@ -43,6 +43,15 @@ const ROOM_SIZE = 200;
 const SHOGGOTH_BASE_BEAM_LENGTH_WORLD = (304 * 4) / (TILE_SIZE / 2);
 const SHOGGOTH_BEAM_LENGTH_WORLD = SHOGGOTH_BASE_BEAM_LENGTH_WORLD * SHOGGOTH_CONFIG.beamLengthScale;
 
+const cracksSheet = new Image();
+cracksSheet.src = "/textures/cracks.png";
+
+const tilesSheet = new Image();
+tilesSheet.src = "/textures/tiles.png";
+
+const urnSprite = new Image();
+urnSprite.src = "/sprites/urn.png";
+
 
 interface EnemyProjectile {
   id: string;
@@ -80,6 +89,11 @@ interface TerrainObstacle {
 
 const { addSummon } = useSummons.getState();
 addSummon("ghost");
+
+function seededTileRandom(seed: number, x: number, z: number, salt: number) {
+  const value = Math.sin(seed * 0.17 + x * 12.9898 + z * 78.233 + salt * 37.719) * 43758.5453;
+  return value - Math.floor(value);
+}
 
 function generateRoomTerrain(roomX: number, roomY: number): TerrainObstacle[] {
   const obstacles: TerrainObstacle[] = [];
@@ -1080,11 +1094,7 @@ export default function CanvasGame() {
     const offsetX = (-position.x * TILE_SIZE) / 2;
     const offsetZ = (-position.z * TILE_SIZE) / 2;
 
-    // ============================================
-    // DARK STONE FLOOR (20MTD Style - OPTIMIZED)
-    // ============================================
-
-    // Base dark floor color
+    // Base floor color under textures
     ctx.fillStyle = "#1a1a1c";
     ctx.fillRect(
       centerX - floorSize / 2 + offsetX,
@@ -1093,47 +1103,75 @@ export default function CanvasGame() {
       floorSize,
     );
 
-    // Seeded random for consistent pattern
+    // Seeded random for consistent texture layout
     const seed = currentRoom.x * 1000 + currentRoom.y;
-    const seededRandom = (n: number) => {
-      const x = Math.sin(seed + n) * 1000;
-      return x - Math.floor(x);
-    };
 
-    // Draw subtle stone pattern (MUCH fewer tiles)
-    const stoneSize = 80; // Larger tiles = less drawing
-    const rows = Math.ceil(floorSize / stoneSize) + 1;
-    const cols = Math.ceil(floorSize / stoneSize) + 1;
+    const crackFrameSize = 16;
+    const crackCols = 3;
+    const crackRows = 3;
+    const tileFrameSize = 16;
+    const tileCols = 4;
+    const tileRows = 5;
+    const worldTileStep = 1;
+    const drawSize = 24;
 
-    ctx.strokeStyle = "#0f0f10";
-    ctx.lineWidth = 1;
+    const halfCanvasWorldW = CANVAS_WIDTH / TILE_SIZE;
+    const halfCanvasWorldH = CANVAS_HEIGHT / TILE_SIZE;
+    const roomMin = -ROOM_SIZE;
+    const roomMax = ROOM_SIZE;
 
-    // Draw stone tile lines
-    for (let row = 0; row <= rows; row++) {
-      const y = centerY - floorSize / 2 + offsetZ + row * stoneSize;
-      ctx.beginPath();
-      ctx.moveTo(centerX - floorSize / 2 + offsetX, y);
-      ctx.lineTo(centerX + floorSize / 2 + offsetX, y);
-      ctx.stroke();
-    }
+    const startX = Math.max(roomMin, Math.floor(position.x - halfCanvasWorldW - 2));
+    const endX = Math.min(roomMax, Math.ceil(position.x + halfCanvasWorldW + 2));
+    const startZ = Math.max(roomMin, Math.floor(position.z - halfCanvasWorldH - 2));
+    const endZ = Math.min(roomMax, Math.ceil(position.z + halfCanvasWorldH + 2));
 
-    for (let col = 0; col <= cols; col++) {
-      const x = centerX - floorSize / 2 + offsetX + col * stoneSize;
-      ctx.beginPath();
-      ctx.moveTo(x, centerY - floorSize / 2 + offsetZ);
-      ctx.lineTo(x, centerY + floorSize / 2 + offsetZ);
-      ctx.stroke();
-    }
+    ctx.imageSmoothingEnabled = false;
 
-    // Add occasional dark spots (very few)
-    ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
-    for (let i = 0; i < 20; i++) {
-      if (seededRandom(i * 123) > 0.7) {
-        const x = centerX - floorSize / 2 + offsetX + seededRandom(i * 234) * floorSize;
-        const y = centerY - floorSize / 2 + offsetZ + seededRandom(i * 345) * floorSize;
-        ctx.beginPath();
-        ctx.arc(x, y, 2 + seededRandom(i) * 3, 0, Math.PI * 2);
-        ctx.fill();
+    for (let worldX = startX; worldX <= endX; worldX += worldTileStep) {
+      for (let worldZ = startZ; worldZ <= endZ; worldZ += worldTileStep) {
+        const screenX = centerX + ((worldX - position.x) * TILE_SIZE) / 2;
+        const screenY = centerY + ((worldZ - position.z) * TILE_SIZE) / 2;
+
+        const crackIndex = Math.floor(seededTileRandom(seed, worldX, worldZ, 1) * (crackCols * crackRows));
+        const crackSX = (crackIndex % crackCols) * crackFrameSize;
+        const crackSY = Math.floor(crackIndex / crackCols) * crackFrameSize;
+
+        if (cracksSheet.complete && cracksSheet.naturalWidth > 0) {
+          ctx.drawImage(
+            cracksSheet,
+            crackSX,
+            crackSY,
+            crackFrameSize,
+            crackFrameSize,
+            screenX - drawSize / 2,
+            screenY - drawSize / 2,
+            drawSize,
+            drawSize,
+          );
+        }
+
+        const clusterX = Math.floor(worldX / 4);
+        const clusterZ = Math.floor(worldZ / 4);
+        const clusterValue = seededTileRandom(seed, clusterX, clusterZ, 2);
+        const inCluster = clusterValue > 0.58;
+        const edgeVariation = seededTileRandom(seed, worldX, worldZ, 3) > 0.22;
+
+        if (inCluster && edgeVariation && tilesSheet.complete && tilesSheet.naturalWidth > 0) {
+          const tileIndex = Math.floor(seededTileRandom(seed, worldX, worldZ, 4) * (tileCols * tileRows));
+          const tileSX = (tileIndex % tileCols) * tileFrameSize;
+          const tileSY = Math.floor(tileIndex / tileCols) * tileFrameSize;
+          ctx.drawImage(
+            tilesSheet,
+            tileSX,
+            tileSY,
+            tileFrameSize,
+            tileFrameSize,
+            screenX - drawSize / 2,
+            screenY - drawSize / 2,
+            drawSize,
+            drawSize,
+          );
+        }
       }
     }
 
@@ -1167,30 +1205,19 @@ export default function CanvasGame() {
       const w = (obstacle.width * TILE_SIZE) / 2;
       const h = (obstacle.height * TILE_SIZE) / 2;
 
-      if (obstacle.type === "rock") {
-        // Dark rock
-        ctx.fillStyle = "#2a2a2c";
-        ctx.fillRect(screenX - w / 2, screenY - h / 2, w, h);
-
-        // Simple texture
-        ctx.fillStyle = "#1f1f21";
-        ctx.fillRect(screenX - w / 2 + 2, screenY - h / 2 + 2, w / 3, h / 3);
-
-        // Outline
-        ctx.strokeStyle = "#0f0f10";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(screenX - w / 2, screenY - h / 2, w, h);
-      } else if (obstacle.type === "pillar") {
-        // Dark pillar
+      if (urnSprite.complete && urnSprite.naturalWidth > 0) {
+        const spriteSize = Math.max(18, Math.max(w, h) * 1.25);
+        ctx.drawImage(
+          urnSprite,
+          screenX - spriteSize / 2,
+          screenY - spriteSize / 2,
+          spriteSize,
+          spriteSize,
+        );
+      } else {
         ctx.fillStyle = "#3a3a3c";
         ctx.beginPath();
         ctx.arc(screenX, screenY, w / 2, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Shadow
-        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-        ctx.beginPath();
-        ctx.ellipse(screenX + 2, screenY + 2, w / 2 - 1, w / 3, 0, 0, Math.PI * 2);
         ctx.fill();
       }
     });
