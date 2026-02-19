@@ -52,6 +52,13 @@ tilesSheet.src = "/textures/tiles.png";
 const urnSprite = new Image();
 urnSprite.src = "/sprites/urn.png";
 
+const tentacleSheet = new Image();
+tentacleSheet.src = "/sprites/tentacle-spritesheet.png";
+
+const TENTACLE_FRAME_WIDTH = 48;
+const TENTACLE_FRAME_HEIGHT = 64;
+const TENTACLE_TOTAL_FRAMES = 6;
+
 
 interface EnemyProjectile {
   id: string;
@@ -93,6 +100,13 @@ addSummon("ghost");
 function seededTileRandom(seed: number, x: number, z: number, salt: number) {
   const value = Math.sin(seed * 0.17 + x * 12.9898 + z * 78.233 + salt * 37.719) * 43758.5453;
   return value - Math.floor(value);
+}
+
+function normalizeAngle(angle: number) {
+  let normalized = angle;
+  while (normalized > Math.PI) normalized -= Math.PI * 2;
+  while (normalized < -Math.PI) normalized += Math.PI * 2;
+  return normalized;
 }
 
 function generateRoomTerrain(roomX: number, roomY: number): TerrainObstacle[] {
@@ -1224,6 +1238,80 @@ export default function CanvasGame() {
         wallThickness,
         floorSize,
       );
+    }
+
+    if (tentacleSheet.complete && tentacleSheet.naturalWidth > 0) {
+      const seed = currentRoom.x * 1000 + currentRoom.y;
+      const now = performance.now();
+      const wallInset = wallThickness + 10;
+      const wallRangeStart = -ROOM_SIZE + 10;
+      const wallRangeEnd = ROOM_SIZE - 10;
+      const wallSpacing = 16;
+      const maxTurnRadians = Math.PI / 4;
+      const drawScale = 2;
+      const drawWidth = TENTACLE_FRAME_WIDTH * drawScale;
+      const drawHeight = TENTACLE_FRAME_HEIGHT * drawScale;
+
+      const drawTentaclesForWall = (
+        wallName: "north" | "south" | "east" | "west",
+        baseAngle: number,
+        getWorldPosition: (lineOffset: number) => { x: number; z: number },
+      ) => {
+        if (currentRoom.exits.includes(wallName)) return;
+
+        for (let lineOffset = wallRangeStart; lineOffset <= wallRangeEnd; lineOffset += wallSpacing) {
+          const world = getWorldPosition(lineOffset);
+
+          const animationOffsetMs = seededTileRandom(seed, world.x, world.z, 21) * 1200;
+          const animationSpeed = 90 + seededTileRandom(seed, world.x, world.z, 22) * 90;
+          const frameIndex = Math.floor(((now + animationOffsetMs) / animationSpeed) % TENTACLE_TOTAL_FRAMES);
+
+          const desiredAngle = Math.atan2(position.z - world.z, position.x - world.x);
+          const deltaFromBase = normalizeAngle(desiredAngle - baseAngle);
+          const clampedDelta = Math.max(-maxTurnRadians, Math.min(maxTurnRadians, deltaFromBase));
+          const spriteRotation = baseAngle + clampedDelta;
+
+          const screenX = centerX + ((world.x - position.x) * TILE_SIZE) / 2;
+          const screenY = centerY + ((world.z - position.z) * TILE_SIZE) / 2;
+
+          ctx.save();
+          ctx.imageSmoothingEnabled = false;
+          ctx.translate(screenX, screenY);
+          ctx.rotate(spriteRotation);
+          ctx.drawImage(
+            tentacleSheet,
+            frameIndex * TENTACLE_FRAME_WIDTH,
+            0,
+            TENTACLE_FRAME_WIDTH,
+            TENTACLE_FRAME_HEIGHT,
+            -drawWidth / 2,
+            -drawHeight / 2,
+            drawWidth,
+            drawHeight,
+          );
+          ctx.restore();
+        }
+      };
+
+      drawTentaclesForWall("north", Math.PI / 2, (lineOffset) => ({
+        x: lineOffset,
+        z: -ROOM_SIZE + wallInset,
+      }));
+
+      drawTentaclesForWall("south", -Math.PI / 2, (lineOffset) => ({
+        x: lineOffset,
+        z: ROOM_SIZE - wallInset,
+      }));
+
+      drawTentaclesForWall("east", Math.PI, (lineOffset) => ({
+        x: ROOM_SIZE - wallInset,
+        z: lineOffset,
+      }));
+
+      drawTentaclesForWall("west", 0, (lineOffset) => ({
+        x: -ROOM_SIZE + wallInset,
+        z: lineOffset,
+      }));
     }
   };
 
