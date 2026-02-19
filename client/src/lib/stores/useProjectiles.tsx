@@ -195,6 +195,14 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       const drag = proj.drag;
       proj.velocity.multiplyScalar(Math.pow(drag, delta * 60));
 
+      // Subtle curvature (perpendicular force)
+      const lateral = new THREE.Vector3(
+        -proj.velocity.z,
+        0,
+        proj.velocity.x
+      ).normalize();
+
+      proj.velocity.add(lateral.multiplyScalar(0.15 * delta));
       // --- Move projectile ---
       const move = proj.velocity.clone().multiplyScalar(delta);
       proj.position.add(move);
@@ -210,11 +218,9 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       if (!proj.trailHistory) proj.trailHistory = [];
 
       const lastPos = proj.trailHistory[0] ?? proj.position.clone();
-      const dist = proj.position.distanceTo(lastPos);
-      const pointSpacing = 0.12;
-
-      if (dist > pointSpacing) {
-        const steps = Math.ceil(dist / pointSpacing);
+      const dist = Math.ceil(proj.position.distanceTo(lastPos));
+      if (dist > 0.20) {
+        const steps = Math.ceil(dist / 0.20);
         for (let s = 1; s <= steps; s++) {
           const interpolated = lastPos.clone().lerp(proj.position, s / steps);
           proj.trailHistory.unshift(interpolated);
