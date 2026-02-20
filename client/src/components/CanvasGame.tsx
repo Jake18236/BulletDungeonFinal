@@ -50,7 +50,7 @@ const tilesSheet = new Image();
 tilesSheet.src = "/textures/tiles.png";
 
 const urnSprite = new Image();
-urnSprite.src = "/sprites/urn.png";
+urnSprite.src = "/sprites/tree.png";
 
 const tentacleSheet = new Image();
 tentacleSheet.src = "/sprites/tentacle-spritesheet.png";
@@ -1153,7 +1153,6 @@ export default function CanvasGame() {
       }
     }
 
-    // Add subtle vignette (simple gradient)
     const gradient = ctx.createRadialGradient(
       centerX,
       centerY,
@@ -1180,20 +1179,20 @@ export default function CanvasGame() {
     terrainRef.current.forEach((obstacle) => {
       const screenX = centerX + ((obstacle.x - position.x) * TILE_SIZE) / 2;
       const screenY = centerY + ((obstacle.z - position.z) * TILE_SIZE) / 2;
-      const w = urnSprite.naturalWidth*2;
+      const w = urnSprite.naturalWidth;
       const h = urnSprite.naturalHeight;
-    
+      ctx.imageSmoothingEnabled = false;
       if (urnSprite.complete) {
         const spriteSize = Math.max(1, w);
         ctx.drawImage(
           urnSprite,
           screenX - spriteSize / 2,
-          screenY - spriteSize*1.5 / 2,
-          spriteSize,
-          spriteSize*1.5,
+          screenY - spriteSize*1 / 2,
+          w*2,
+          h*2,  
         );
       } else {
-        ctx.fillStyle = "#ffffff";
+      ctx.fillStyle = "#ffffff";
         ctx.beginPath();
         ctx.arc(screenX, screenY, w / 2, 0, Math.PI * 2);
         ctx.fill();
@@ -1243,11 +1242,11 @@ export default function CanvasGame() {
     if (tentacleSheet.complete && tentacleSheet.naturalWidth > 0) {
       const seed = currentRoom.x * 1000 + currentRoom.y;
       const now = performance.now();
-      const wallInset = wallThickness + 10;
-      const wallRangeStart = -ROOM_SIZE + 10;
-      const wallRangeEnd = ROOM_SIZE - 10;
-      const wallSpacing = 16;
-      const maxTurnRadians = Math.PI / 4;
+      const wallInset = wallThickness;
+      const wallRangeStart = -ROOM_SIZE;
+      const wallRangeEnd = ROOM_SIZE;
+      const wallSpacing = 2;
+      const maxTurnRadians = Math.PI / 8;
       const drawScale = 2;
       const drawWidth = TENTACLE_FRAME_WIDTH * drawScale;
       const drawHeight = TENTACLE_FRAME_HEIGHT * drawScale;
@@ -1263,7 +1262,7 @@ export default function CanvasGame() {
           const world = getWorldPosition(lineOffset);
 
           const animationOffsetMs = seededTileRandom(seed, world.x, world.z, 21) * 1200;
-          const animationSpeed = 90 + seededTileRandom(seed, world.x, world.z, 22) * 90;
+          const animationSpeed = 45 + seededTileRandom(seed, world.x, world.z, 22) * 90;
           const frameIndex = Math.floor(((now + animationOffsetMs) / animationSpeed) % TENTACLE_TOTAL_FRAMES);
 
           const desiredAngle = Math.atan2(position.z - world.z, position.x - world.x);
@@ -1277,7 +1276,7 @@ export default function CanvasGame() {
           ctx.save();
           ctx.imageSmoothingEnabled = false;
           ctx.translate(screenX, screenY);
-          ctx.rotate(spriteRotation);
+          ctx.rotate(spriteRotation+Math.PI/2);
           ctx.drawImage(
             tentacleSheet,
             frameIndex * TENTACLE_FRAME_WIDTH,
