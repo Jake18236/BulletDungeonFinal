@@ -49,8 +49,11 @@ cracksSheet.src = "/textures/cracks.png";
 const tilesSheet = new Image();
 tilesSheet.src = "/textures/tiles.png";
 
-const urnSprite = new Image();
-urnSprite.src = "/sprites/tree.png";
+const treeSprite = new Image();
+treeSprite.src = "/sprites/tree.png";
+
+const electricityLineSpriteSheet = new Image();
+electricityLineSpriteSheet.src = "/sprites/electricity-line-spritesheet.png";
 
 const tentacleSheet = new Image();
 tentacleSheet.src = "/sprites/tentacle-spritesheet.png";
@@ -89,9 +92,17 @@ interface Position {
 interface TerrainObstacle {
   x: number;
   z: number;
-  width: number;
-  height: number;
-  type: "rock" | "pillar" | "wall";
+  radius: number;
+  type: "tree";
+}
+
+interface TreeLightningAttack {
+  source: TerrainObstacle;
+  target: TerrainObstacle;
+  startedAt: number;
+  connectAt: number;
+  dissipateAt: number;
+  endsAt: number;
 }
 
 const { addSummon } = useSummons.getState();
@@ -110,79 +121,37 @@ function normalizeAngle(angle: number) {
 }
 
 function generateRoomTerrain(roomX: number, roomY: number): TerrainObstacle[] {
-  const obstacles: TerrainObstacle[] = [];
-  const seed = roomX * 1000 + roomY;
-
-  const seededRandom = (n: number) => {
-    const x = Math.sin(seed + n) * 1000;
-    return x - Math.floor(x);
+  const trees: TerrainObstacle[] = [];
+  const seed = roomX * 911 + roomY * 131;
+  const random = (n: number) => {
+    const value = Math.sin(seed * 0.13 + n * 12.9898) * 43758.5453;
+    return value - Math.floor(value);
   };
 
-  const numOutcrops = 400;
-  for (let i = 0; i < numOutcrops; i++) {
-    const side = Math.floor(seededRandom(i * 20) * 4);
-    const position = seededRandom(i * 10 - 10) * 70 - 35;
-    const depth = seededRandom(i * 10 + 7) * 10 + 2;
-    const width = seededRandom(i * 10 + 9) * 8 + 3;
+  const radialBands = [
+    { radius: 30, count: 6 },
+    { radius: 58, count: 10 },
+    { radius: 88, count: 14 },
+    { radius: 120, count: 18 },
+  ];
 
-    switch (side) {
-      case 0:
-        obstacles.push({
-          x: position,
-          z: -ROOM_SIZE + depth / 2,
-          width: width,
-          height: depth,
-          type: "rock",
-        });
-        break;
-      case 1:
-        obstacles.push({
-          x: position,
-          z: ROOM_SIZE - depth / 2,
-          width: width,
-          height: depth,
-          type: "rock",
-        });
-        break;
-      case 2:
-        obstacles.push({
-          x: ROOM_SIZE - depth / 2,
-          z: position,
-          width: depth,
-          height: width,
-          type: "rock",
-        });
-        break;
-      case 3:
-        obstacles.push({
-          x: -ROOM_SIZE + depth / 2,
-          z: position,
-          width: depth,
-          height: width,
-          type: "rock",
-        });
-        break;
-    }
-  }
+  radialBands.forEach((band, bandIndex) => {
+    const offset = random(30 + bandIndex) * Math.PI * 2;
+    const jitter = (random(50 + bandIndex) - 0.5) * 2;
 
-  const numPillars = Math.floor(seededRandom(100) * 2) + 1;
-  for (let i = 0; i < numPillars; i++) {
-    const x = (seededRandom(i * 20 + 100) - 0.5) * 25;
-    const z = (seededRandom(i * 20 + 105) - 0.5) * 25;
-    const size = seededRandom(i * 20 + 110) * 2 + 1.5;
-
-    if (Math.hypot(x, z) > 5) {
-      obstacles.push({
-        x: x,
-        z: z,
-        width: size,
-        height: size,
-        type: "pillar",
+    for (let i = 0; i < band.count; i++) {
+      const angle = offset + (i / band.count) * Math.PI * 2;
+      const distance = band.radius + jitter * 2;
+      trees.push({
+        x: Math.cos(angle) * distance,
+        z: Math.sin(angle) * distance,
+        radius: 1.7,
+        type: "tree",
       });
     }
-  }
+  });
 
-  return obstacles;
+  return trees;
 }
 
 function checkTerrainCollision(
@@ -191,21 +160,13 @@ function checkTerrainCollision(
   radius: number,
 ): { collision: boolean; normal?: THREE.Vector2 } {
   for (const obs of obstacles) {
-    const closestX = Math.max(
-      obs.x - obs.width / 2,
-      Math.min(pos.x, obs.x + obs.width / 2),
-    );
-    const closestZ = Math.max(
-      obs.z - obs.height / 2,
-      Math.min(pos.z, obs.z + obs.height / 2),
-    );
-
-    const distX = pos.x - closestX;
-    const distZ = pos.z - closestZ;
+    const distX = pos.x - obs.x;
+    const distZ = pos.z - obs.z;
     const distSq = distX * distX + distZ * distZ;
+    const combinedRadius = radius + obs.radius;
 
-    if (distSq < radius * radius) {
-      const dist = Math.sqrt(distSq);
+    if (distSq < combinedRadius * combinedRadius) {
+      const dist = Math.max(Math.sqrt(distSq), 0.0001);
       const normal = new THREE.Vector2(distX / dist, distZ / dist);
       return { collision: true, normal };
     }
@@ -228,6 +189,40 @@ function getEnemyCollisionRadius(enemy: { type?: string }) {
   return ENEMY_TYPE_CONFIG[getEnemyType(enemy)].collisionRadius;
 }
 
+function distancePointToSegment(point: THREE.Vector2, a: THREE.Vector2, b: THREE.Vector2) {
+  const ab = b.clone().sub(a);
+  const ap = point.clone().sub(a);
+  const abLenSq = ab.lengthSq();
+  if (abLenSq === 0) return ap.length();
+  const t = THREE.MathUtils.clamp(ap.dot(ab) / abLenSq, 0, 1);
+  const closest = a.clone().add(ab.multiplyScalar(t));
+  return point.distanceTo(closest);
+}
+
+
+function pickTreeLightningAttack(nowMs: number, trees: TerrainObstacle[]): TreeLightningAttack | null {
+  if (trees.length < 2) return null;
+
+  const source = trees[Math.floor(Math.random() * trees.length)];
+  const nearbyTrees = trees
+    .filter((tree) => tree !== source)
+    .map((tree) => ({ tree, dist: Math.hypot(tree.x - source.x, tree.z - source.z) }))
+    .sort((a, b) => a.dist - b.dist)
+    .slice(0, 6);
+
+  if (nearbyTrees.length === 0) return null;
+
+  const target = nearbyTrees[Math.floor(Math.random() * nearbyTrees.length)].tree;
+  return {
+    source,
+    target,
+    startedAt: nowMs,
+    connectAt: nowMs + 3000,
+    dissipateAt: nowMs + 10000,
+    endsAt: nowMs + 11000,
+  };
+}
+
 export default function CanvasGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const eyeCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -240,6 +235,11 @@ export default function CanvasGame() {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const { applyHit, applyPlayerDamage } = useHit();
   const terrainRef = useRef<TerrainObstacle[]>([]);
+  const treeLightningRef = useRef<TreeLightningAttack | null>(null);
+  const gameStartTimeRef = useRef<number | null>(null);
+  const treeLightningFrameRef = useRef<number>(0);
+  const treeLightningAnimTimerRef = useRef<number>(0);
+  const treeLightningDamageTimerRef = useRef<number>(0);
   const { particles, damageNumbers, impactEffects, addImpact, addExplosion, addDamageNumber, updateEffects } = useVisualEffects();
   const { phase, end } = useGame();
   const {
@@ -309,8 +309,22 @@ export default function CanvasGame() {
   useEffect(() => {
     if (currentRoom) {
       terrainRef.current = generateRoomTerrain(currentRoom.x, currentRoom.y);
+      treeLightningRef.current = null;
     }
   }, [currentRoom]);
+
+  useEffect(() => {
+    if (phase === "playing" && gameStartTimeRef.current == null) {
+      gameStartTimeRef.current = performance.now();
+    }
+    if (phase !== "playing") {
+      gameStartTimeRef.current = null;
+      treeLightningRef.current = null;
+      treeLightningFrameRef.current = 0;
+      treeLightningAnimTimerRef.current = 0;
+      treeLightningDamageTimerRef.current = 0;
+    }
+  }, [phase]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -431,6 +445,7 @@ export default function CanvasGame() {
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
       if (currentRoom) drawDungeon(ctx);
+      drawTreeLightning(ctx, performance.now());
 
       if (phase === "playing") {
         
@@ -503,6 +518,49 @@ export default function CanvasGame() {
         updateEffects(delta);
         
         damagedThisFrameRef.current = false;
+
+        const nowMs = performance.now();
+        if (gameStartTimeRef.current != null) {
+          const elapsed = nowMs - gameStartTimeRef.current;
+          const activeAttack = treeLightningRef.current;
+
+          if (!activeAttack && elapsed >= 10000) {
+            treeLightningRef.current = pickTreeLightningAttack(nowMs, terrainRef.current);
+            treeLightningFrameRef.current = 0;
+            treeLightningAnimTimerRef.current = 0;
+            treeLightningDamageTimerRef.current = 0;
+          }
+
+          const attack = treeLightningRef.current;
+          if (attack) {
+            if (nowMs >= attack.endsAt) {
+              treeLightningRef.current = null;
+              treeLightningFrameRef.current = 0;
+              treeLightningAnimTimerRef.current = 0;
+              treeLightningDamageTimerRef.current = 0;
+            } else if (nowMs >= attack.connectAt) {
+              treeLightningAnimTimerRef.current += delta;
+              if (treeLightningAnimTimerRef.current >= 0.09) {
+                treeLightningAnimTimerRef.current = 0;
+                treeLightningFrameRef.current = (treeLightningFrameRef.current + 1) % 4;
+              }
+
+              const lineStart = new THREE.Vector2(attack.source.x, attack.source.z);
+              const lineEnd = new THREE.Vector2(attack.target.x, attack.target.z);
+              const playerPoint = new THREE.Vector2(position.x, position.z);
+              const lineHitRadius = 1.35;
+              const playerRadius = 0.8;
+              const distanceToBeam = distancePointToSegment(playerPoint, lineStart, lineEnd);
+
+              treeLightningDamageTimerRef.current += delta;
+              if (distanceToBeam <= lineHitRadius + playerRadius && invincibilityTimer <= 0 && !damagedThisFrameRef.current && treeLightningDamageTimerRef.current >= 0.2) {
+                applyPlayerDamage(1, new THREE.Vector3(position.x, 0, position.z));
+                damagedThisFrameRef.current = true;
+                treeLightningDamageTimerRef.current = 0;
+              }
+            }
+          }
+        }
 
         if (ammo === 0 && !isReloading) {
           startReload();
@@ -1179,22 +1237,18 @@ export default function CanvasGame() {
     terrainRef.current.forEach((obstacle) => {
       const screenX = centerX + ((obstacle.x - position.x) * TILE_SIZE) / 2;
       const screenY = centerY + ((obstacle.z - position.z) * TILE_SIZE) / 2;
-      const w = urnSprite.naturalWidth;
-      const h = urnSprite.naturalHeight;
+      const radiusPx = obstacle.radius * (TILE_SIZE / 2);
       ctx.imageSmoothingEnabled = false;
-      if (urnSprite.complete) {
-        const spriteSize = Math.max(1, w);
-        ctx.drawImage(
-          urnSprite,
-          screenX - spriteSize / 2,
-          screenY - spriteSize*1 / 2,
-          w*2,
-          h*2,  
-        );
+
+      if (treeSprite.complete && treeSprite.naturalWidth > 0) {
+        const scale = (radiusPx * 2.8) / treeSprite.naturalWidth;
+        const drawW = treeSprite.naturalWidth * scale;
+        const drawH = treeSprite.naturalHeight * scale;
+        ctx.drawImage(treeSprite, screenX - drawW / 2, screenY - drawH * 0.75, drawW, drawH);
       } else {
-      ctx.fillStyle = "#ffffff";
+        ctx.fillStyle = "#2f6b2f";
         ctx.beginPath();
-        ctx.arc(screenX, screenY, w / 2, 0, Math.PI * 2);
+        ctx.arc(screenX, screenY, radiusPx, 0, Math.PI * 2);
         ctx.fill();
       }
     });
@@ -1650,6 +1704,74 @@ export default function CanvasGame() {
     });
 
     ctx.restore();
+  };
+
+  const drawTreeLightning = (ctx: CanvasRenderingContext2D, nowMs: number) => {
+    const attack = treeLightningRef.current;
+    if (!attack) return;
+
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
+    const x1 = centerX + ((attack.source.x - position.x) * TILE_SIZE) / 2;
+    const y1 = centerY + ((attack.source.z - position.z) * TILE_SIZE) / 2;
+    const x2 = centerX + ((attack.target.x - position.x) * TILE_SIZE) / 2;
+    const y2 = centerY + ((attack.target.z - position.z) * TILE_SIZE) / 2;
+
+    if (nowMs < attack.connectAt) {
+      const steps = 22;
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const px = THREE.MathUtils.lerp(x1, x2, t);
+        const py = THREE.MathUtils.lerp(y1, y2, t);
+        const jitterX = (Math.random() - 0.5) * 8;
+        const jitterY = (Math.random() - 0.5) * 8;
+        ctx.fillStyle = "rgba(120,220,255,0.9)";
+        ctx.beginPath();
+        ctx.arc(px + jitterX, py + jitterY, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      return;
+    }
+
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const length = Math.hypot(dx, dy);
+    const angle = Math.atan2(dy, dx);
+    const frame = nowMs >= attack.dissipateAt ? 4 : treeLightningFrameRef.current;
+
+    if (electricityLineSpriteSheet.complete && electricityLineSpriteSheet.naturalWidth > 0) {
+      const frameW = 64;
+      const frameH = 32;
+      const spriteScale = 1.1;
+      const segW = frameW * spriteScale;
+      const segH = frameH * spriteScale;
+
+      ctx.save();
+      ctx.translate(x1, y1);
+      ctx.rotate(angle);
+      for (let offset = 0; offset < length; offset += segW - 8) {
+        const drawW = Math.min(segW, length - offset + 2);
+        ctx.drawImage(
+          electricityLineSpriteSheet,
+          frame * frameW,
+          0,
+          frameW,
+          frameH,
+          offset,
+          -segH / 2,
+          drawW,
+          segH,
+        );
+      }
+      ctx.restore();
+    } else {
+      ctx.strokeStyle = nowMs >= attack.dissipateAt ? "rgba(130,130,255,0.35)" : "rgba(130,220,255,0.9)";
+      ctx.lineWidth = 8;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
   };
 
   const drawPlayer = (ctx: CanvasRenderingContext2D) => {
