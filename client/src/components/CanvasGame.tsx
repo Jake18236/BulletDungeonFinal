@@ -103,6 +103,9 @@ interface TreeLightningAttack {
   connectAt: number;
   dissipateAt: number;
   endsAt: number;
+  frame: number;
+  animTimer: number;
+  damageTimer: number;
 }
 
 const { addSummon } = useSummons.getState();
@@ -220,6 +223,9 @@ function pickTreeLightningAttack(nowMs: number, trees: TerrainObstacle[]): TreeL
     connectAt: nowMs + 3000,
     dissipateAt: nowMs + 10000,
     endsAt: nowMs + 11000,
+    frame: 0,
+    animTimer: 0,
+    damageTimer: 0,
   };
 }
 
@@ -235,11 +241,9 @@ export default function CanvasGame() {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const { applyHit, applyPlayerDamage } = useHit();
   const terrainRef = useRef<TerrainObstacle[]>([]);
-  const treeLightningRef = useRef<TreeLightningAttack | null>(null);
+  const treeLightningRef = useRef<TreeLightningAttack[]>([]);
   const gameStartTimeRef = useRef<number | null>(null);
-  const treeLightningFrameRef = useRef<number>(0);
-  const treeLightningAnimTimerRef = useRef<number>(0);
-  const treeLightningDamageTimerRef = useRef<number>(0);
+  const treeLightningSpawnTimerRef = useRef<number>(0);
   const { particles, damageNumbers, impactEffects, addImpact, addExplosion, addDamageNumber, updateEffects } = useVisualEffects();
   const { phase, end } = useGame();
   const {
@@ -309,7 +313,8 @@ export default function CanvasGame() {
   useEffect(() => {
     if (currentRoom) {
       terrainRef.current = generateRoomTerrain(currentRoom.x, currentRoom.y);
-      treeLightningRef.current = null;
+      treeLightningRef.current = [];
+      treeLightningSpawnTimerRef.current = 0;
     }
   }, [currentRoom]);
 
@@ -317,12 +322,10 @@ export default function CanvasGame() {
     if (phase === "playing" && gameStartTimeRef.current == null) {
       gameStartTimeRef.current = performance.now();
     }
-    if (phase !== "playing") {
+    if (phase === "ready" || phase === "ended") {
       gameStartTimeRef.current = null;
-      treeLightningRef.current = null;
-      treeLightningFrameRef.current = 0;
-      treeLightningAnimTimerRef.current = 0;
-      treeLightningDamageTimerRef.current = 0;
+      treeLightningRef.current = [];
+      treeLightningSpawnTimerRef.current = 0;
     }
   }, [phase]);
 
@@ -522,42 +525,39 @@ export default function CanvasGame() {
         const nowMs = performance.now();
         if (gameStartTimeRef.current != null) {
           const elapsed = nowMs - gameStartTimeRef.current;
-          const activeAttack = treeLightningRef.current;
 
-          if (!activeAttack && elapsed >= 10) {
-            treeLightningRef.current = pickTreeLightningAttack(nowMs, terrainRef.current);
-            treeLightningFrameRef.current = 0;
-            treeLightningAnimTimerRef.current = 0;
-            treeLightningDamageTimerRef.current = 0;
+          if (elapsed >= 10) {
+            treeLightningSpawnTimerRef.current += delta;
+            while (treeLightningSpawnTimerRef.current >= 1.2) {
+              treeLightningSpawnTimerRef.current -= 1.2;
+              const newAttack = pickTreeLightningAttack(nowMs, terrainRef.current);
+              if (newAttack) treeLightningRef.current.push(newAttack);
+            }
           }
 
-          const attack = treeLightningRef.current;
-          if (attack) {
-            if (nowMs >= attack.endsAt) {
-              treeLightningRef.current = null;
-              treeLightningFrameRef.current = 0;
-              treeLightningAnimTimerRef.current = 0;
-              treeLightningDamageTimerRef.current = 0;
-            } else if (nowMs >= attack.connectAt) {
-              treeLightningAnimTimerRef.current += delta;
-              if (treeLightningAnimTimerRef.current >= 0.09) {
-                treeLightningAnimTimerRef.current = 0;
-                treeLightningFrameRef.current = (treeLightningFrameRef.current + 1) % 4;
-              }
+          treeLightningRef.current = treeLightningRef.current.filter((attack) => nowMs < attack.endsAt);
 
-              const lineStart = new THREE.Vector2(attack.source.x, attack.source.z);
-              const lineEnd = new THREE.Vector2(attack.target.x, attack.target.z);
-              const playerPoint = new THREE.Vector2(position.x, position.z);
-              const lineHitRadius = 1.35;
-              const playerRadius = 0.8;
-              const distanceToBeam = distancePointToSegment(playerPoint, lineStart, lineEnd);
+          for (const attack of treeLightningRef.current) {
+            if (nowMs < attack.connectAt) continue;
 
-              treeLightningDamageTimerRef.current += delta;
-              if (distanceToBeam <= lineHitRadius + playerRadius && invincibilityTimer <= 0 && !damagedThisFrameRef.current && treeLightningDamageTimerRef.current >= 0.2) {
-                applyPlayerDamage(1, new THREE.Vector3(position.x, 0, position.z));
-                damagedThisFrameRef.current = true;
-                treeLightningDamageTimerRef.current = 0;
-              }
+            attack.animTimer += delta;
+            if (attack.animTimer >= 0.09) {
+              attack.animTimer = 0;
+              attack.frame = (attack.frame + 1) % 4;
+            }
+
+            const lineStart = new THREE.Vector2(attack.source.x, attack.source.z);
+            const lineEnd = new THREE.Vector2(attack.target.x, attack.target.z);
+            const playerPoint = new THREE.Vector2(position.x, position.z);
+            const lineHitRadius = 1.35;
+            const playerRadius = 0.8;
+            const distanceToBeam = distancePointToSegment(playerPoint, lineStart, lineEnd);
+
+            attack.damageTimer += delta;
+            if (distanceToBeam <= lineHitRadius + playerRadius && invincibilityTimer <= 0 && !damagedThisFrameRef.current && attack.damageTimer >= 0.2) {
+              applyPlayerDamage(1, new THREE.Vector3(position.x, 0, position.z));
+              damagedThisFrameRef.current = true;
+              attack.damageTimer = 0;
             }
           }
         }
@@ -1090,6 +1090,7 @@ export default function CanvasGame() {
         drawTreeLightning(eyeCtx, performance.now());
       }
 
+      drawTreeLightning(ctx, performance.now());
       drawPlayer(ctx);
       drawSummons(ctx);
       drawStatusEffects(ctx);
@@ -1708,70 +1709,72 @@ export default function CanvasGame() {
   };
 
   const drawTreeLightning = (ctx: CanvasRenderingContext2D, nowMs: number) => {
-    const attack = treeLightningRef.current;
-    if (!attack) return;
+    if (treeLightningRef.current.length === 0) return;
 
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
-    const x1 = centerX + ((attack.source.x - position.x) * TILE_SIZE) / 2;
-    const y1 = centerY + ((attack.source.z - position.z) * TILE_SIZE) / 2;
-    const x2 = centerX + ((attack.target.x - position.x) * TILE_SIZE) / 2;
-    const y2 = centerY + ((attack.target.z - position.z) * TILE_SIZE) / 2;
 
-    if (nowMs < attack.connectAt) {
-      const steps = 22;
-      for (let i = 0; i <= steps; i++) {
-        const t = i / steps;
-        const px = THREE.MathUtils.lerp(x1, x2, t);
-        const py = THREE.MathUtils.lerp(y1, y2, t);
-        const jitterX = (Math.random() - 0.5) * 8;
-        const jitterY = (Math.random() - 0.5) * 8;
-        ctx.fillStyle = "rgba(120,220,255,0.9)";
+    for (const attack of treeLightningRef.current) {
+      const x1 = centerX + ((attack.source.x - position.x) * TILE_SIZE) / 2;
+      const y1 = centerY + ((attack.source.z - position.z) * TILE_SIZE) / 2;
+      const x2 = centerX + ((attack.target.x - position.x) * TILE_SIZE) / 2;
+      const y2 = centerY + ((attack.target.z - position.z) * TILE_SIZE) / 2;
+
+      if (nowMs < attack.connectAt) {
+        const steps = 22;
+        for (let i = 0; i <= steps; i++) {
+          const t = i / steps;
+          const px = THREE.MathUtils.lerp(x1, x2, t);
+          const py = THREE.MathUtils.lerp(y1, y2, t);
+          const jitterX = (Math.random() - 0.5) * 8;
+          const jitterY = (Math.random() - 0.5) * 8;
+          ctx.fillStyle = "rgba(120,220,255,0.9)";
+          ctx.beginPath();
+          ctx.arc(px + jitterX, py + jitterY, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        continue;
+      }
+
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const length = Math.hypot(dx, dy);
+      const angle = Math.atan2(dy, dx);
+      const frame = nowMs >= attack.dissipateAt ? 4 : attack.frame;
+
+      if (electricityLineSpriteSheet.complete && electricityLineSpriteSheet.naturalWidth > 0) {
+        const frameW = 64;
+        const frameH = 32;
+        const spriteScale = 2;
+        const segW = frameW * spriteScale;
+        const segH = frameH * spriteScale;
+
+        ctx.save();
+        ctx.translate(x1, y1);
+        ctx.rotate(angle);
+        for (let offset = 0; offset < length; offset += segW - 8) {
+          const drawW = Math.min(segW, length - offset + 2);
+          ctx.drawImage(
+            electricityLineSpriteSheet,
+            frame * frameW,
+            0,
+            frameW,
+            frameH,
+            offset,
+            -segH / 2,
+            drawW,
+            segH,
+          );
+        }
+        ctx.restore();
+      } else {
+        ctx.strokeStyle = nowMs >= attack.dissipateAt ? "rgba(130,130,255,0.35)" : "rgba(130,220,255,0.9)";
+        ctx.lineWidth = 8;
         ctx.beginPath();
-        ctx.arc(px + jitterX, py + jitterY, 2.2, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
       }
-      return;
-    }
-
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const length = Math.hypot(dx, dy);
-    const angle = Math.atan2(dy, dx);
-    const frame = nowMs >= attack.dissipateAt ? 4 : treeLightningFrameRef.current;
-
-    if (electricityLineSpriteSheet.complete && electricityLineSpriteSheet.naturalWidth > 0) {
-      const frameW = 64;
-      const frameH = 32;
-      const spriteScale = 2;
-      const segW = frameW * spriteScale;
-      const segH = frameH * spriteScale;
-
-      ctx.save();
-      ctx.translate(x1, y1);
-      ctx.rotate(angle);
-      for (let offset = 0; offset < length; offset += segW - 8) {
-        const drawW = Math.min(segW, length - offset + 2);
-        ctx.drawImage(
-          electricityLineSpriteSheet,
-          frame * frameW,
-          0,
-          frameW,
-          frameH,
-          offset,
-          -segH / 2,
-          drawW,
-          segH,
-        );
-      }
-      ctx.restore();
-    } else {
-      ctx.strokeStyle = nowMs >= attack.dissipateAt ? "rgba(130,130,255,0.35)" : "rgba(130,220,255,0.9)";
-      ctx.lineWidth = 8;
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
-      ctx.stroke();
     }
   };
 
