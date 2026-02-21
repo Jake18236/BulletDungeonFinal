@@ -130,9 +130,9 @@ function generateRoomTerrain(roomX: number, roomY: number): TerrainObstacle[] {
 
   const radialBands = [
     { radius: 30, count: 6 },
-    { radius: 58, count: 10 },
-    { radius: 88, count: 14 },
-    { radius: 120, count: 18 },
+    { radius: 58, count: 0 },
+    { radius: 88, count: 0 },
+    { radius: 120, count: 0 },
   ];
 
   radialBands.forEach((band, bandIndex) => {
@@ -445,7 +445,7 @@ export default function CanvasGame() {
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
       if (currentRoom) drawDungeon(ctx);
-      drawTreeLightning(ctx, performance.now());
+      
 
       if (phase === "playing") {
         
@@ -524,7 +524,7 @@ export default function CanvasGame() {
           const elapsed = nowMs - gameStartTimeRef.current;
           const activeAttack = treeLightningRef.current;
 
-          if (!activeAttack && elapsed >= 10000) {
+          if (!activeAttack && elapsed >= 10) {
             treeLightningRef.current = pickTreeLightningAttack(nowMs, terrainRef.current);
             treeLightningFrameRef.current = 0;
             treeLightningAnimTimerRef.current = 0;
@@ -1087,6 +1087,7 @@ export default function CanvasGame() {
         enemies.forEach(enemy => drawEnemyEyes(eyeCtx, enemy));
         drawEnemyProjectiles(eyeCtx);
         drawEnemyDeaths(eyeCtx);
+        drawTreeLightning(eyeCtx, performance.now());
       }
 
       drawPlayer(ctx);
@@ -1742,7 +1743,7 @@ export default function CanvasGame() {
     if (electricityLineSpriteSheet.complete && electricityLineSpriteSheet.naturalWidth > 0) {
       const frameW = 64;
       const frameH = 32;
-      const spriteScale = 1.1;
+      const spriteScale = 2;
       const segW = frameW * spriteScale;
       const segH = frameH * spriteScale;
 
@@ -2288,7 +2289,6 @@ export default function CanvasGame() {
       ctx.restore();
     });
   };
-  
 
   const drawStatusEffects = (ctx: CanvasRenderingContext2D) => {
     const centerX = CANVAS_WIDTH / 2;
