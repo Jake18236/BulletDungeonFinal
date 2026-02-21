@@ -524,6 +524,7 @@ export default function CanvasGame() {
 
         const nowMs = performance.now();
         if (gameStartTimeRef.current != null) {
+          
           const elapsed = nowMs - gameStartTimeRef.current;
 
           if (elapsed >= 10) {
@@ -1070,13 +1071,11 @@ export default function CanvasGame() {
         updateXPOrbs(delta, position);
         updateEnemies(aliveEnemies);
         
-        
-
         useEnemies.getState().updateAutoSpawn(delta, player.position);
-
         if (hearts <= 0) end();
       }
-
+      
+      drawXPOrbs(ctx);
       enemies.forEach(enemy => drawEnemy(ctx, enemy));
 
       const eyeCanvas = eyeCanvasRef.current;
@@ -1086,19 +1085,17 @@ export default function CanvasGame() {
         eyeCtx.imageSmoothingEnabled = false;
         enemies.forEach(enemy => drawEnemyEyes(eyeCtx, enemy));
         drawEnemyProjectiles(eyeCtx);
-        drawEnemyDeaths(eyeCtx);
         drawTreeLightning(eyeCtx, performance.now());
       }
-
-      drawTreeLightning(ctx, performance.now());
       drawPlayer(ctx);
       drawSummons(ctx);
       drawStatusEffects(ctx);
       drawImpactEffects(ctx); // ADD - behind projectiles
       drawProjectilesAndTrails(ctx, phase !== "playing", position);
+      drawEnemyDeaths(ctx);
       drawParticles(ctx); 
       drawDamageNumbers(ctx); 
-      drawXPOrbs(ctx);
+      
       drawReloadIndicator(ctx);
       drawWeapon(ctx, "revolver", phase !== "playing");
       
