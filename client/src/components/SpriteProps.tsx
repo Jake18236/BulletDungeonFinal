@@ -9,7 +9,7 @@ export type SpriteDef = {
   scale: number;    // relative world/UI size
 };
 
-export type EnemySpriteType = "basic" | "tank" | "eyeball";
+export type EnemySpriteType = "basic" | "tank" | "eyeball" | "tree";
 
 export const WeaponSprites = {
   revolver: (() => {
@@ -152,12 +152,14 @@ export const enemySpritesByType: Record<EnemySpriteType, SpriteDef> = {
   basic: createEnemySprite("/sprites/enemy/basic-enemy.png", 32, 2),
   tank: createEnemySprite("/sprites/enemy/tank-enemy.png", 48, 2),
   eyeball: createEnemySprite("/sprites/enemy/eyeball-enemy.png", 48, 2),
+  tree: createEnemySprite("/sprites/enemy/tree-enemy.png", 48, 2),
 };
 
 export const enemyEyeSpritesByType: Record<EnemySpriteType, SpriteDef> = {
   basic: createEnemySprite("/sprites/enemy/basic-enemy-eyes.png", 32, 2),
   tank: createEnemySprite("/sprites/enemy/tank-enemy-eyes.png", 48, 2),
   eyeball: createEnemySprite("/sprites/enemy/eyeball-enemy-eyes.png", 48, 2),
+  tree: createEnemySprite("/sprites/enemy/tree-enemy-eyes.png", 96, 2),
 };
 
 export const enemyFlashSpritesByType: Record<EnemySpriteType, SpriteDef> = {

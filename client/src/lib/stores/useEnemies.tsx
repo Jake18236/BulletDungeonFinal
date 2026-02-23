@@ -70,7 +70,7 @@ export interface Enemy {
   canAttack: boolean;
   attackCooldown: number;
   maxAttackCooldown: number;
-  type?: "basic" | "tank" | "eyeball" | "boss";
+  type?: "basic" | "tank" | "eyeball" | "tree" | "boss";
   velocity: THREE.Vector3;
   hitFlash: number;
 

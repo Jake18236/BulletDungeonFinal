@@ -50,7 +50,7 @@ const tilesSheet = new Image();
 tilesSheet.src = "/textures/tiles.png";
 
 const treeSprite = new Image();
-treeSprite.src = "/sprites/tree.png";
+treeSprite.src = "/sprites/enemy/tree-enemy.png";
 
 const treeEnemyEyesSprite = new Image();
 treeEnemyEyesSprite.src = "/sprites/enemy/tree-enemy-eyes.png";
@@ -119,7 +119,7 @@ interface TreeLightningAttack {
 }
 
 const { addSummon } = useSummons.getState();
-addSummon("ghost");
+
 
 function seededTileRandom(seed: number, x: number, z: number, salt: number) {
   const value = Math.sin(seed * 0.17 + x * 12.9898 + z * 78.233 + salt * 37.719) * 43758.5453;
@@ -144,8 +144,8 @@ function generateRoomTerrain(roomX: number, roomY: number): TerrainObstacle[] {
 
   const radialBands = [
     { radius: 30, count: 6 },
-    { radius: 58, count: 0 },
-    { radius: 88, count: 0 },
+    { radius: 58, count: 18 },
+    { radius: 88, count: 20 },
     { radius: 120, count: 0 },
   ];
 
@@ -1141,8 +1141,9 @@ export default function CanvasGame() {
         eyeCtx.imageSmoothingEnabled = false;
         enemies.forEach(enemy => drawEnemyEyes(eyeCtx, enemy, animationNowMs));
         terrainRef.current.forEach((obstacle) => drawEnemyEyes(eyeCtx, obstacle, animationNowMs));
-        drawEnemyProjectiles(eyeCtx);
         drawTreeLightning(eyeCtx, gameplayElapsedMsRef.current);
+        drawEnemyProjectiles(eyeCtx);
+        
       }
       drawPlayer(ctx);
       drawSummons(ctx, animationNowMs);
@@ -1297,7 +1298,7 @@ export default function CanvasGame() {
       ctx.imageSmoothingEnabled = false;
 
       if (treeSprite.complete && treeSprite.naturalWidth > 0) {
-        if (!obstacle.lockedByLightning && obstacle.frameQueue.length > 0) {
+        if (obstacle.frameQueue.length > 0) {
           obstacle.frameTimer += animationDeltaRef.current;
           if (obstacle.frameTimer >= 0.13) {
             obstacle.frameTimer = 0;
@@ -1308,9 +1309,9 @@ export default function CanvasGame() {
           }
         }
 
-        const frameW = 96;
-        const frameH = 96;
-        const scale = (radiusPx * 2.8) / frameW;
+        const frameW = treeSprite.naturalWidth / 3;
+        const frameH = treeSprite.naturalHeight;
+        const scale = 2;
         const drawW = frameW * scale;
         const drawH = frameH * scale;
         ctx.drawImage(
@@ -1320,7 +1321,7 @@ export default function CanvasGame() {
           frameW,
           frameH,
           screenX - drawW / 2,
-          screenY - drawH * 0.75,
+          screenY - drawH / 1.5,
           drawW,
           drawH,
         );
@@ -1932,11 +1933,11 @@ export default function CanvasGame() {
       const screenY = centerY + ((enemy.z - position.z) * TILE_SIZE) / 2;
 
       if (treeEnemyEyesSprite.complete && treeEnemyEyesSprite.naturalWidth > 0 && treeEnemyEyesSprite.naturalHeight > 0) {
-        const frameW = 96;
-        const frameH = 96;
+        const frameW = treeEnemyEyesSprite.naturalWidth / 2;
+        const frameH = treeEnemyEyesSprite.naturalHeight;
         const eyeFrame = enemy.spriteFrame === 1 ? 0 : 1;
         const radiusPx = enemy.radius * (TILE_SIZE / 2);
-        const scale = (radiusPx * 2.8) / frameW;
+        const scale = 2;
         const drawW = frameW * scale;
         const drawH = frameH * scale;
 
@@ -1949,7 +1950,7 @@ export default function CanvasGame() {
           frameW,
           frameH,
           screenX - drawW / 2,
-          screenY - drawH * 0.75,
+          screenY - drawH / 1.5,
           drawW,
           drawH,
         );

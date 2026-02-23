@@ -45,8 +45,8 @@ export default function Darkness() {
       );
 
       playerGradient.addColorStop(0.0, "rgba(0,0,0,1)");
-      playerGradient.addColorStop(0.5, "rgba(0,0,0,0.8)");
-      playerGradient.addColorStop(0.7, "rgba(0,0,0,0.45)");
+      playerGradient.addColorStop(0.7, "rgba(0,0,0,0.8)");
+      playerGradient.addColorStop(0.8, "rgba(0,0,0,0.45)");
       playerGradient.addColorStop(0.85, "rgba(0,0,0,0.2)");
       playerGradient.addColorStop(1.0, "rgba(0,0,0,0)");
 
