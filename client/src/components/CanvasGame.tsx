@@ -52,6 +52,9 @@ tilesSheet.src = "/textures/tiles.png";
 const treeSprite = new Image();
 treeSprite.src = "/sprites/tree.png";
 
+const treeEnemyEyesSprite = new Image();
+treeEnemyEyesSprite.src = "/sprites/enemy/tree-enemy-eyes.png";
+
 const electricityLineSpriteSheet = new Image();
 electricityLineSpriteSheet.src = "/sprites/electricity-line-spritesheet.png";
 
@@ -90,10 +93,16 @@ interface Position {
 
 
 interface TerrainObstacle {
+  id: number;
   x: number;
   z: number;
   radius: number;
   type: "tree";
+  spriteFrame: 0 | 1 | 2;
+  frameTimer: number;
+  frameQueue: Array<0 | 1 | 2>;
+  lockedByLightning: boolean;
+  cooldownUntil: number;
 }
 
 interface TreeLightningAttack {
@@ -106,6 +115,7 @@ interface TreeLightningAttack {
   frame: number;
   animTimer: number;
   damageTimer: number;
+  releasedTrees: boolean;
 }
 
 const { addSummon } = useSummons.getState();
@@ -125,6 +135,7 @@ function normalizeAngle(angle: number) {
 
 function generateRoomTerrain(roomX: number, roomY: number): TerrainObstacle[] {
   const trees: TerrainObstacle[] = [];
+  let obstacleId = 0;
   const seed = roomX * 911 + roomY * 131;
   const random = (n: number) => {
     const value = Math.sin(seed * 0.13 + n * 12.9898) * 43758.5453;
@@ -146,10 +157,16 @@ function generateRoomTerrain(roomX: number, roomY: number): TerrainObstacle[] {
       const angle = offset + (i / band.count) * Math.PI * 2;
       const distance = band.radius + jitter * 2;
       trees.push({
+        id: obstacleId++,
         x: Math.cos(angle) * distance,
         z: Math.sin(angle) * distance,
         radius: 1.7,
         type: "tree",
+        spriteFrame: 0,
+        frameTimer: 0,
+        frameQueue: [],
+        lockedByLightning: false,
+        cooldownUntil: 0,
       });
     }
   });
@@ -206,9 +223,12 @@ function distancePointToSegment(point: THREE.Vector2, a: THREE.Vector2, b: THREE
 function pickTreeLightningAttack(nowMs: number, trees: TerrainObstacle[]): TreeLightningAttack | null {
   if (trees.length < 2) return null;
 
-  const source = trees[Math.floor(Math.random() * trees.length)];
+  const eligibleTrees = trees.filter((tree) => nowMs >= tree.cooldownUntil && !tree.lockedByLightning);
+  if (eligibleTrees.length < 2) return null;
+
+  const source = eligibleTrees[Math.floor(Math.random() * eligibleTrees.length)];
   const nearbyTrees = trees
-    .filter((tree) => tree !== source)
+    .filter((tree) => tree !== source && nowMs >= tree.cooldownUntil && !tree.lockedByLightning)
     .map((tree) => ({ tree, dist: Math.hypot(tree.x - source.x, tree.z - source.z) }))
     .sort((a, b) => a.dist - b.dist)
     .slice(0, 6);
@@ -226,17 +246,31 @@ function pickTreeLightningAttack(nowMs: number, trees: TerrainObstacle[]): TreeL
     frame: 0,
     animTimer: 0,
     damageTimer: 0,
+    releasedTrees: false,
   };
+}
+
+function queueTreeFrames(tree: TerrainObstacle, frames: Array<0 | 1 | 2>) {
+  tree.frameQueue.push(...frames);
+}
+
+function releaseLightningTree(tree: TerrainObstacle, nowMs: number) {
+  tree.lockedByLightning = false;
+  tree.cooldownUntil = nowMs + 10_000;
+  queueTreeFrames(tree, [1, 0]);
 }
 
 export default function CanvasGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const eyeCanvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number>();
+  const animationDeltaRef = useRef<number>(0);
   const enemyProjectilesRef = useRef<EnemyProjectile[]>([]);
   const enemyDeathAnimationsRef = useRef<EnemyDeathAnimation[]>([]);
   const keysPressed = useRef<Set<string>>(new Set());
   const lastTimeRef = useRef<number>(0);
+  const pausedAnimationTimeRef = useRef<number>(0);
+  const gameplayElapsedMsRef = useRef<number>(0);
   const damagedThisFrameRef = useRef<boolean>(false);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const { applyHit, applyPlayerDamage } = useHit();
@@ -322,8 +356,13 @@ export default function CanvasGame() {
     if (phase === "playing" && gameStartTimeRef.current == null) {
       gameStartTimeRef.current = performance.now();
     }
+    if (phase === "paused") {
+      pausedAnimationTimeRef.current = performance.now();
+    }
     if (phase === "ready" || phase === "ended") {
       gameStartTimeRef.current = null;
+      gameplayElapsedMsRef.current = 0;
+      pausedAnimationTimeRef.current = 0;
       treeLightningRef.current = [];
       treeLightningSpawnTimerRef.current = 0;
     }
@@ -431,9 +470,11 @@ export default function CanvasGame() {
 
   useEffect(() => {
     const gameLoop = (currentTime: number) => {
-      const delta = lastTimeRef.current
+      const rawDelta = lastTimeRef.current
         ? (currentTime - lastTimeRef.current) / 1000
         : 0;
+      const delta = phase === "playing" ? rawDelta : 0;
+      animationDeltaRef.current = delta;
 
       lastTimeRef.current = currentTime;
       if (!canvasRef.current) return;
@@ -441,13 +482,15 @@ export default function CanvasGame() {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
+
+      const animationNowMs = phase === "playing" ? currentTime : pausedAnimationTimeRef.current;
       
       
 
       ctx.fillStyle = "#1a1a1a";
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-      if (currentRoom) drawDungeon(ctx);
+      if (currentRoom) drawDungeon(ctx, animationNowMs);
       
 
       if (phase === "playing") {
@@ -522,23 +565,34 @@ export default function CanvasGame() {
         
         damagedThisFrameRef.current = false;
 
-        const nowMs = performance.now();
+        gameplayElapsedMsRef.current += delta * 1000;
+        const nowMs = gameplayElapsedMsRef.current;
         if (gameStartTimeRef.current != null) {
-          
-          const elapsed = nowMs - gameStartTimeRef.current;
+          const elapsed = nowMs;
 
           if (elapsed >= 10) {
             treeLightningSpawnTimerRef.current += delta;
             while (treeLightningSpawnTimerRef.current >= 1.2) {
               treeLightningSpawnTimerRef.current -= 1.2;
               const newAttack = pickTreeLightningAttack(nowMs, terrainRef.current);
-              if (newAttack) treeLightningRef.current.push(newAttack);
+              if (newAttack) {
+                newAttack.source.lockedByLightning = true;
+                newAttack.target.lockedByLightning = true;
+                queueTreeFrames(newAttack.source, [1, 2]);
+                queueTreeFrames(newAttack.target, [1, 2]);
+                treeLightningRef.current.push(newAttack);
+              }
             }
           }
 
-          treeLightningRef.current = treeLightningRef.current.filter((attack) => nowMs < attack.endsAt);
-
           for (const attack of treeLightningRef.current) {
+            if (nowMs >= attack.endsAt && !attack.releasedTrees) {
+              releaseLightningTree(attack.source, nowMs);
+              releaseLightningTree(attack.target, nowMs);
+              attack.releasedTrees = true;
+              continue;
+            }
+
             if (nowMs < attack.connectAt) continue;
 
             attack.animTimer += delta;
@@ -561,6 +615,8 @@ export default function CanvasGame() {
               attack.damageTimer = 0;
             }
           }
+
+          treeLightningRef.current = treeLightningRef.current.filter((attack) => nowMs < attack.endsAt);
         }
 
         if (ammo === 0 && !isReloading) {
@@ -1083,16 +1139,17 @@ export default function CanvasGame() {
       if (eyeCtx) {
         eyeCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         eyeCtx.imageSmoothingEnabled = false;
-        enemies.forEach(enemy => drawEnemyEyes(eyeCtx, enemy));
+        enemies.forEach(enemy => drawEnemyEyes(eyeCtx, enemy, animationNowMs));
+        terrainRef.current.forEach((obstacle) => drawEnemyEyes(eyeCtx, obstacle, animationNowMs));
         drawEnemyProjectiles(eyeCtx);
-        drawTreeLightning(eyeCtx, performance.now());
+        drawTreeLightning(eyeCtx, gameplayElapsedMsRef.current);
       }
       drawPlayer(ctx);
-      drawSummons(ctx);
-      drawStatusEffects(ctx);
+      drawSummons(ctx, animationNowMs);
+      drawStatusEffects(ctx, animationNowMs);
       drawImpactEffects(ctx); // ADD - behind projectiles
       drawProjectilesAndTrails(ctx, phase !== "playing", position);
-      drawEnemyDeaths(ctx);
+      drawEnemyDeaths(ctx, animationNowMs);
       drawParticles(ctx); 
       drawDamageNumbers(ctx); 
       
@@ -1124,7 +1181,7 @@ export default function CanvasGame() {
     enemyDeathAnimationsRef.current.push({
       id: crypto.randomUUID(),
       position: enemy.position.clone(),
-      startedAt: performance.now(),
+      startedAt: gameplayElapsedMsRef.current,
       frameDurationMs: 85,
     });
     removeEnemy(enemy.id);
@@ -1154,7 +1211,7 @@ export default function CanvasGame() {
     }
   }
   
-  const drawDungeon = (ctx: CanvasRenderingContext2D) => {
+  const drawDungeon = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     if (!currentRoom) return;
 
     const centerX = CANVAS_WIDTH / 2;
@@ -1240,10 +1297,33 @@ export default function CanvasGame() {
       ctx.imageSmoothingEnabled = false;
 
       if (treeSprite.complete && treeSprite.naturalWidth > 0) {
-        const scale = (radiusPx * 2.8) / treeSprite.naturalWidth;
-        const drawW = treeSprite.naturalWidth * scale;
-        const drawH = treeSprite.naturalHeight * scale;
-        ctx.drawImage(treeSprite, screenX - drawW / 2, screenY - drawH * 0.75, drawW, drawH);
+        if (!obstacle.lockedByLightning && obstacle.frameQueue.length > 0) {
+          obstacle.frameTimer += animationDeltaRef.current;
+          if (obstacle.frameTimer >= 0.13) {
+            obstacle.frameTimer = 0;
+            const nextFrame = obstacle.frameQueue.shift();
+            if (nextFrame != null) {
+              obstacle.spriteFrame = nextFrame;
+            }
+          }
+        }
+
+        const frameW = 96;
+        const frameH = 96;
+        const scale = (radiusPx * 2.8) / frameW;
+        const drawW = frameW * scale;
+        const drawH = frameH * scale;
+        ctx.drawImage(
+          treeSprite,
+          obstacle.spriteFrame * frameW,
+          0,
+          frameW,
+          frameH,
+          screenX - drawW / 2,
+          screenY - drawH * 0.75,
+          drawW,
+          drawH,
+        );
       } else {
         ctx.fillStyle = "#2f6b2f";
         ctx.beginPath();
@@ -1294,7 +1374,7 @@ export default function CanvasGame() {
 
     if (tentacleSheet.complete && tentacleSheet.naturalWidth > 0) {
       const seed = currentRoom.x * 1000 + currentRoom.y;
-      const now = performance.now();
+      const now = animationNowMs;
       const wallInset = wallThickness;
       const wallRangeStart = -ROOM_SIZE;
       const wallRangeEnd = ROOM_SIZE;
@@ -1840,8 +1920,45 @@ export default function CanvasGame() {
     ctx.restore();
   };
 
-  const drawEnemyEyes = (ctx: CanvasRenderingContext2D, enemy: any) => {
-    if (!enemy || !enemy.position) return;
+  const drawEnemyEyes = (ctx: CanvasRenderingContext2D, enemy: any, animationNowMs: number) => {
+    if (!enemy) return;
+
+    if (enemy.type === "tree") {
+      if (enemy.spriteFrame === 0) return;
+
+      const centerX = CANVAS_WIDTH / 2;
+      const centerY = CANVAS_HEIGHT / 2;
+      const screenX = centerX + ((enemy.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((enemy.z - position.z) * TILE_SIZE) / 2;
+
+      if (treeEnemyEyesSprite.complete && treeEnemyEyesSprite.naturalWidth > 0 && treeEnemyEyesSprite.naturalHeight > 0) {
+        const frameW = 96;
+        const frameH = 96;
+        const eyeFrame = enemy.spriteFrame === 1 ? 0 : 1;
+        const radiusPx = enemy.radius * (TILE_SIZE / 2);
+        const scale = (radiusPx * 2.8) / frameW;
+        const drawW = frameW * scale;
+        const drawH = frameH * scale;
+
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(
+          treeEnemyEyesSprite,
+          eyeFrame * frameW,
+          0,
+          frameW,
+          frameH,
+          screenX - drawW / 2,
+          screenY - drawH * 0.75,
+          drawW,
+          drawH,
+        );
+        ctx.restore();
+      }
+      return;
+    }
+
+    if (!enemy.position) return;
 
     if (enemy.isBoss && enemy.bossType === "shoggoth") {
       const centerX = CANVAS_WIDTH / 2;
@@ -1862,7 +1979,7 @@ export default function CanvasGame() {
       if (hasBossSheet) {
         const frameW = bossSheet.naturalWidth / 3;
         const frameH = bossSheet.naturalHeight / 2;
-        const animFrame = Math.floor(Date.now() / 130) % 3;
+        const animFrame = Math.floor(animationNowMs / 130) % 3;
         const bodyFrame = enemy.attackState === "laser_windup" || enemy.attackState === "laser_firing" ? 2 : animFrame;
         const gasFrameIndex = 4;
         const gasSourceX = (gasFrameIndex % 3) * frameW;
@@ -1939,7 +2056,7 @@ export default function CanvasGame() {
       };
 
       if (enemy.attackState === "laser_windup" && hasWindupSheet) {
-        const pulse = 0.82 + Math.sin(Date.now() / 85) * 0.16;
+        const pulse = 0.82 + Math.sin(animationNowMs / 85) * 0.16;
 
         for (const beamOffset of SHOGGOTH_CONFIG.beamAngles) {
           const beamAngle = aimAngle + beamOffset;
@@ -2063,7 +2180,7 @@ export default function CanvasGame() {
     }
   };
   
-  const drawEnemyDeaths = (ctx: CanvasRenderingContext2D) => {
+  const drawEnemyDeaths = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
     const sprite = enemyDeathSpritesheet;
@@ -2075,7 +2192,7 @@ export default function CanvasGame() {
     const nextAnimations: EnemyDeathAnimation[] = [];
 
     for (const animation of enemyDeathAnimationsRef.current) {
-      const elapsedMs = performance.now() - animation.startedAt;
+      const elapsedMs = animationNowMs - animation.startedAt;
       const frameIndex = Math.floor(elapsedMs / animation.frameDurationMs);
 
       if (frameIndex >= totalFrames) {
@@ -2112,7 +2229,7 @@ export default function CanvasGame() {
     enemyDeathAnimationsRef.current = nextAnimations;
   };
 
-  const drawSummons = (ctx: CanvasRenderingContext2D) => {
+  const drawSummons = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
     
@@ -2135,7 +2252,7 @@ export default function CanvasGame() {
           const shootFrames = 5;
           const inShootAnim = (summon.shootAnimTimer ?? 0) > 0;
 
-          const nowSeconds = performance.now() / 1000;
+          const nowSeconds = animationNowMs / 1000;
           const animFps = inShootAnim ? 5 : 10;
           const frameIndex = Math.floor(nowSeconds * animFps);
 
@@ -2290,7 +2407,7 @@ export default function CanvasGame() {
     });
   };
 
-  const drawStatusEffects = (ctx: CanvasRenderingContext2D) => {
+  const drawStatusEffects = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
     const { statusEffects } = useSummons.getState();
@@ -2307,7 +2424,7 @@ export default function CanvasGame() {
         ctx.fillStyle = "#ff6600";
         ctx.globalAlpha = 0.8;
         for (let i = 0; i < 3; i++) {
-          const angle = (Date.now() / 200 + i) % (Math.PI * 2);
+          const angle = (animationNowMs / 200 + i) % (Math.PI * 2);
           const x = screenX + Math.cos(angle) * 15;
           const y = screenY + Math.sin(angle) * 15 - 10;
           ctx.beginPath();
@@ -2320,7 +2437,7 @@ export default function CanvasGame() {
         ctx.lineWidth = 2;
         ctx.globalAlpha = 0.6;
         ctx.beginPath();
-        ctx.arc(screenX, screenY, 20 + Math.sin(Date.now() / 200) * 3, 0, Math.PI * 2);
+        ctx.arc(screenX, screenY, 20 + Math.sin(animationNowMs / 200) * 3, 0, Math.PI * 2);
         ctx.stroke();
       }
     });
