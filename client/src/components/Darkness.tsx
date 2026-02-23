@@ -6,10 +6,30 @@ const CANVAS_WIDTH = 1490;
 const CANVAS_HEIGHT = 750;
 const TILE_SIZE = 50;
 const WORLD_TO_SCREEN_SCALE = TILE_SIZE;
+const PIXEL_SIZE = 4;
+const LIGHT_LEVELS = [0.35, 0.24, 0.14] as const;
+
+function drawThreeStepLight(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  radius: number,
+) {
+  const radii = [radius * 0.38, radius * 0.68, radius] as const;
+
+  LIGHT_LEVELS.forEach((alpha, index) => {
+    ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+    ctx.beginPath();
+    ctx.arc(x, y, radii[index], 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
 
 export default function Darkness() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number>();
+  const lightCanvasRef = useRef<HTMLCanvasElement>();
+  const darknessCanvasRef = useRef<HTMLCanvasElement>();
 
   const { position: playerPosition, isFiring } = usePlayer();
   const { xpOrbs } = useEnemies();
@@ -21,72 +41,68 @@ export default function Darkness() {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      if (!lightCanvasRef.current) {
+        lightCanvasRef.current = document.createElement("canvas");
+        lightCanvasRef.current.width = Math.floor(CANVAS_WIDTH / PIXEL_SIZE);
+        lightCanvasRef.current.height = Math.floor(CANVAS_HEIGHT / PIXEL_SIZE);
+      }
 
-      // Base darkness
-      ctx.fillStyle = "rgba(0,0,0,0.7)";
-      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      if (!darknessCanvasRef.current) {
+        darknessCanvasRef.current = document.createElement("canvas");
+        darknessCanvasRef.current.width = Math.floor(CANVAS_WIDTH / PIXEL_SIZE);
+        darknessCanvasRef.current.height = Math.floor(CANVAS_HEIGHT / PIXEL_SIZE);
+      }
 
-      ctx.globalCompositeOperation = "destination-out";
+      const lightCtx = lightCanvasRef.current.getContext("2d");
+      const darknessCtx = darknessCanvasRef.current.getContext("2d");
+      if (!lightCtx || !darknessCtx) return;
 
-      const centerX = CANVAS_WIDTH / 2;
-      const centerY = CANVAS_HEIGHT / 2;
+      const scaledWidth = lightCanvasRef.current.width;
+      const scaledHeight = lightCanvasRef.current.height;
+      const centerX = scaledWidth / 2;
+      const centerY = scaledHeight / 2;
 
-      // --- PLAYER LIGHT (guaranteed circular) ---
-      const radius = 210 + (isFiring ? 18 : 0);
+      lightCtx.clearRect(0, 0, scaledWidth, scaledHeight);
+      lightCtx.globalCompositeOperation = "source-over";
+      lightCtx.globalCompositeOperation = "lighter";
 
-      const playerGradient = ctx.createRadialGradient(
-        centerX,
-        centerY,
-        0,
-        centerX,
-        centerY,
-        radius
-      );
+      const playerRadius = (210 + (isFiring ? 18 : 0)) / PIXEL_SIZE;
+      drawThreeStepLight(lightCtx, centerX, centerY, playerRadius);
 
-      playerGradient.addColorStop(0.0, "rgba(0,0,0,1)");
-      playerGradient.addColorStop(0.7, "rgba(0,0,0,0.8)");
-      playerGradient.addColorStop(0.8, "rgba(0,0,0,0.45)");
-      playerGradient.addColorStop(0.85, "rgba(0,0,0,0.2)");
-      playerGradient.addColorStop(1.0, "rgba(0,0,0,0)");
-
-      ctx.fillStyle = playerGradient;
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-      ctx.fill();
-
-      // --- XP LIGHTS (correct world → screen mapping) ---
       xpOrbs.forEach((orb) => {
-        const WORLD_SCALE = WORLD_TO_SCREEN_SCALE;
-
         const x =
-          centerX + (orb.position.x - playerPosition.x) * WORLD_SCALE;
+          centerX +
+          ((orb.position.x - playerPosition.x) * WORLD_TO_SCREEN_SCALE) / PIXEL_SIZE;
 
         const y =
-          centerY + (orb.position.z - playerPosition.z) * WORLD_SCALE;
+          centerY +
+          ((orb.position.z - playerPosition.z) * WORLD_TO_SCREEN_SCALE) / PIXEL_SIZE;
 
-
-        const orbRadius = 36;
-
-        const orbGradient = ctx.createRadialGradient(
-          x,
-          y,
-          0,
-          x,
-          y,
-          orbRadius
-        );
-
-        orbGradient.addColorStop(0, "rgba(0,0,0,0.9)");
-        orbGradient.addColorStop(1, "rgba(0,0,0,0)");
-
-        ctx.fillStyle = orbGradient;
-        ctx.beginPath();
-        ctx.arc(x, y, orbRadius, 0, Math.PI * 2);
-        ctx.fill();
+        drawThreeStepLight(lightCtx, x, y, 36 / PIXEL_SIZE);
       });
 
-      ctx.globalCompositeOperation = "source-over";
+      darknessCtx.clearRect(0, 0, scaledWidth, scaledHeight);
+      darknessCtx.globalCompositeOperation = "source-over";
+      darknessCtx.fillStyle = "rgba(0,0,0,0.86)";
+      darknessCtx.fillRect(0, 0, scaledWidth, scaledHeight);
+
+      darknessCtx.globalCompositeOperation = "destination-out";
+      darknessCtx.drawImage(lightCanvasRef.current, 0, 0);
+      darknessCtx.globalCompositeOperation = "source-over";
+
+      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(
+        darknessCanvasRef.current,
+        0,
+        0,
+        scaledWidth,
+        scaledHeight,
+        0,
+        0,
+        CANVAS_WIDTH,
+        CANVAS_HEIGHT,
+      );
 
 
       animationFrameRef.current = requestAnimationFrame(render);
@@ -109,6 +125,7 @@ export default function Darkness() {
         left: 0,
         pointerEvents: "none",
         zIndex: 1,
+        imageRendering: "pixelated",
       }}
     />
   );
