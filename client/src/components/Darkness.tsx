@@ -1,13 +1,14 @@
 import { useEffect, useRef } from "react";
 import { usePlayer } from "../lib/stores/usePlayer";
 import { useEnemies } from "../lib/stores/useEnemies";
+import { useVisualEffects } from "../lib/stores/useVisualEffects";
 
 const CANVAS_WIDTH = 1490;
 const CANVAS_HEIGHT = 750;
 const TILE_SIZE = 50;
 const WORLD_TO_SCREEN_SCALE = TILE_SIZE;
-const PIXEL_SIZE = 4;
-const LIGHT_LEVELS = [0.35, 0.24, 0.14] as const;
+const PIXEL_SIZE = 6;
+const LIGHT_LEVELS = [0.35, 0.22, 0.12] as const;
 
 function drawThreeStepLight(
   ctx: CanvasRenderingContext2D,
@@ -20,7 +21,7 @@ function drawThreeStepLight(
   LIGHT_LEVELS.forEach((alpha, index) => {
     ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
     ctx.beginPath();
-    ctx.arc(x, y, radii[index], 0, Math.PI * 2);
+    ctx.arc(Math.round(x), Math.round(y), Math.round(radii[index]), 0, Math.PI * 2);
     ctx.fill();
   });
 }
@@ -31,8 +32,9 @@ export default function Darkness() {
   const lightCanvasRef = useRef<HTMLCanvasElement>();
   const darknessCanvasRef = useRef<HTMLCanvasElement>();
 
-  const { position: playerPosition, isFiring } = usePlayer();
+  const { position: playerPosition, muzzleFlashPosition } = usePlayer();
   const { xpOrbs } = useEnemies();
+  const { impactEffects } = useVisualEffects();
 
   useEffect(() => {
     const render = () => {
@@ -64,10 +66,30 @@ export default function Darkness() {
 
       lightCtx.clearRect(0, 0, scaledWidth, scaledHeight);
       lightCtx.globalCompositeOperation = "source-over";
-      lightCtx.globalCompositeOperation = "lighter";
 
-      const playerRadius = (210 + (isFiring ? 18 : 0)) / PIXEL_SIZE;
+      const playerRadius = 210 / PIXEL_SIZE;
       drawThreeStepLight(lightCtx, centerX, centerY, playerRadius);
+
+      if (muzzleFlashPosition) {
+        const x =
+          centerX +
+          ((muzzleFlashPosition.x - playerPosition.x) * WORLD_TO_SCREEN_SCALE) / PIXEL_SIZE;
+        const y =
+          centerY +
+          ((muzzleFlashPosition.z - playerPosition.z) * WORLD_TO_SCREEN_SCALE) / PIXEL_SIZE;
+        drawThreeStepLight(lightCtx, x, y, 64 / PIXEL_SIZE);
+      }
+
+      impactEffects.forEach((impact) => {
+        const x =
+          centerX +
+          ((impact.x - playerPosition.x) * WORLD_TO_SCREEN_SCALE) / PIXEL_SIZE;
+        const y =
+          centerY +
+          ((impact.y - playerPosition.z) * WORLD_TO_SCREEN_SCALE) / PIXEL_SIZE;
+        const sizeScale = impact.frameIndex === 0 ? 1 : 0.65;
+        drawThreeStepLight(lightCtx, x, y, (impact.size * sizeScale) / PIXEL_SIZE);
+      });
 
       xpOrbs.forEach((orb) => {
         const x =
@@ -78,7 +100,7 @@ export default function Darkness() {
           centerY +
           ((orb.position.z - playerPosition.z) * WORLD_TO_SCREEN_SCALE) / PIXEL_SIZE;
 
-        drawThreeStepLight(lightCtx, x, y, 36 / PIXEL_SIZE);
+        drawThreeStepLight(lightCtx, x, y, 32 / PIXEL_SIZE);
       });
 
       darknessCtx.clearRect(0, 0, scaledWidth, scaledHeight);
@@ -104,7 +126,6 @@ export default function Darkness() {
         CANVAS_HEIGHT,
       );
 
-
       animationFrameRef.current = requestAnimationFrame(render);
     };
 
@@ -112,7 +133,7 @@ export default function Darkness() {
     return () => {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [playerPosition, xpOrbs, isFiring]);
+  }, [playerPosition, xpOrbs, impactEffects, muzzleFlashPosition]);
 
   return (
     <canvas
