@@ -82,6 +82,7 @@ interface PlayerState {
   killClipStacks: number;
 
   muzzleFlashTimer: number;
+  muzzleFlashPosition: THREE.Vector3 | null;
   fanFireActive: boolean;
   fanFireIndex: number;
   fanFireTimer: number;
@@ -124,8 +125,8 @@ interface PlayerState {
   // Actions - Fan Fire
   startFanFire: () => void;
   updateFanFire: (delta: number, fireCallback: () => void) => void;
-  fireMuzzleFlash: () => void;
-  updateMuzzleFlash: (delta: number) => void;
+  fireMuzzleFlash: (position: THREE.Vector3) => void;
+  updateMuzzleFlash: () => void;
 
   // Actions - XP & Leveling
   addXP: (amount: number) => void;
@@ -756,6 +757,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   killClipStacks: 0,
 
   muzzleFlashTimer: 0,
+  muzzleFlashPosition: null,
   fanFireActive: false,
   fanFireIndex: 0,
   fanFireTimer: 0,
@@ -847,11 +849,18 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     return { fanFireTimer: newTimer };
   }),
 
-  fireMuzzleFlash: () => set({ muzzleFlashTimer: 0.02 }),
+  fireMuzzleFlash: (position) => set({
+    muzzleFlashTimer: 1,
+    muzzleFlashPosition: position.clone(),
+  }),
 
-  updateMuzzleFlash: (delta) => set((state) => {
+  updateMuzzleFlash: () => set((state) => {
     if (state.muzzleFlashTimer <= 0) return {};
-    return { muzzleFlashTimer: Math.max(state.muzzleFlashTimer - delta, 0) };
+    const nextTimer = Math.max(state.muzzleFlashTimer - 1, 0);
+    return {
+      muzzleFlashTimer: nextTimer,
+      muzzleFlashPosition: nextTimer > 0 ? state.muzzleFlashPosition : null,
+    };
   }),
 
   setFiring: (val) => set({ isFiring: val }),
@@ -1015,6 +1024,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     killClipStacks: 0,
     lastMovementTime: 0,
     muzzleFlashTimer: 0,
+    muzzleFlashPosition: null,
     fanFireActive: false,
     fanFireIndex: 0,
     fanFireTimer: 0,
