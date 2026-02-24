@@ -305,6 +305,7 @@ export default function CanvasGame() {
     loseHeart,
     updateInvincibility,
     muzzleFlashTimer,
+    muzzleFlashPosition,
     updateMuzzleFlash,
       updateFanFire,
       startFanFire,
@@ -498,7 +499,7 @@ export default function CanvasGame() {
         const ps = usePlayer.getState();
         updateReload(delta);
         updateInvincibility(delta);
-        updateMuzzleFlash(delta);
+        updateMuzzleFlash();
         updateSummons(delta, position, enemies, addProjectile, playHit);
         updateFanFire(delta, () => {
           const fanIndex = usePlayer.getState().fanFireIndex;
@@ -644,20 +645,27 @@ export default function CanvasGame() {
                 mouseRef.current.x - centerX
               );
 
+              const handOffset = 8;
+              const barrelLength = 28;
+              const totalOffsetPixels = handOffset + barrelLength;
+              const totalOffset = totalOffsetPixels / (TILE_SIZE / 2);
+              const barrelFlashPosition = ps.position.clone().add(
+                new THREE.Vector3(
+                  Math.cos(baseAngle) * totalOffset,
+                  0,
+                  Math.sin(baseAngle) * totalOffset,
+                ),
+              );
+
               // Helper function to fire a projectile in a direction
-           const fireProjectileInDirection = (angle: number, damageMultiplier: number = 1) => {
+              const fireProjectileInDirection = (angle: number, damageMultiplier: number = 1) => {
                 const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
-                const handOffset = 8;
-                const barrelLength = 28;
-                const totalOffsetPixels = handOffset + barrelLength;
-                const totalOffset = totalOffsetPixels / (TILE_SIZE / 2);
-                
                 const barrelPosition = ps.position.clone().add(
                   new THREE.Vector3(
                     Math.cos(angle) * totalOffset,
                     0,
-                    Math.sin(angle) * totalOffset
-                  )
+                    Math.sin(angle) * totalOffset,
+                  ),
                 );
 
                 addProjectile({
@@ -702,7 +710,7 @@ export default function CanvasGame() {
               if (ps.fanFire && ammo === 1) {
                 ps.startFanFire();
               }
-              ps.fireMuzzleFlash();
+              ps.fireMuzzleFlash(barrelFlashPosition);
 
               playHit();
 
@@ -1589,7 +1597,7 @@ export default function CanvasGame() {
       // MUZZLE FLASH
       // ===========================
       
-      if (muzzleFlashTimer > 0) {
+      if (muzzleFlashTimer > 0 && muzzleFlashPosition) {
         const sprite = VisualSprites.muzzleFlash;
         
         ctx.save();
