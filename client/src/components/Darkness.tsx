@@ -7,8 +7,8 @@ const CANVAS_WIDTH = 1490;
 const CANVAS_HEIGHT = 750;
 const TILE_SIZE = 50;
 const WORLD_TO_SCREEN_SCALE = TILE_SIZE / 2;
-const PIXEL_SIZE = 3;
-const LIGHT_LEVELS = [0.35, 0.22, 0.12] as const;
+const PIXEL_SIZE = 2;
+const LIGHT_LEVELS = [0.6, 0.3] as const;
 
 function drawThreeStepLight(
   ctx: CanvasRenderingContext2D,
@@ -16,7 +16,7 @@ function drawThreeStepLight(
   y: number,
   radius: number,
 ) {
-  const radii = [radius * 0.38, radius * 0.68, radius] as const;
+  const radii = [radius * 0.38, radius * 0.68] as const;
 
   LIGHT_LEVELS.forEach((alpha, index) => {
     ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
@@ -46,7 +46,7 @@ export default function Darkness() {
 
       ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
       ctx.globalCompositeOperation = "source-over";
-      ctx.fillStyle = "rgba(0,0,0,0.86)";
+      ctx.fillStyle = "rgba(0,0,0,0.8)";
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
       ctx.globalCompositeOperation = "destination-out";
@@ -59,7 +59,7 @@ export default function Darkness() {
         const y =
           centerY +
           (muzzleFlashPosition.z - playerPosition.z) * WORLD_TO_SCREEN_SCALE;
-        drawThreeStepLight(ctx, x, y, 64);
+        drawThreeStepLight(ctx, x, y, 264);
       }
 
       impactEffects.forEach((impact) => {
@@ -69,8 +69,8 @@ export default function Darkness() {
         const y =
           centerY +
           (impact.y - playerPosition.z) * WORLD_TO_SCREEN_SCALE;
-        const sizeScale = impact.frameIndex === 0 ? 1 : 0.65;
-        drawThreeStepLight(ctx, x, y, impact.size * sizeScale);
+        const sizeScale = 1;
+        drawThreeStepLight(ctx, x, y, impact.size*2 * sizeScale);
       });
 
       xpOrbs.forEach((orb) => {

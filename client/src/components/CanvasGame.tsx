@@ -1151,13 +1151,14 @@ export default function CanvasGame() {
         terrainRef.current.forEach((obstacle) => drawEnemyEyes(eyeCtx, obstacle, animationNowMs));
         drawTreeLightning(eyeCtx, gameplayElapsedMsRef.current);
         drawEnemyProjectiles(eyeCtx);
-        
+        drawProjectilesAndTrails(eyeCtx, phase !== "playing", position);
+        drawImpactEffects(eyeCtx); // ADD - behind projectiles
       }
       drawPlayer(ctx);
       drawSummons(ctx, animationNowMs);
       drawStatusEffects(ctx, animationNowMs);
-      drawImpactEffects(ctx); // ADD - behind projectiles
-      drawProjectilesAndTrails(ctx, phase !== "playing", position);
+      
+      
       drawEnemyDeaths(ctx, animationNowMs);
       drawParticles(ctx); 
       drawDamageNumbers(ctx); 
