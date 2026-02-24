@@ -6,10 +6,9 @@ import { useVisualEffects } from "../lib/stores/useVisualEffects";
 const CANVAS_WIDTH = 1490;
 const CANVAS_HEIGHT = 750;
 const TILE_SIZE = 50;
-const WORLD_TO_SCREEN_SCALE = TILE_SIZE;
-const PIXEL_SIZE = 4;
+const WORLD_TO_SCREEN_SCALE = TILE_SIZE / 2;
+const PIXEL_SIZE = 3;
 const LIGHT_LEVELS = [0.35, 0.22, 0.12] as const;
-const LIGHT_SNAP = 2;
 
 function drawThreeStepLight(
   ctx: CanvasRenderingContext2D,
@@ -22,10 +21,8 @@ function drawThreeStepLight(
   LIGHT_LEVELS.forEach((alpha, index) => {
     ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
     ctx.beginPath();
-    const snappedX = Math.round(x / LIGHT_SNAP) * LIGHT_SNAP;
-    const snappedY = Math.round(y / LIGHT_SNAP) * LIGHT_SNAP;
-    const snappedRadius = Math.max(1, Math.round(radii[index] / LIGHT_SNAP) * LIGHT_SNAP);
-    ctx.arc(snappedX, snappedY, snappedRadius, 0, Math.PI * 2);
+    const snappedRadius = Math.max(1, Math.round(radii[index] / PIXEL_SIZE) * PIXEL_SIZE);
+    ctx.arc(x, y, snappedRadius, 0, Math.PI * 2);
     ctx.fill();
   });
 }
@@ -33,9 +30,6 @@ function drawThreeStepLight(
 export default function Darkness() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number>();
-  const lightCanvasRef = useRef<HTMLCanvasElement>();
-  const darknessCanvasRef = useRef<HTMLCanvasElement>();
-
   const { position: playerPosition, muzzleFlashPosition } = usePlayer();
   const { xpOrbs } = useEnemies();
   const { impactEffects } = useVisualEffects();
@@ -47,88 +41,50 @@ export default function Darkness() {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      if (!lightCanvasRef.current) {
-        lightCanvasRef.current = document.createElement("canvas");
-        lightCanvasRef.current.width = Math.floor(CANVAS_WIDTH / PIXEL_SIZE);
-        lightCanvasRef.current.height = Math.floor(CANVAS_HEIGHT / PIXEL_SIZE);
-      }
+      const centerX = CANVAS_WIDTH / 2;
+      const centerY = CANVAS_HEIGHT / 2;
 
-      if (!darknessCanvasRef.current) {
-        darknessCanvasRef.current = document.createElement("canvas");
-        darknessCanvasRef.current.width = Math.floor(CANVAS_WIDTH / PIXEL_SIZE);
-        darknessCanvasRef.current.height = Math.floor(CANVAS_HEIGHT / PIXEL_SIZE);
-      }
+      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.globalCompositeOperation = "source-over";
+      ctx.fillStyle = "rgba(0,0,0,0.86)";
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-      const lightCtx = lightCanvasRef.current.getContext("2d");
-      const darknessCtx = darknessCanvasRef.current.getContext("2d");
-      if (!lightCtx || !darknessCtx) return;
-
-      const scaledWidth = lightCanvasRef.current.width;
-      const scaledHeight = lightCanvasRef.current.height;
-      const centerX = scaledWidth / 2;
-      const centerY = scaledHeight / 2;
-
-      lightCtx.clearRect(0, 0, scaledWidth, scaledHeight);
-      lightCtx.globalCompositeOperation = "source-over";
-
-      const playerRadius = 210 / PIXEL_SIZE;
-      drawThreeStepLight(lightCtx, centerX, centerY, playerRadius);
+      ctx.globalCompositeOperation = "destination-out";
+      drawThreeStepLight(ctx, centerX, centerY, 210);
 
       if (muzzleFlashPosition) {
         const x =
           centerX +
-          ((muzzleFlashPosition.x - playerPosition.x) * WORLD_TO_SCREEN_SCALE) / PIXEL_SIZE;
+          (muzzleFlashPosition.x - playerPosition.x) * WORLD_TO_SCREEN_SCALE;
         const y =
           centerY +
-          ((muzzleFlashPosition.z - playerPosition.z) * WORLD_TO_SCREEN_SCALE) / PIXEL_SIZE;
-        drawThreeStepLight(lightCtx, x, y, 64 / PIXEL_SIZE);
+          (muzzleFlashPosition.z - playerPosition.z) * WORLD_TO_SCREEN_SCALE;
+        drawThreeStepLight(ctx, x, y, 64);
       }
 
       impactEffects.forEach((impact) => {
         const x =
           centerX +
-          ((impact.x - playerPosition.x) * WORLD_TO_SCREEN_SCALE) / PIXEL_SIZE;
+          (impact.x - playerPosition.x) * WORLD_TO_SCREEN_SCALE;
         const y =
           centerY +
-          ((impact.y - playerPosition.z) * WORLD_TO_SCREEN_SCALE) / PIXEL_SIZE;
+          (impact.y - playerPosition.z) * WORLD_TO_SCREEN_SCALE;
         const sizeScale = impact.frameIndex === 0 ? 1 : 0.65;
-        drawThreeStepLight(lightCtx, x, y, (impact.size * sizeScale) / PIXEL_SIZE);
+        drawThreeStepLight(ctx, x, y, impact.size * sizeScale);
       });
 
       xpOrbs.forEach((orb) => {
         const x =
           centerX +
-          ((orb.position.x - playerPosition.x) * WORLD_TO_SCREEN_SCALE) / PIXEL_SIZE;
+          (orb.position.x - playerPosition.x) * WORLD_TO_SCREEN_SCALE;
 
         const y =
           centerY +
-          ((orb.position.z - playerPosition.z) * WORLD_TO_SCREEN_SCALE) / PIXEL_SIZE;
+          (orb.position.z - playerPosition.z) * WORLD_TO_SCREEN_SCALE;
 
-        drawThreeStepLight(lightCtx, x, y, 32 / PIXEL_SIZE);
+        drawThreeStepLight(ctx, x, y, 32);
       });
-
-      darknessCtx.clearRect(0, 0, scaledWidth, scaledHeight);
-      darknessCtx.globalCompositeOperation = "source-over";
-      darknessCtx.fillStyle = "rgba(0,0,0,0.86)";
-      darknessCtx.fillRect(0, 0, scaledWidth, scaledHeight);
-
-      darknessCtx.globalCompositeOperation = "destination-out";
-      darknessCtx.drawImage(lightCanvasRef.current, 0, 0);
-      darknessCtx.globalCompositeOperation = "source-over";
-
-      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(
-        darknessCanvasRef.current,
-        0,
-        0,
-        scaledWidth,
-        scaledHeight,
-        0,
-        0,
-        CANVAS_WIDTH,
-        CANVAS_HEIGHT,
-      );
+      ctx.globalCompositeOperation = "source-over";
 
       animationFrameRef.current = requestAnimationFrame(render);
     };

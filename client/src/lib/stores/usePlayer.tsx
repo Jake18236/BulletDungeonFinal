@@ -850,7 +850,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   }),
 
   fireMuzzleFlash: (position) => set({
-    muzzleFlashTimer: 1,
+    muzzleFlashTimer: 6,
     muzzleFlashPosition: position.clone(),
   }),
 
