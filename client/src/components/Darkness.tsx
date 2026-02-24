@@ -8,23 +8,36 @@ const CANVAS_HEIGHT = 750;
 const TILE_SIZE = 50;
 const WORLD_TO_SCREEN_SCALE = TILE_SIZE / 2;
 const PIXEL_SIZE = 2;
-const LIGHT_LEVELS = [0.6, 0.3] as const;
+const LIGHT_LEVELS = [1, 0.3, 0.5] as const;
 
 function drawThreeStepLight(
-  ctx: CanvasRenderingContext2D,
+ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
   radius: number,
 ) {
-  const radii = [radius * 0.38, radius * 0.68] as const;
+  const snappedRadius =
+    Math.max(1, Math.round(radius / PIXEL_SIZE) * PIXEL_SIZE);
 
-  LIGHT_LEVELS.forEach((alpha, index) => {
-    ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-    ctx.beginPath();
-    const snappedRadius = Math.max(1, Math.round(radii[index] / PIXEL_SIZE) * PIXEL_SIZE);
-    ctx.arc(x, y, snappedRadius, 0, Math.PI * 2);
-    ctx.fill();
-  });
+  const gradient = ctx.createRadialGradient(
+    x,
+    y,
+    0,
+    x,
+    y,
+    snappedRadius,
+  );
+
+  gradient.addColorStop(0, "rgb(255, 255, 255)");
+    gradient.addColorStop(0.45, "rgba(255,255,255)");
+  gradient.addColorStop(0.5, "rgba(255,255,255,0.5)");
+    gradient.addColorStop(0.70, "rgba(255,255,255, 0.25)");
+  gradient.addColorStop(1, "rgba(255,255,255,0)");
+
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.arc(x, y, snappedRadius, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 export default function Darkness() {
@@ -46,11 +59,11 @@ export default function Darkness() {
 
       ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
       ctx.globalCompositeOperation = "source-over";
-      ctx.fillStyle = "rgba(0,0,0,0.8)";
+      ctx.fillStyle = "rgba(0,0,0,0.7)";
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
       ctx.globalCompositeOperation = "destination-out";
-      drawThreeStepLight(ctx, centerX, centerY, 210);
+      drawThreeStepLight(ctx, centerX, centerY, 300);
 
       if (muzzleFlashPosition) {
         const x =
@@ -70,7 +83,7 @@ export default function Darkness() {
           centerY +
           (impact.y - playerPosition.z) * WORLD_TO_SCREEN_SCALE;
         const sizeScale = 1;
-        drawThreeStepLight(ctx, x, y, impact.size*2 * sizeScale);
+        drawThreeStepLight(ctx, x, y, impact.size * sizeScale);
       });
 
       xpOrbs.forEach((orb) => {

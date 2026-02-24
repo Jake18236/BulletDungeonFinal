@@ -16,6 +16,7 @@ import { useSummons } from "../lib/stores/useSummons";
 import { useVisualEffects } from "../lib/stores/useVisualEffects";
 import GameUI from "./GameUI"  
 import { LevelUpScreen } from "./GameUI";
+import Darkness from "./Darkness";
 import {
   enemySpritesByType,
   enemyEyeSpritesByType,
@@ -38,11 +39,8 @@ import {
 const TILE_SIZE = 50;
 export const CANVAS_WIDTH = 1490;
 export const CANVAS_HEIGHT = 750;
-const INTERNAL_WIDTH = 800;
-const INTERNAL_HEIGHT = 450;
-const WORLD_SCALE = 32;
 const ROOM_SIZE = 200;
-const SHOGGOTH_BASE_BEAM_LENGTH_WORLD = (304 * 4) / WORLD_SCALE;
+const SHOGGOTH_BASE_BEAM_LENGTH_WORLD = (304 * 4) / (TILE_SIZE / 2);
 const SHOGGOTH_BEAM_LENGTH_WORLD = SHOGGOTH_BASE_BEAM_LENGTH_WORLD * SHOGGOTH_CONFIG.beamLengthScale;
 
 const cracksSheet = new Image();
@@ -262,22 +260,9 @@ function releaseLightningTree(tree: TerrainObstacle, nowMs: number) {
   queueTreeFrames(tree, [1, 0]);
 }
 
-
-interface Camera2D {
-  x: number;
-  z: number;
-}
-
-function worldToScreen(worldX: number, worldZ: number, camera: Camera2D) {
-  return {
-    x: Math.round(INTERNAL_WIDTH / 2 + (worldX - camera.x) * WORLD_SCALE),
-    y: Math.round(INTERNAL_HEIGHT / 2 + (worldZ - camera.z) * WORLD_SCALE),
-  };
-}
-
 export default function CanvasGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const offscreenBufferRef = useRef<HTMLCanvasElement | null>(null);
+  const eyeCanvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number>();
   const animationDeltaRef = useRef<number>(0);
   const enemyProjectilesRef = useRef<EnemyProjectile[]>([]);
@@ -434,8 +419,8 @@ export default function CanvasGame() {
       
       setMousePos({ x: rawX, y: rawY });
 
-      const scaleX = INTERNAL_WIDTH / rect.width;
-      const scaleY = INTERNAL_HEIGHT / rect.height;
+      const scaleX = CANVAS_WIDTH / rect.width;
+      const scaleY = CANVAS_HEIGHT / rect.height;
 
       mouseRef.current = {
         x: (e.clientX - rect.left) * scaleX,
@@ -499,27 +484,14 @@ export default function CanvasGame() {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      if (!offscreenBufferRef.current) {
-        const buffer = document.createElement("canvas");
-        buffer.width = INTERNAL_WIDTH;
-        buffer.height = INTERNAL_HEIGHT;
-        offscreenBufferRef.current = buffer;
-      }
-
-      const buffer = offscreenBufferRef.current;
-      const bufferCtx = buffer.getContext("2d");
-      if (!bufferCtx) return;
-
       const animationNowMs = phase === "playing" ? currentTime : pausedAnimationTimeRef.current;
       
       
 
-      const camera = { x: position.x, z: position.z };
+      ctx.fillStyle = "#1a1a1a";
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-      bufferCtx.fillStyle = "#1a1a1a";
-      bufferCtx.fillRect(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
-
-      if (currentRoom) drawDungeon(bufferCtx, animationNowMs, camera);
+      if (currentRoom) drawDungeon(ctx, animationNowMs);
       
 
       if (phase === "playing") {
@@ -664,8 +636,8 @@ export default function CanvasGame() {
 
         if (isMouseDown.current && !isReloading && ammo > 0 && canFire.current) {
             if (fireShot()) {
-              const centerX = INTERNAL_WIDTH / 2;
-              const centerY = INTERNAL_HEIGHT / 2;
+              const centerX = CANVAS_WIDTH / 2;
+              const centerY = CANVAS_HEIGHT / 2;
 
               const stats = usePlayer.getState().getProjectileStats();
               const baseAngle = Math.atan2(
@@ -676,7 +648,7 @@ export default function CanvasGame() {
               const handOffset = 8;
               const barrelLength = 28;
               const totalOffsetPixels = handOffset + barrelLength;
-              const totalOffset = totalOffsetPixels / WORLD_SCALE;
+              const totalOffset = totalOffsetPixels / (TILE_SIZE / 2);
               const barrelFlashPosition = ps.position.clone().add(
                 new THREE.Vector3(
                   Math.cos(baseAngle) * totalOffset,
@@ -922,7 +894,7 @@ export default function CanvasGame() {
 
             updated.projectileCooldown = (updated.projectileCooldown ?? 0) - delta;
             if (updated.projectileCooldown <= 0) {
-              const beamOriginOffsetWorld = SHOGGOTH_CONFIG.beamOriginOffsetPx / WORLD_SCALE;
+              const beamOriginOffsetWorld = SHOGGOTH_CONFIG.beamOriginOffsetPx / (TILE_SIZE / 2);
               for (const beamOffset of SHOGGOTH_CONFIG.beamAngles) {
                 const beamAngle = currentRotation + beamOffset;
                 const beamDirection = new THREE.Vector3(Math.cos(beamAngle), 0, Math.sin(beamAngle));
@@ -981,9 +953,9 @@ export default function CanvasGame() {
             enemy.rotationY = Math.atan2(dirZ, dirX);
             const isRangedAttacking = (enemy as any).isRangedAttacking ?? false;
 
-            if (distance <= (ENEMY_TYPE_CONFIG.eyeball.engageDistancePx ?? 100) / WORLD_SCALE) {
+            if (distance <= (ENEMY_TYPE_CONFIG.eyeball.engageDistancePx ?? 100) / (TILE_SIZE / 2)) {
               (enemy as any).isRangedAttacking = true;
-            } else if (distance > (ENEMY_TYPE_CONFIG.eyeball.disengageDistancePx ?? 150) / WORLD_SCALE) {
+            } else if (distance > (ENEMY_TYPE_CONFIG.eyeball.disengageDistancePx ?? 150) / (TILE_SIZE / 2)) {
               (enemy as any).isRangedAttacking = false;
             } else {
               (enemy as any).isRangedAttacking = isRangedAttacking;
@@ -1167,21 +1139,33 @@ export default function CanvasGame() {
         if (hearts <= 0) end();
       }
       
-      drawXPOrbs(bufferCtx);
-      enemies.forEach(enemy => drawEnemy(bufferCtx, enemy));
-      drawPlayer(bufferCtx);
-      drawSummons(bufferCtx, animationNowMs);
-      drawStatusEffects(bufferCtx, animationNowMs);
-      drawEnemyDeaths(bufferCtx, animationNowMs);
-      drawParticles(bufferCtx);
-      drawDamageNumbers(bufferCtx);
-      drawReloadIndicator(bufferCtx);
-      drawWeapon(bufferCtx, "revolver", phase !== "playing");
+      drawXPOrbs(ctx);
+      enemies.forEach(enemy => drawEnemy(ctx, enemy));
 
-      ctx.imageSmoothingEnabled = false;
-      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-      ctx.drawImage(buffer, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
+      const eyeCanvas = eyeCanvasRef.current;
+      const eyeCtx = eyeCanvas?.getContext("2d");
+      if (eyeCtx) {
+        eyeCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        eyeCtx.imageSmoothingEnabled = false;
+        enemies.forEach(enemy => drawEnemyEyes(eyeCtx, enemy, animationNowMs));
+        terrainRef.current.forEach((obstacle) => drawEnemyEyes(eyeCtx, obstacle, animationNowMs));
+        drawTreeLightning(eyeCtx, gameplayElapsedMsRef.current);
+        drawEnemyProjectiles(eyeCtx);
+        drawProjectilesAndTrails(eyeCtx, phase !== "playing", position);
+      }
+      drawPlayer(ctx);
+      drawSummons(ctx, animationNowMs);
+      drawStatusEffects(ctx, animationNowMs);
+      drawImpactEffects(ctx); // ADD - behind projectiles
+      
+      drawEnemyDeaths(ctx, animationNowMs);
+      drawParticles(ctx); 
+      drawDamageNumbers(ctx); 
+      
+      drawReloadIndicator(ctx);
+      drawWeapon(ctx, "revolver", phase !== "playing");
+      
+      
       animationFrameRef.current = requestAnimationFrame(gameLoop);
     };
 
@@ -1236,16 +1220,16 @@ export default function CanvasGame() {
     }
   }
   
-  const drawDungeon = (ctx: CanvasRenderingContext2D, animationNowMs: number, camera: Camera2D) => {
+  const drawDungeon = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     if (!currentRoom) return;
 
-    const centerX = INTERNAL_WIDTH / 2;
-    const centerY = INTERNAL_HEIGHT / 2;
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
 
     const floorSize = ROOM_SIZE * TILE_SIZE;
 
-    const offsetX = (-camera.x * WORLD_SCALE);
-    const offsetZ = (-camera.z * WORLD_SCALE);
+    const offsetX = (-position.x * TILE_SIZE) / 2;
+    const offsetZ = (-position.z * TILE_SIZE) / 2;
 
     // Base floor color under textures
     ctx.fillStyle = "#272030";
@@ -1256,42 +1240,7 @@ export default function CanvasGame() {
       floorSize,
     );
 
-    // Seeded random for consistent texture layout
-    const seed = currentRoom.x * 1000 + currentRoom.y;
-
-    const crackFrameSize = 16;
-    const crackCols = 3;
-    const crackRows = 3;
-    const worldTileStep = 1;
-    const drawSize = 32;
-
-    const halfCanvasWorldW = CANVAS_WIDTH / TILE_SIZE;
-    const halfCanvasWorldH = CANVAS_HEIGHT / TILE_SIZE;
-    const roomMin = -ROOM_SIZE;
-    const roomMax = ROOM_SIZE;
-
-    const startX = Math.max(roomMin, Math.floor(camera.x - halfCanvasWorldW - 2));
-    const endX = Math.min(roomMax, Math.ceil(camera.x + halfCanvasWorldW + 2));
-    const startZ = Math.max(roomMin, Math.floor(camera.z - halfCanvasWorldH - 2));
-    const endZ = Math.min(roomMax, Math.ceil(camera.z + halfCanvasWorldH + 2));
-
-    ctx.imageSmoothingEnabled = false;
-
-    for (let worldX = startX; worldX <= endX; worldX += worldTileStep) {
-      for (let worldZ = startZ; worldZ <= endZ; worldZ += worldTileStep) {
-        const screenX = centerX + ((worldX - camera.x) * WORLD_SCALE);
-        const screenY = centerY + ((worldZ - camera.z) * WORLD_SCALE);
-
-        const crackIndex = Math.floor(seededTileRandom(seed, worldX, worldZ, 1) * (crackCols * crackRows));
-        const crackSX = (crackIndex % crackCols) * crackFrameSize;
-        const crackSY = Math.floor(crackIndex / crackCols) * crackFrameSize;
-
-        if (cracksSheet.complete && cracksSheet.naturalWidth > 0) {
-          
-        }
-      }
-    }
-
+    
     const gradient = ctx.createRadialGradient(
       centerX,
       centerY,
@@ -1316,9 +1265,9 @@ export default function CanvasGame() {
     // ============================================
 
     terrainRef.current.forEach((obstacle) => {
-      const screenX = centerX + ((obstacle.x - camera.x) * WORLD_SCALE);
-      const screenY = centerY + ((obstacle.z - camera.z) * WORLD_SCALE);
-      const radiusPx = obstacle.radius * WORLD_SCALE;
+      const screenX = centerX + ((obstacle.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((obstacle.z - position.z) * TILE_SIZE) / 2;
+      const radiusPx = obstacle.radius * (TILE_SIZE / 2);
       ctx.imageSmoothingEnabled = false;
 
       if (treeSprite.complete && treeSprite.naturalWidth > 0) {
@@ -1428,8 +1377,8 @@ export default function CanvasGame() {
           const clampedDelta = Math.max(-maxTurnRadians, Math.min(maxTurnRadians, deltaFromBase));
           const spriteRotation = baseAngle + clampedDelta;
 
-          const screenX = centerX + ((world.x - camera.x) * WORLD_SCALE);
-          const screenY = centerY + ((world.z - camera.z) * WORLD_SCALE);
+          const screenX = centerX + ((world.x - position.x) * TILE_SIZE) / 2;
+          const screenY = centerY + ((world.z - position.z) * TILE_SIZE) / 2;
 
           ctx.save();
           ctx.imageSmoothingEnabled = false;
@@ -1473,12 +1422,12 @@ export default function CanvasGame() {
   };
 
   const drawXPOrbs = (ctx: CanvasRenderingContext2D) => {
-    const centerX = INTERNAL_WIDTH / 2;
-    const centerY = INTERNAL_HEIGHT / 2;
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
 
     xpOrbs.forEach((orb) => {
-      const screenX = centerX + ((orb.position.x - position.x) * WORLD_SCALE);
-      const screenY = centerY + ((orb.position.z - position.z) * WORLD_SCALE);
+      const screenX = centerX + ((orb.position.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((orb.position.z - position.z) * TILE_SIZE) / 2;
 
       const sprite = xpSprite; // assume you imported or loaded xp.png as xpImage
 
@@ -1497,8 +1446,8 @@ export default function CanvasGame() {
   };
 
   const drawReloadIndicator = (ctx: CanvasRenderingContext2D) => {
-    const centerX = INTERNAL_WIDTH / 2;
-    const centerY = INTERNAL_HEIGHT / 2;
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
 
     if (isReloading) {
       const radius = 40;
@@ -1573,8 +1522,8 @@ export default function CanvasGame() {
     type: string,
     isPaused: boolean
   ) => {
-    const centerX = INTERNAL_WIDTH / 2;
-    const centerY = INTERNAL_HEIGHT / 2;
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
 
     const dx = mouseRef.current.x - centerX;
     const dy = mouseRef.current.y - centerY;
@@ -1652,11 +1601,16 @@ export default function CanvasGame() {
   const drawProjectilesAndTrails = (
     ctx: CanvasRenderingContext2D,
     isPaused: boolean,
-    camera: Camera2D,
+    playerPos: THREE.Vector3
   ) => {
     const { projectiles, trailGhosts } = useProjectiles.getState();
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
 
-    const projectileScreen = (pos: THREE.Vector3) => worldToScreen(pos.x, pos.z, camera);
+    const worldToScreen = (pos: THREE.Vector3) => ({
+      x: centerX + ((pos.x - playerPos.x) * TILE_SIZE) / 2,
+      y: centerY + ((pos.z - playerPos.z) * TILE_SIZE) / 2,
+    });
 
     ctx.save();
     const img = getProjectileImage();
@@ -1674,7 +1628,7 @@ export default function CanvasGame() {
             2,
             Math.floor(maxSize - i * step)
           );
-          const p = projectileScreen(trail[i]);
+          const p = worldToScreen(trail[i]);
           
 
           ctx.drawImage(img, p.x - size / 2, p.y - size / 2, size, size);
@@ -1682,7 +1636,7 @@ export default function CanvasGame() {
       
 
       // --- MAIN BULLET (brightest, full size) ---
-      const screen = projectileScreen(proj.position);
+      const screen = worldToScreen(proj.position);
       const mainSize = Math.floor(proj.size);
       ctx.globalAlpha = 1.5;
       ctx.drawImage(
@@ -1699,14 +1653,14 @@ export default function CanvasGame() {
 
 
   const drawParticles = (ctx: CanvasRenderingContext2D) => {
-    const centerX = INTERNAL_WIDTH / 2;
-    const centerY = INTERNAL_HEIGHT / 2;
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
 
     ctx.save();
 
     particles.forEach(particle => {
-      const screenX = centerX + ((particle.position.x - position.x) * WORLD_SCALE);
-      const screenY = centerY + ((particle.position.z - position.z) * WORLD_SCALE);
+      const screenX = centerX + ((particle.position.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((particle.position.z - position.z) * TILE_SIZE) / 2;
 
       ctx.globalAlpha = particle.alpha;
 
@@ -1744,7 +1698,6 @@ export default function CanvasGame() {
   };
 
   const drawImpactEffects = (ctx: CanvasRenderingContext2D) => {
-    const camera = { x: position.x, z: position.z };
     const impactEffects = useVisualEffects.getState().impactEffects;
     const sprite = VisualSprites.impactSheet;
     if (!sprite.complete || sprite.naturalWidth === 0) return;
@@ -1753,9 +1706,8 @@ export default function CanvasGame() {
     const frameHeight = sprite.height;
 
     impactEffects.forEach(impact => {
-      const screen = worldToScreen(impact.x, impact.y, camera);
-      const screenX = screen.x;
-      const screenY = screen.y;
+      const screenX = CANVAS_WIDTH/2 + ((impact.x - position.x) * TILE_SIZE)/2;
+      const screenY = CANVAS_HEIGHT/2 + ((impact.y - position.z) * TILE_SIZE)/2;
 
       ctx.save();
       ctx.imageSmoothingEnabled = false;
@@ -1772,16 +1724,16 @@ export default function CanvasGame() {
   };
 
   const drawDamageNumbers = (ctx: CanvasRenderingContext2D) => {
-    const centerX = INTERNAL_WIDTH / 2;
-    const centerY = INTERNAL_HEIGHT / 2;
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
 
     ctx.save();
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
     damageNumbers.forEach(dmg => {
-      const screenX = centerX + ((dmg.x - position.x) * WORLD_SCALE);
-      const screenY = centerY + ((dmg.y - position.z) * WORLD_SCALE);
+      const screenX = centerX + ((dmg.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((dmg.y - position.z) * TILE_SIZE) / 2;
 
       const lifePercent = dmg.life / dmg.maxLife;
       const alpha = lifePercent < 0.7 ? 1 : (1 - (lifePercent - 0.7) / 0.3);
@@ -1810,14 +1762,14 @@ export default function CanvasGame() {
   const drawTreeLightning = (ctx: CanvasRenderingContext2D, nowMs: number) => {
     if (treeLightningRef.current.length === 0) return;
 
-    const centerX = INTERNAL_WIDTH / 2;
-    const centerY = INTERNAL_HEIGHT / 2;
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
 
     for (const attack of treeLightningRef.current) {
-      const x1 = centerX + ((attack.source.x - position.x) * WORLD_SCALE);
-      const y1 = centerY + ((attack.source.z - position.z) * WORLD_SCALE);
-      const x2 = centerX + ((attack.target.x - position.x) * WORLD_SCALE);
-      const y2 = centerY + ((attack.target.z - position.z) * WORLD_SCALE);
+      const x1 = centerX + ((attack.source.x - position.x) * TILE_SIZE) / 2;
+      const y1 = centerY + ((attack.source.z - position.z) * TILE_SIZE) / 2;
+      const x2 = centerX + ((attack.target.x - position.x) * TILE_SIZE) / 2;
+      const y2 = centerY + ((attack.target.z - position.z) * TILE_SIZE) / 2;
 
       if (nowMs < attack.connectAt) {
         const steps = 22;
@@ -1878,8 +1830,8 @@ export default function CanvasGame() {
   };
 
   const drawPlayer = (ctx: CanvasRenderingContext2D) => {
-    const centerX = INTERNAL_WIDTH / 2;
-    const centerY = INTERNAL_HEIGHT / 2;
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
 
     ctx.save();
     ctx.translate(centerX, centerY);
@@ -1911,11 +1863,11 @@ export default function CanvasGame() {
       return;
     }
 
-    const centerX = INTERNAL_WIDTH / 2;
-    const centerY = INTERNAL_HEIGHT / 2;
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
 
-    const screenX = centerX + ((enemy.position.x - position.x) * WORLD_SCALE);
-    const screenY = centerY + ((enemy.position.z - position.z) * WORLD_SCALE);
+    const screenX = centerX + ((enemy.position.x - position.x) * TILE_SIZE) / 2;
+    const screenY = centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2;
 
     const enemyType: EnemySpriteType = getEnemyType(enemy);
     const bodySprite = enemySpritesByType[enemyType];
@@ -1948,16 +1900,16 @@ export default function CanvasGame() {
     if (enemy.type === "tree") {
       if (enemy.spriteFrame === 0) return;
 
-      const centerX = INTERNAL_WIDTH / 2;
-      const centerY = INTERNAL_HEIGHT / 2;
-      const screenX = centerX + ((enemy.x - position.x) * WORLD_SCALE);
-      const screenY = centerY + ((enemy.z - position.z) * WORLD_SCALE);
+      const centerX = CANVAS_WIDTH / 2;
+      const centerY = CANVAS_HEIGHT / 2;
+      const screenX = centerX + ((enemy.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((enemy.z - position.z) * TILE_SIZE) / 2;
 
       if (treeEnemyEyesSprite.complete && treeEnemyEyesSprite.naturalWidth > 0 && treeEnemyEyesSprite.naturalHeight > 0) {
         const frameW = treeEnemyEyesSprite.naturalWidth / 2;
         const frameH = treeEnemyEyesSprite.naturalHeight;
         const eyeFrame = enemy.spriteFrame === 1 ? 0 : 1;
-        const radiusPx = enemy.radius * WORLD_SCALE;
+        const radiusPx = enemy.radius * (TILE_SIZE / 2);
         const scale = 2;
         const drawW = frameW * scale;
         const drawH = frameH * scale;
@@ -1983,10 +1935,10 @@ export default function CanvasGame() {
     if (!enemy.position) return;
 
     if (enemy.isBoss && enemy.bossType === "shoggoth") {
-      const centerX = INTERNAL_WIDTH / 2;
-      const centerY = INTERNAL_HEIGHT / 2;
-      const screenX = centerX + ((enemy.position.x - position.x) * WORLD_SCALE);
-      const screenY = centerY + ((enemy.position.z - position.z) * WORLD_SCALE);
+      const centerX = CANVAS_WIDTH / 2;
+      const centerY = CANVAS_HEIGHT / 2;
+      const screenX = centerX + ((enemy.position.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2;
       const bossSheet = shoggothBossSpriteSheet;
       const windupSheet = bossLaserWindupSprite;
       const laserSheet = bossLaserSpriteSheet;
@@ -2162,10 +2114,10 @@ export default function CanvasGame() {
     const eyeSprite = enemyEyeSpritesByType[enemyType];
     const size = eyeSprite.size * eyeSprite.scale;
 
-    const centerX = INTERNAL_WIDTH / 2;
-    const centerY = INTERNAL_HEIGHT / 2;
-    const screenX = centerX + ((enemy.position.x - position.x) * WORLD_SCALE);
-    const screenY = centerY + ((enemy.position.z - position.z) * WORLD_SCALE);
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
+    const screenX = centerX + ((enemy.position.x - position.x) * TILE_SIZE) / 2;
+    const screenY = centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2;
     const facingRight = enemy.position.x <= position.x;
 
     ctx.save();
@@ -2180,14 +2132,14 @@ export default function CanvasGame() {
   };
 
   const drawEnemyProjectiles = (ctx: CanvasRenderingContext2D) => {
-    const centerX = INTERNAL_WIDTH / 2;
-    const centerY = INTERNAL_HEIGHT / 2;
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
     const projectileSprite = enemyEyeballProjectileSprite;
     const hasProjectileSprite = projectileSprite.complete && projectileSprite.naturalWidth > 0 && projectileSprite.naturalHeight > 0;
 
     for (const projectile of enemyProjectilesRef.current) {
-      const screenX = centerX + ((projectile.position.x - position.x) * WORLD_SCALE);
-      const screenY = centerY + ((projectile.position.z - position.z) * WORLD_SCALE);
+      const screenX = centerX + ((projectile.position.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((projectile.position.z - position.z) * TILE_SIZE) / 2;
       const pixelSize = Math.max(8, projectile.size * TILE_SIZE * 1.1);
 
       ctx.save();
@@ -2203,8 +2155,8 @@ export default function CanvasGame() {
   };
   
   const drawEnemyDeaths = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
-    const centerX = INTERNAL_WIDTH / 2;
-    const centerY = INTERNAL_HEIGHT / 2;
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
     const sprite = enemyDeathSpritesheet;
     const totalFrames = 4;
 
@@ -2223,8 +2175,8 @@ export default function CanvasGame() {
 
       nextAnimations.push(animation);
 
-      const screenX = centerX + ((animation.position.x - position.x) * WORLD_SCALE);
-      const screenY = centerY + ((animation.position.z - position.z) * WORLD_SCALE);
+      const screenX = centerX + ((animation.position.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((animation.position.z - position.z) * TILE_SIZE) / 2;
       const drawScale = 2;
       const drawWidth = frameWidth * drawScale;
       const drawHeight = frameHeight * drawScale;
@@ -2252,12 +2204,12 @@ export default function CanvasGame() {
   };
 
   const drawSummons = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
-    const centerX = INTERNAL_WIDTH / 2;
-    const centerY = INTERNAL_HEIGHT / 2;
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
     
     summons.forEach(summon => {
-      const screenX = centerX + ((summon.position.x - position.x) * WORLD_SCALE);
-      const screenY = centerY + ((summon.position.z - position.z) * WORLD_SCALE);
+      const screenX = centerX + ((summon.position.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((summon.position.z - position.z) * TILE_SIZE) / 2;
 
 
       if (summon.type === "ghost") {
@@ -2355,8 +2307,8 @@ export default function CanvasGame() {
               for (let i = summon.trail.length - 1; i >= 0; i--) {
                 const p = summon.trail[i];
 
-                const x = centerX + ((p.x - position.x) * WORLD_SCALE);
-                const y = centerY + ((p.z - position.z) * WORLD_SCALE);
+                const x = centerX + ((p.x - position.x) * TILE_SIZE) / 2;
+                const y = centerY + ((p.z - position.z) * TILE_SIZE) / 2;
 
                 const t = i / summon.trail.length;
                 const size = 120 * (1 - t * 0.9);
@@ -2372,9 +2324,9 @@ export default function CanvasGame() {
             if (!canDrawDagger) return; // ← safe here ONLY if this is inside a dagger block
 
             const screenX =
-              centerX + ((summon.position.x - position.x) * WORLD_SCALE);
+              centerX + ((summon.position.x - position.x) * TILE_SIZE) / 2;
             const screenY =
-              centerY + ((summon.position.z - position.z) * WORLD_SCALE);
+              centerY + ((summon.position.z - position.z) * TILE_SIZE) / 2;
 
             const scale = 2;
             const w = sprite.naturalWidth * scale;
@@ -2430,16 +2382,16 @@ export default function CanvasGame() {
   };
 
   const drawStatusEffects = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
-    const centerX = INTERNAL_WIDTH / 2;
-    const centerY = INTERNAL_HEIGHT / 2;
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
     const { statusEffects } = useSummons.getState();
 
     statusEffects.forEach(effect => {
       const enemy = enemies.find(e => e.id === effect.enemyId);
       if (!enemy) return;
 
-      const screenX = centerX + ((enemy.position.x - position.x) * WORLD_SCALE);
-      const screenY = centerY + ((enemy.position.z - position.z) * WORLD_SCALE);
+      const screenX = centerX + ((enemy.position.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2;
 
       if (effect.type === "burn") {
         // Flame particles
@@ -2474,6 +2426,7 @@ export default function CanvasGame() {
         className=""
         style={{ cursor: phase === "playing" ? "none" : "default", position: "relative" }}
       >
+      <Darkness />
       <LevelUpScreen />
       <GameUI />
       
@@ -2484,6 +2437,18 @@ export default function CanvasGame() {
         height={CANVAS_HEIGHT}
         className="border-2 border-gray-700"
         style={{ position: "relative", zIndex: 0 }}
+      />
+      <canvas
+        ref={eyeCanvasRef}
+        width={CANVAS_WIDTH}
+        height={CANVAS_HEIGHT}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          pointerEvents: "none",
+          zIndex: 2,
+        }}
       />
         
       <CursorSprite
