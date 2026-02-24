@@ -7,8 +7,9 @@ const CANVAS_WIDTH = 1490;
 const CANVAS_HEIGHT = 750;
 const TILE_SIZE = 50;
 const WORLD_TO_SCREEN_SCALE = TILE_SIZE;
-const PIXEL_SIZE = 6;
+const PIXEL_SIZE = 4;
 const LIGHT_LEVELS = [0.35, 0.22, 0.12] as const;
+const LIGHT_SNAP = 2;
 
 function drawThreeStepLight(
   ctx: CanvasRenderingContext2D,
@@ -21,7 +22,10 @@ function drawThreeStepLight(
   LIGHT_LEVELS.forEach((alpha, index) => {
     ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
     ctx.beginPath();
-    ctx.arc(Math.round(x), Math.round(y), Math.round(radii[index]), 0, Math.PI * 2);
+    const snappedX = Math.round(x / LIGHT_SNAP) * LIGHT_SNAP;
+    const snappedY = Math.round(y / LIGHT_SNAP) * LIGHT_SNAP;
+    const snappedRadius = Math.max(1, Math.round(radii[index] / LIGHT_SNAP) * LIGHT_SNAP);
+    ctx.arc(snappedX, snappedY, snappedRadius, 0, Math.PI * 2);
     ctx.fill();
   });
 }
