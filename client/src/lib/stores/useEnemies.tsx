@@ -17,7 +17,7 @@ export interface EnemyTypeBehaviorConfig {
 
 export const ENEMY_TYPE_CONFIG: Record<"basic" | "tank" | "eyeball", EnemyTypeBehaviorConfig> = {
   basic: {
-    bodyHitRadius: 0.7,
+    bodyHitRadius: 1.2,
     collisionRadius: 0.95,
   },
   tank: {
@@ -25,20 +25,20 @@ export const ENEMY_TYPE_CONFIG: Record<"basic" | "tank" | "eyeball", EnemyTypeBe
     collisionRadius: 1.8,
   },
   eyeball: {
-    bodyHitRadius: 0.65,
+    bodyHitRadius: 1.2,
     collisionRadius: 0.9,
     engageDistancePx: 500,
     disengageDistancePx: 550,
-    projectileSpeed: 4,
-    projectileLife: 5,
+    projectileSpeed: 6,
+    projectileLife: 8,
     projectileSize: 1,
     projectileFireInterval: 4.0,
   },
 };
 
 export const SHOGGOTH_CONFIG = {
-  bodyHitRadius: 42.6,
-  collisionRadius: 40,
+  bodyHitRadius: 3.0,
+  collisionRadius: 10,
   idealDistance: 12,
   minDistance: 4,
   maxDistance: 26,
