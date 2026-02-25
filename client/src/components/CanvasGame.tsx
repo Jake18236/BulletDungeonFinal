@@ -198,7 +198,10 @@ function getEnemyType(enemy: { type?: string }): EnemySpriteType {
   return "basic";
 }
 
-function getEnemyBodyHitRadius(enemy: { type?: string }) {
+function getEnemyBodyHitRadius(enemy: { type?: string; isBoss?: boolean; bossType?: string }) {
+  if (enemy.isBoss && enemy.bossType === "shoggoth") {
+    return SHOGGOTH_CONFIG.bodyHitRadius;
+  }
   return ENEMY_TYPE_CONFIG[getEnemyType(enemy)].bodyHitRadius;
 }
 
@@ -1157,7 +1160,7 @@ export default function CanvasGame() {
       drawStatusEffects(ctx, animationNowMs);
       drawImpactEffects(ctx); // ADD - behind projectiles
       
-      drawEnemyDeaths(ctx, animationNowMs);
+      drawEnemyDeaths(ctx, gameplayElapsedMsRef.current);
       drawParticles(ctx); 
       drawDamageNumbers(ctx); 
       
@@ -1203,14 +1206,14 @@ export default function CanvasGame() {
         const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
 
         addProjectile({
-          position: enemy.position.clone(),
+          position: enemy.position.clone().add(direction.clone().multiplyScalar(0.6)),
           size: 25,
           direction,
           damage: stats.damage * 0.1,
-          speed: stats.speed * 1.5,
-          life: 0.2,
-          range: stats.range * 0.01,
-          trailLength: 50,
+          speed: stats.speed * 1.35,
+          life: 1.2,
+          range: Math.max(12, stats.range * 0.4),
+          trailLength: 30,
           piercing: 0,
           bouncing: 0,
           homing: false,
@@ -1576,11 +1579,10 @@ export default function CanvasGame() {
       // REVOLVER SPRITE
       // ===========================
       const sprite = WeaponSprites.revolver;
-      if (sprite.complete) {
-        
+      if (sprite.complete && sprite.naturalWidth > 0 && sprite.naturalHeight > 0) {
         ctx.save();
-        const w = sprite.width;
-        const h = sprite.height;
+        const w = sprite.naturalWidth;
+        const h = sprite.naturalHeight;
 
         // Grip anchor: left-middle of sprite
         ctx.drawImage(sprite, -w, -h / 2, w, h);
@@ -2201,69 +2203,101 @@ export default function CanvasGame() {
   const drawSummons = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     const centerX = CANVAS_WIDTH / 2;
     const centerY = CANVAS_HEIGHT / 2;
-    
-    summons.forEach(summon => {
+
+    summons.forEach((summon) => {
       const screenX = centerX + ((summon.position.x - position.x) * TILE_SIZE) / 2;
       const screenY = centerY + ((summon.position.z - position.z) * TILE_SIZE) / 2;
-
 
       if (summon.type === "ghost") {
         const sprite = SummonSprites.ghostSheet;
         const isSheetReady = sprite.complete && sprite.naturalWidth > 0 && sprite.naturalHeight > 0;
+        if (!isSheetReady) return;
 
-        if (isSheetReady) {
-          const totalCols = 6;
-          const totalRows = 2;
-          const frameW = sprite.naturalWidth / totalCols;
-          const frameH = sprite.naturalHeight / totalRows;
+        const totalCols = 6;
+        const totalRows = 2;
+        const frameW = sprite.naturalWidth / totalCols;
+        const frameH = sprite.naturalHeight / totalRows;
 
-          const passiveFrames = 6;
-          const shootFrames = 5;
-          const inShootAnim = (summon.shootAnimTimer ?? 0) > 0;
+        const passiveFrames = 6;
+        const shootFrames = 5;
+        const inShootAnim = (summon.shootAnimTimer ?? 0) > 0;
 
-          const nowSeconds = animationNowMs / 1000;
-          const animFps = inShootAnim ? 5 : 10;
-          const frameIndex = Math.floor(nowSeconds * animFps);
+        const nowSeconds = animationNowMs / 1000;
+        const animFps = inShootAnim ? 5 : 10;
+        const frameIndex = Math.floor(nowSeconds * animFps);
 
-          const sx = inShootAnim ? (frameIndex % shootFrames) * frameW : (frameIndex % passiveFrames) * frameW;
-          const sy = inShootAnim ? frameH : 0;
+        const sx = inShootAnim ? (frameIndex % shootFrames) * frameW : (frameIndex % passiveFrames) * frameW;
+        const sy = inShootAnim ? frameH : 0;
 
-          const drawScale = 2;
-          const drawW = frameW * drawScale;
-          const drawH = frameH * drawScale;
+        const drawScale = 2;
+        const drawW = frameW * drawScale;
+        const drawH = frameH * drawScale;
 
-          ctx.save();
-          ctx.translate(screenX, screenY);
-          ctx.imageSmoothingEnabled = false;
-          ctx.globalAlpha = 0.95;
-          ctx.drawImage(sprite, sx, sy, frameW, frameH, -drawW / 2, -drawH / 2, drawW, drawH);
-          ctx.restore();
-        }
+        ctx.save();
+        ctx.translate(screenX, screenY);
+        ctx.imageSmoothingEnabled = false;
+        ctx.globalAlpha = 0.95;
+        ctx.drawImage(sprite, sx, sy, frameW, frameH, -drawW / 2, -drawH / 2, drawW, drawH);
+        ctx.restore();
+        return;
       }
-      if (summon.type === "scythe") {
-          const sprite = SummonSprites.scythe;
 
-          
-          const scale = 4;
-          const w = sprite.width * scale;
-          const h = sprite.height * scale;
-    
-          ctx.save();
-          ctx.imageSmoothingEnabled = false;
+      if (summon.type === "dagger") {
+        const sprite = SummonSprites.dagger;
+        const img = getProjectileImage();
+        const canDrawDagger = sprite.complete && sprite.naturalWidth > 0;
+        const canDrawTrail = img.complete && img.naturalWidth > 0;
 
-          // Rotate so the blade leads the orbit
-          
-          ctx.rotate(0);
-          ctx.drawImage(sprite, -w / 2, -h / 2, w, h);
-          ctx.restore();
+        if (summon.trail && canDrawTrail) {
+          for (let i = summon.trail.length - 1; i >= 0; i--) {
+            const p = summon.trail[i];
+            const x = centerX + ((p.x - position.x) * TILE_SIZE) / 2;
+            const y = centerY + ((p.z - position.z) * TILE_SIZE) / 2;
+            const t = i / summon.trail.length;
+            const size = 120 * (1 - t * 0.9);
+
+            ctx.save();
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(img, x - size / 2, y - size / 2, size, size);
+            ctx.restore();
+          }
         }
-      else if (summon.type === "spear") {
-        // Sharp spear
+
+        if (!canDrawDagger) return;
+
+        const scale = 2;
+        const w = sprite.naturalWidth * scale;
+        const h = sprite.naturalHeight * scale;
+
+        ctx.save();
+        ctx.translate(screenX, screenY);
+        ctx.rotate(summon.rotation);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(sprite, -w / 2, -h / 2, w, h);
+        ctx.restore();
+        return;
+      }
+
+      ctx.save();
+      ctx.translate(screenX, screenY);
+      ctx.imageSmoothingEnabled = false;
+
+      if (summon.type === "scythe") {
+        const sprite = SummonSprites.scythe;
+        const canDrawScythe = sprite.complete && sprite.naturalWidth > 0 && sprite.naturalHeight > 0;
+
+        if (canDrawScythe) {
+          const scale = 4;
+          const w = sprite.naturalWidth * scale;
+          const h = sprite.naturalHeight * scale;
+          ctx.rotate(summon.rotation ?? 0);
+          ctx.drawImage(sprite, -w / 2, -h / 2, w, h);
+        }
+      } else if (summon.type === "spear") {
         ctx.fillStyle = "#ffaa00";
         ctx.strokeStyle = "#cc8800";
         ctx.lineWidth = 2;
 
-        // Spearhead
         ctx.beginPath();
         ctx.moveTo(0, -25);
         ctx.lineTo(5, -15);
@@ -2275,77 +2309,21 @@ export default function CanvasGame() {
         ctx.fill();
         ctx.stroke();
 
-        // Shaft
         ctx.fillStyle = "#8b4513";
         ctx.fillRect(-2, -12, 4, 30);
 
-        // Glow
         ctx.globalAlpha = 0.4;
         ctx.fillStyle = "#ffaa00";
         ctx.beginPath();
         ctx.arc(0, -15, 10, 0, Math.PI * 2);
         ctx.fill();
-      }
-      
-          else if (summon.type === "dagger") {
-            const sprite = SummonSprites.dagger;
-            const img = getProjectileImage();
-
-            const canDrawDagger =
-              sprite.complete && sprite.naturalWidth > 0;
-
-            const canDrawTrail =
-              img.complete && img.naturalWidth > 0;
-
-            // --- TRAIL ---
-            if (summon.trail && canDrawTrail) {
-              for (let i = summon.trail.length - 1; i >= 0; i--) {
-                const p = summon.trail[i];
-
-                const x = centerX + ((p.x - position.x) * TILE_SIZE) / 2;
-                const y = centerY + ((p.z - position.z) * TILE_SIZE) / 2;
-
-                const t = i / summon.trail.length;
-                const size = 120 * (1 - t * 0.9);
-
-                ctx.save();
-                ctx.imageSmoothingEnabled = false;
-                ctx.drawImage(img, x - size / 2, y - size / 2, size, size);
-                ctx.restore();
-              }
-            }
-
-            // --- MAIN DAGGER ---
-            if (!canDrawDagger) return; // ← safe here ONLY if this is inside a dagger block
-
-            const screenX =
-              centerX + ((summon.position.x - position.x) * TILE_SIZE) / 2;
-            const screenY =
-              centerY + ((summon.position.z - position.z) * TILE_SIZE) / 2;
-
-            const scale = 2;
-            const w = sprite.naturalWidth * scale;
-            const h = sprite.naturalHeight * scale;
-
-            ctx.save();
-            ctx.translate(screenX, screenY);
-            ctx.rotate(summon.rotation);
-            ctx.imageSmoothingEnabled = false;
-            ctx.drawImage(sprite, -w / 2, -h / 2, w, h);
-            ctx.restore();
-          }
-
-                               
-      else if (summon.type === "electrobug") {
-        // Small electric bug
+      } else if (summon.type === "electrobug") {
         ctx.fillStyle = "#00ffff";
 
-        // Body
         ctx.beginPath();
         ctx.ellipse(0, 0, 8, 6, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Wings
         ctx.globalAlpha = 0.4;
         ctx.fillStyle = "#00ffff";
         ctx.beginPath();
@@ -2353,14 +2331,12 @@ export default function CanvasGame() {
         ctx.ellipse(6, -2, 5, 3, 0.3, 0, Math.PI * 2);
         ctx.fill();
 
-        // Electric glow
         ctx.globalAlpha = 0.3;
         ctx.fillStyle = "#00ffff";
         ctx.beginPath();
         ctx.arc(0, 0, 12, 0, Math.PI * 2);
         ctx.fill();
 
-        // Antennae
         ctx.globalAlpha = 1;
         ctx.strokeStyle = "#00ffff";
         ctx.lineWidth = 1;

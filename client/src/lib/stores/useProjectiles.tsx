@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { usePlayer } from "./usePlayer";
 import * as THREE from "three";
-import { Enemy } from "./useEnemies";
+import { Enemy, ENEMY_TYPE_CONFIG, SHOGGOTH_CONFIG } from "./useEnemies";
 import { useSummons } from "./useSummons";
 import { useVisualEffects } from "./useVisualEffects";
 
@@ -88,6 +88,7 @@ interface ProjectilesState {
       position: THREE.Vector3;
       health: number;
       velocity?: THREE.Vector3;
+      type?: "basic" | "tank" | "eyeball" | "tree" | "boss";
     }>,
     playerPos: THREE.Vector3,
     roomBounds: number,
@@ -311,7 +312,9 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
         const toEnemy = enemy.position.clone().sub(proj.position);
         toEnemy.y = 0; // ignore vertical for 2D plane
 
-        const enemyRadius = 1.2; 
+        const enemyRadius = enemy.type === "boss"
+          ? SHOGGOTH_CONFIG.bodyHitRadius
+          : ENEMY_TYPE_CONFIG[enemy.type === "tank" || enemy.type === "eyeball" ? enemy.type : "basic"].bodyHitRadius;
         const distance = toEnemy.length();
 
         
