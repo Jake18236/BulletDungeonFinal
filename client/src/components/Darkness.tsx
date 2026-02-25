@@ -11,13 +11,21 @@ const PIXEL_SIZE = 2;
 const LIGHT_LEVELS = [1, 0.3, 0.5] as const;
 
 function drawThreeStepLight(
-ctx: CanvasRenderingContext2D,
+  ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
   radius: number,
 ) {
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(radius)) {
+    return;
+  }
+
   const snappedRadius =
     Math.max(1, Math.round(radius / PIXEL_SIZE) * PIXEL_SIZE);
+
+  if (!Number.isFinite(snappedRadius)) {
+    return;
+  }
 
   const gradient = ctx.createRadialGradient(
     x,

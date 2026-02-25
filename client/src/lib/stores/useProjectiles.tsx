@@ -1,8 +1,6 @@
 import { create } from "zustand";
-import { usePlayer } from "./usePlayer";
 import * as THREE from "three";
-import { Enemy, ENEMY_TYPE_CONFIG, SHOGGOTH_CONFIG } from "./useEnemies";
-import { useSummons } from "./useSummons";
+import { ENEMY_TYPE_CONFIG, SHOGGOTH_CONFIG } from "./useEnemies";
 import { useVisualEffects } from "./useVisualEffects";
 
 export type DamageSource = {
@@ -271,33 +269,32 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       // ========================================
       // WALL BOUNCING FIRST
       // ========================================
-      if (proj.bouncesLeft > 0) {
-        let hitWall = false;
-        let hitPosition = proj.position.clone();
+      const hitWallX = Math.abs(proj.position.x) > roomBounds;
+      const hitWallZ = Math.abs(proj.position.z) > roomBounds;
 
-        if (Math.abs(proj.position.x) > roomBounds) {
-          proj.velocity.x *= -1;
-          proj.bouncesLeft--;
-          hitWall = true;
-          hitPosition.x = Math.sign(proj.position.x) * roomBounds;
-        }
-        if (Math.abs(proj.position.z) > roomBounds) {
-          proj.velocity.z *= -1;
-          proj.bouncesLeft--;
-          hitWall = true;
-          hitPosition.z = Math.sign(proj.position.z) * roomBounds;
+      if (hitWallX || hitWallZ) {
+        if (proj.bouncesLeft <= 0) {
+          continue;
         }
 
-        // Add terrain impact effect
-        if (hitWall && get().addImpactEffect) {
-          get().addImpactEffect(hitPosition, 'terrain', proj.color, 0.8);
+        if (hitWallX) {
+          proj.position.x = Math.sign(proj.position.x) * roomBounds;
+          proj.velocity.x = -proj.velocity.x;
         }
-      } else if (
-        // If no bounces left, check if out of bounds and remove
-        Math.abs(proj.position.x) > roomBounds ||
-        Math.abs(proj.position.z) > roomBounds
-      ) {
-        continue;
+        if (hitWallZ) {
+          proj.position.z = Math.sign(proj.position.z) * roomBounds;
+          proj.velocity.z = -proj.velocity.z;
+        }
+
+        const retainedSpeed = Math.max(proj.speed * 0.65, proj.velocity.length() * 0.95);
+        proj.velocity.normalize().multiplyScalar(retainedSpeed);
+        proj.rotationY = Math.atan2(proj.velocity.x, proj.velocity.z);
+        proj.bouncesLeft--;
+
+        useVisualEffects.getState().addImpact(
+          new THREE.Vector3(proj.position.x, 0, proj.position.z),
+          Math.max(20, proj.size * 0.3),
+        );
       }
 
       
@@ -336,21 +333,24 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
               explosive: proj.explosive,
               chainLightning: proj.chainLightning,
               burn: proj.burn,
-              impactPos: proj.position,
+              impactPos,
             }
           );
 
           // ===================== BOUNCE LOGIC =====================
           if (proj.bouncesLeft > 0) {
-            const hitNormal = toEnemy.clone().normalize();
+            const hitNormal = toEnemy.lengthSq() > 0.000001
+              ? toEnemy.clone().normalize().multiplyScalar(-1)
+              : proj.velocity.clone().normalize().multiplyScalar(-1);
 
-            // Reflect velocity along normal
-            const dot = proj.velocity.dot(hitNormal);
-            proj.velocity.sub(hitNormal.multiplyScalar(2 * dot));
+            proj.velocity.reflect(hitNormal);
 
-            // Keep speed but reduce slightly
-            const speed = proj.velocity.length() * 0.85;
-            proj.velocity.normalize().multiplyScalar(speed);
+            const retainedSpeed = Math.max(proj.speed * 0.7, proj.velocity.length() * 0.9);
+            if (proj.velocity.lengthSq() < 0.000001) {
+              proj.velocity.copy(hitNormal).multiplyScalar(-retainedSpeed);
+            } else {
+              proj.velocity.normalize().multiplyScalar(retainedSpeed);
+            }
             proj.rotationY = Math.atan2(proj.velocity.x, proj.velocity.z);
 
             proj.bouncesLeft--;
@@ -359,7 +359,11 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
             proj.piercedEnemies.add(enemy.id);
 
             // Move projectile slightly away to prevent overlap
-            proj.position.add(hitNormal.multiplyScalar(enemyRadius + 0.1));
+            proj.position.copy(
+              enemy.position
+                .clone()
+                .add(hitNormal.clone().multiplyScalar(enemyRadius + Math.max(0.2, proj.size * 0.01))),
+            );
 
             continue; // skip piercing logic since we bounced
           }
