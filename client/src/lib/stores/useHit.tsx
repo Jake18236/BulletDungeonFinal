@@ -66,8 +66,11 @@ export const useHit = create<HitState>((set, get) => ({
       enemy.velocity = new THREE.Vector3();
     }
 
-    if (impactPos) {
-      const dir = enemy.position.clone().sub(impactPos);
+    const playerPosition = usePlayer.getState().position;
+    const knockbackOrigin = params.isPlayerDamage ? playerPosition : impactPos;
+
+    if (knockbackOrigin) {
+      const dir = enemy.position.clone().sub(knockbackOrigin);
       dir.y = 0;
       if (dir.lengthSq() > 0.1) {
         const ps = usePlayer.getState();
@@ -211,8 +214,10 @@ export const useHit = create<HitState>((set, get) => ({
 
     loseHeart();
 
+    const resolvedImpact = impactPos?.clone?.() ?? position.clone();
+
     for (let i = 0; i < 5; i++) {
-      addImpact(position.clone(), "#ff4444");
+      addImpact(resolvedImpact.clone(), "#ff4444");
     }
 
     playHit();
