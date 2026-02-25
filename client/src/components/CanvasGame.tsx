@@ -14,6 +14,7 @@ import { useProjectiles } from "../lib/stores/useProjectiles";
 import { useHit } from "../lib/stores/useHit";
 import { useSummons } from "../lib/stores/useSummons";
 import { useVisualEffects } from "../lib/stores/useVisualEffects";
+import { GameCamera2D, getPixelPerfectScale } from "../lib/camera";
 import GameUI from "./GameUI"  
 import { LevelUpScreen } from "./GameUI";
 import Darkness from "./Darkness";
@@ -329,11 +330,34 @@ export default function CanvasGame() {
   const isMouseDown = useRef(false);
   const canInteract = phase === "playing";
   const canvasRectRef = useRef<DOMRect | null>(null);
+  const cameraRef = useRef(new GameCamera2D());
+  const [canvasDisplay, setCanvasDisplay] = useState({
+    width: CANVAS_WIDTH,
+    height: CANVAS_HEIGHT,
+    offsetX: 0,
+    offsetY: 0,
+  });
   
   useEffect(() => {
     if (canvasRef.current) {
       canvasRectRef.current = canvasRef.current.getBoundingClientRect();
     }
+  }, []);
+
+  useEffect(() => {
+    const updatePixelScale = () => {
+      const scaled = getPixelPerfectScale(CANVAS_WIDTH, CANVAS_HEIGHT, window.innerWidth, window.innerHeight);
+      setCanvasDisplay({
+        width: scaled.width,
+        height: scaled.height,
+        offsetX: scaled.offsetX,
+        offsetY: scaled.offsetY,
+      });
+    };
+
+    updatePixelScale();
+    window.addEventListener("resize", updatePixelScale);
+    return () => window.removeEventListener("resize", updatePixelScale);
   }, []);
 
   useEffect(() => {
@@ -425,8 +449,6 @@ export default function CanvasGame() {
       mouseRef.current = {
         x: (e.clientX - rect.left) * scaleX,
         y: (e.clientY - rect.top) * scaleY,
-        rawX,
-        rawY
       };
     };
 
@@ -487,6 +509,14 @@ export default function CanvasGame() {
       if (!ctx) return;
 
       const animationNowMs = phase === "playing" ? currentTime : pausedAnimationTimeRef.current;
+
+      cameraRef.current.update({
+        deltaSeconds: delta,
+        target: { x: position.x, y: position.z },
+        mouse: mouseRef.current,
+        viewportWidth: CANVAS_WIDTH,
+        viewportHeight: CANVAS_HEIGHT,
+      });
       
       
 
@@ -638,8 +668,7 @@ export default function CanvasGame() {
 
         if (isMouseDown.current && !isReloading && ammo > 0 && canFire.current) {
             if (fireShot()) {
-              const centerX = CANVAS_WIDTH / 2;
-              const centerY = CANVAS_HEIGHT / 2;
+              const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
 
               const stats = usePlayer.getState().getProjectileStats();
               const baseAngle = Math.atan2(
@@ -713,6 +742,7 @@ export default function CanvasGame() {
                 ps.startFanFire();
               }
               ps.fireMuzzleFlash(barrelFlashPosition);
+              cameraRef.current.shake({ strength: 12, durationMs: 110 });
 
               playHit();
 
@@ -1231,8 +1261,7 @@ export default function CanvasGame() {
   }
 
   if (!grassPattern) return;
-  const centerX = CANVAS_WIDTH / 2;
-  const centerY = CANVAS_HEIGHT / 2;
+  const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
   
   const floorSize = ROOM_SIZE * TILE_SIZE;
 
@@ -1420,8 +1449,7 @@ export default function CanvasGame() {
   };
 
   const drawXPOrbs = (ctx: CanvasRenderingContext2D) => {
-    const centerX = CANVAS_WIDTH / 2;
-    const centerY = CANVAS_HEIGHT / 2;
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
 
     xpOrbs.forEach((orb) => {
       const screenX = centerX + ((orb.position.x - position.x) * TILE_SIZE) / 2;
@@ -1444,8 +1472,7 @@ export default function CanvasGame() {
   };
 
   const drawReloadIndicator = (ctx: CanvasRenderingContext2D) => {
-    const centerX = CANVAS_WIDTH / 2;
-    const centerY = CANVAS_HEIGHT / 2;
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
 
     if (isReloading) {
       const radius = 40;
@@ -1520,8 +1547,7 @@ export default function CanvasGame() {
     type: string,
     isPaused: boolean
   ) => {
-    const centerX = CANVAS_WIDTH / 2;
-    const centerY = CANVAS_HEIGHT / 2;
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
 
     const dx = mouseRef.current.x - centerX;
     const dy = mouseRef.current.y - centerY;
@@ -1600,14 +1626,16 @@ export default function CanvasGame() {
     isPaused: boolean,
     playerPos: THREE.Vector3
   ) => {
-    const { projectiles, trailGhosts } = useProjectiles.getState();
-    const centerX = CANVAS_WIDTH / 2;
-    const centerY = CANVAS_HEIGHT / 2;
+    const { projectiles } = useProjectiles.getState();
 
-    const worldToScreen = (pos: THREE.Vector3) => ({
-      x: centerX + ((pos.x - playerPos.x) * TILE_SIZE) / 2,
-      y: centerY + ((pos.z - playerPos.z) * TILE_SIZE) / 2,
-    });
+    const worldToScreen = (pos: THREE.Vector3) =>
+      cameraRef.current.worldToScreen(
+        { x: pos.x, y: pos.z },
+        { x: playerPos.x, y: playerPos.z },
+        CANVAS_WIDTH,
+        CANVAS_HEIGHT,
+        TILE_SIZE / 2,
+      );
 
     ctx.save();
     const img = getProjectileImage();
@@ -1650,8 +1678,7 @@ export default function CanvasGame() {
 
 
   const drawParticles = (ctx: CanvasRenderingContext2D) => {
-    const centerX = CANVAS_WIDTH / 2;
-    const centerY = CANVAS_HEIGHT / 2;
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
 
     ctx.save();
 
@@ -1703,8 +1730,9 @@ export default function CanvasGame() {
     const frameHeight = sprite.height;
 
     impactEffects.forEach(impact => {
-      const screenX = CANVAS_WIDTH/2 + ((impact.x - position.x) * TILE_SIZE)/2;
-      const screenY = CANVAS_HEIGHT/2 + ((impact.y - position.z) * TILE_SIZE)/2;
+      const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+      const screenX = centerX + ((impact.x - position.x) * TILE_SIZE)/2;
+      const screenY = centerY + ((impact.y - position.z) * TILE_SIZE)/2;
 
       ctx.save();
       ctx.imageSmoothingEnabled = false;
@@ -1721,8 +1749,7 @@ export default function CanvasGame() {
   };
 
   const drawDamageNumbers = (ctx: CanvasRenderingContext2D) => {
-    const centerX = CANVAS_WIDTH / 2;
-    const centerY = CANVAS_HEIGHT / 2;
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
 
     ctx.save();
     ctx.textAlign = "center";
@@ -1759,8 +1786,7 @@ export default function CanvasGame() {
   const drawTreeLightning = (ctx: CanvasRenderingContext2D, nowMs: number) => {
     if (treeLightningRef.current.length === 0) return;
 
-    const centerX = CANVAS_WIDTH / 2;
-    const centerY = CANVAS_HEIGHT / 2;
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
 
     for (const attack of treeLightningRef.current) {
       const x1 = centerX + ((attack.source.x - position.x) * TILE_SIZE) / 2;
@@ -1827,8 +1853,7 @@ export default function CanvasGame() {
   };
 
   const drawPlayer = (ctx: CanvasRenderingContext2D) => {
-    const centerX = CANVAS_WIDTH / 2;
-    const centerY = CANVAS_HEIGHT / 2;
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
 
     ctx.save();
     ctx.translate(centerX, centerY);
@@ -1860,8 +1885,7 @@ export default function CanvasGame() {
       return;
     }
 
-    const centerX = CANVAS_WIDTH / 2;
-    const centerY = CANVAS_HEIGHT / 2;
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
 
     const screenX = centerX + ((enemy.position.x - position.x) * TILE_SIZE) / 2;
     const screenY = centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2;
@@ -1897,8 +1921,7 @@ export default function CanvasGame() {
     if (enemy.type === "tree") {
       if (enemy.spriteFrame === 0) return;
 
-      const centerX = CANVAS_WIDTH / 2;
-      const centerY = CANVAS_HEIGHT / 2;
+      const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
       const screenX = centerX + ((enemy.x - position.x) * TILE_SIZE) / 2;
       const screenY = centerY + ((enemy.z - position.z) * TILE_SIZE) / 2;
 
@@ -1932,8 +1955,7 @@ export default function CanvasGame() {
     if (!enemy.position) return;
 
     if (enemy.isBoss && enemy.bossType === "shoggoth") {
-      const centerX = CANVAS_WIDTH / 2;
-      const centerY = CANVAS_HEIGHT / 2;
+      const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
       const screenX = centerX + ((enemy.position.x - position.x) * TILE_SIZE) / 2;
       const screenY = centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2;
       const bossSheet = shoggothBossSpriteSheet;
@@ -2111,8 +2133,7 @@ export default function CanvasGame() {
     const eyeSprite = enemyEyeSpritesByType[enemyType];
     const size = eyeSprite.size * eyeSprite.scale;
 
-    const centerX = CANVAS_WIDTH / 2;
-    const centerY = CANVAS_HEIGHT / 2;
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
     const screenX = centerX + ((enemy.position.x - position.x) * TILE_SIZE) / 2;
     const screenY = centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2;
     const facingRight = enemy.position.x <= position.x;
@@ -2129,8 +2150,7 @@ export default function CanvasGame() {
   };
 
   const drawEnemyProjectiles = (ctx: CanvasRenderingContext2D) => {
-    const centerX = CANVAS_WIDTH / 2;
-    const centerY = CANVAS_HEIGHT / 2;
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
     const projectileSprite = enemyEyeballProjectileSprite;
     const hasProjectileSprite = projectileSprite.complete && projectileSprite.naturalWidth > 0 && projectileSprite.naturalHeight > 0;
 
@@ -2152,8 +2172,7 @@ export default function CanvasGame() {
   };
   
   const drawEnemyDeaths = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
-    const centerX = CANVAS_WIDTH / 2;
-    const centerY = CANVAS_HEIGHT / 2;
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
     const sprite = enemyDeathSpritesheet;
     const totalFrames = 4;
 
@@ -2201,8 +2220,7 @@ export default function CanvasGame() {
   };
 
   const drawSummons = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
-    const centerX = CANVAS_WIDTH / 2;
-    const centerY = CANVAS_HEIGHT / 2;
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
 
     summons.forEach((summon) => {
       const screenX = centerX + ((summon.position.x - position.x) * TILE_SIZE) / 2;
@@ -2353,8 +2371,7 @@ export default function CanvasGame() {
   };
 
   const drawStatusEffects = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
-    const centerX = CANVAS_WIDTH / 2;
-    const centerY = CANVAS_HEIGHT / 2;
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
     const { statusEffects } = useSummons.getState();
 
     statusEffects.forEach(effect => {
@@ -2395,7 +2412,14 @@ export default function CanvasGame() {
     <>
       <div
         className=""
-        style={{ cursor: phase === "playing" ? "none" : "default", position: "relative" }}
+        style={{
+          cursor: phase === "playing" ? "none" : "default",
+          position: "relative",
+          width: canvasDisplay.width,
+          height: canvasDisplay.height,
+          marginLeft: canvasDisplay.offsetX,
+          marginTop: canvasDisplay.offsetY,
+        }}
       >
       <Darkness />
       <LevelUpScreen />
@@ -2407,7 +2431,13 @@ export default function CanvasGame() {
         width={CANVAS_WIDTH}
         height={CANVAS_HEIGHT}
         className="border-2 border-gray-700"
-        style={{ position: "relative", zIndex: 0 }}
+        style={{
+          position: "relative",
+          zIndex: 0,
+          width: canvasDisplay.width,
+          height: canvasDisplay.height,
+          imageRendering: "pixelated",
+        }}
       />
       <canvas
         ref={eyeCanvasRef}
@@ -2419,6 +2449,9 @@ export default function CanvasGame() {
           left: 0,
           pointerEvents: "none",
           zIndex: 2,
+          width: canvasDisplay.width,
+          height: canvasDisplay.height,
+          imageRendering: "pixelated",
         }}
       />
         
