@@ -43,11 +43,8 @@ const ROOM_SIZE = 200;
 const SHOGGOTH_BASE_BEAM_LENGTH_WORLD = (304 * 4) / (TILE_SIZE / 2);
 const SHOGGOTH_BEAM_LENGTH_WORLD = SHOGGOTH_BASE_BEAM_LENGTH_WORLD * SHOGGOTH_CONFIG.beamLengthScale;
 
-const cracksSheet = new Image();
-cracksSheet.src = "/textures/cracks.png";
-
-const tilesSheet = new Image();
-tilesSheet.src = "/textures/tiles.png";
+const grassSprite = new Image();
+grassSprite.src = "/textures/grass.png";
 
 const treeSprite = new Image();
 treeSprite.src = "/sprites/enemy/tree-enemy.png";
@@ -468,6 +465,8 @@ export default function CanvasGame() {
       frame: Math.floor(Math.random() * 6),
     });
   };
+
+
 
   useEffect(() => {
     const gameLoop = (currentTime: number) => {
@@ -1205,7 +1204,7 @@ export default function CanvasGame() {
 
         addProjectile({
           position: enemy.position.clone(),
-          size: 1.5,
+          size: 25,
           direction,
           damage: stats.damage * 0.1,
           speed: stats.speed * 1.5,
@@ -1219,46 +1218,42 @@ export default function CanvasGame() {
       }
     }
   }
-  
+
+  let grassPattern: CanvasPattern | null = null;
+
   const drawDungeon = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     if (!currentRoom) return;
+    if (!grassPattern && grassSprite.complete) {
+    grassPattern = ctx.createPattern(grassSprite, "repeat");
+  }
 
-    const centerX = CANVAS_WIDTH / 2;
-    const centerY = CANVAS_HEIGHT / 2;
+  if (!grassPattern) return;
+  const centerX = CANVAS_WIDTH / 2;
+  const centerY = CANVAS_HEIGHT / 2;
+  
+  const floorSize = ROOM_SIZE * TILE_SIZE;
 
-    const floorSize = ROOM_SIZE * TILE_SIZE;
+  const offsetX = (-position.x * TILE_SIZE) / 2;
+  const offsetZ = (-position.z * TILE_SIZE) / 2;
+  ctx.save();
 
-    const offsetX = (-position.x * TILE_SIZE) / 2;
-    const offsetZ = (-position.z * TILE_SIZE) / 2;
 
-    // Base floor color under textures
-    ctx.fillStyle = "#272030";
-    ctx.fillRect(
-      centerX - floorSize / 2 + offsetX,
-      centerY - floorSize / 2 + offsetZ,
-      floorSize,
-      floorSize,
-    );
+  // Camera offset in pixels
+  const pixelOffsetX = (-position.x * TILE_SIZE) / 2;
+  const pixelOffsetZ = (-position.z * TILE_SIZE) / 2;
 
-    
-    const gradient = ctx.createRadialGradient(
-      centerX,
-      centerY,
-      floorSize * 0.3,
-      centerX,
-      centerY,
-      floorSize * 0.7
-    );
-    gradient.addColorStop(0, "rgba(0, 0, 0, 0)");
-    gradient.addColorStop(1, "rgba(0, 0, 0, 0.4)");
+  ctx.translate(pixelOffsetX, pixelOffsetZ);
+  ctx.fillRect(
+    -pixelOffsetX,
+    -pixelOffsetZ,
+    CANVAS_WIDTH / 2,
+    CANVAS_HEIGHT/ 2
+  );
+  ctx.fillStyle = grassPattern;
+  
 
-    ctx.fillStyle = gradient;
-    ctx.fillRect(
-      centerX - floorSize / 2 + offsetX,
-      centerY - floorSize / 2 + offsetZ,
-      floorSize,
-      floorSize,
-    );
+  ctx.restore();
+
 
     // ============================================
     // TERRAIN OBSTACLES
@@ -2245,9 +2240,9 @@ export default function CanvasGame() {
           ctx.restore();
         }
       }
-      else if (summon.type === "scythe") {
+      if (summon.type === "scythe") {
           const sprite = SummonSprites.scythe;
-          if (!sprite.complete) return;
+
           
           const scale = 4;
           const w = sprite.width * scale;

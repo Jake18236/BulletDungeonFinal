@@ -217,15 +217,5 @@ export const useHit = create<HitState>((set, get) => ({
 
     playHit();
 
-    if (impactPos) {
-      const dir = position.clone().sub(impactPos);
-      dir.y = 0;
-      if (dir.lengthSq() > 0.0001) {
-        dir.normalize().multiplyScalar(5);
-        usePlayer.setState({
-          position: position.clone().add(dir)
-        });
-      }
-    }
   },
 }));

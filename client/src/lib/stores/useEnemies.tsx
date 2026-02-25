@@ -173,17 +173,17 @@ export const useEnemies = create<EnemiesState>((set, get) => {
   const spawnSessions: SpawnSession[] = [
     createSession("basic_0_1", "basic", "0:00", "0:30", 28, 20, 4, 3),
     createSession("basic_1_2", "basic", "0:30", "1:00", 36, 40, 10, 4),
-    createSession("basic_2_6", "basic", "1:00", "6:00", 48, 40, 7, 4),
+    createSession("basic_2_6", "basic", "1:00", "3:00", 48, 4000, 7, 4),
     //eyes
     createSession("eyeball_1_6", "eyeball", "0:30", "2:00", 20, 10, 6, 1),
-    createSession("eyeball_6_9", "eyeball", "2:00", "30:00", 50, 20, 5, 3),
-    createSession("eyeball_6_2", "eyeball", "0:01", "30:00", 50, 2000, 1, 30),
+    createSession("eyeball_6_9", "eyeball", "2:00", "3:00", 50, 20, 5, 3),
+    createSession("eyeball_6_2", "eyeball", "3:01", "30:00", 30, 200, 1, 13),
     //tanks
     createSession("tank_3_6", "tank", "1:00", "2:00", 100, 4, 1, 2),
     createSession("tank_6_9", "tank", "2:00", "3:00", 200, 6, 2, 2),
-    createSession("tank_6_2", "tank", "3:00", "30:00", 500, 8, 2, 1),
+    createSession("tank_6_2", "tank", "3:00", "30:00", 1000, 580, 5, 100),
     //boss
-    createSession("shoggoth_5_10", "shoggoth", "1:00", "3:00", 2500, 1, 0.1, 1),
+    createSession("shoggoth_5_10", "shoggoth", "1:00", "30:00", 2500, 1, 0.1, 1),
     
     
   ];
