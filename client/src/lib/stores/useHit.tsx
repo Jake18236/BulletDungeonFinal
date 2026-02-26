@@ -1,11 +1,14 @@
 // client/src/lib/stores/useHit.tsx
 import { create } from "zustand";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { useVisualEffects } from "./useVisualEffects";
 import { useAudio } from "./useAudio";
 import { usePlayer } from "./usePlayer";
 import { useSummons } from "./useSummons";
 import { Enemy } from "./useEnemies";
+import { useCamera } from "./useCamera";
+import { GameCamera2D, getPixelPerfectScale } from "../camera";
 
 export interface ImpactParams {
   enemy: Enemy;
@@ -50,7 +53,7 @@ interface HitState {
 export const useHit = create<HitState>((set, get) => ({
   applyHit: (params, allEnemies = []) => {
     const { enemy, damage, impactPos, color = "#ffffff", knockbackStrength = 8 } = params;
-
+    
     const { addImpact, addDamageNumber } = useVisualEffects.getState();
     const { playHit } = useAudio.getState();
     const { applyStatusEffect } = useSummons.getState();
@@ -212,14 +215,10 @@ export const useHit = create<HitState>((set, get) => ({
 
     const { addImpact } = useVisualEffects.getState();
     const { playHit } = useAudio.getState();
-
+    
     loseHeart();
 
     const resolvedImpact = impactPos?.clone?.() ?? position.clone();
-
-    for (let i = 0; i < 5; i++) {
-      addImpact(resolvedImpact.clone(), "#ff4444");
-    }
 
     playHit();
 

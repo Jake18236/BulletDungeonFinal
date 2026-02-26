@@ -211,7 +211,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       proj.position.add(move);
       proj.distanceTraveled += move.length();
 
-      const velocityFactor = proj.velocity.length() / proj.speed;
+      const velocityFactor = 50 / proj.speed;
       const effectiveTrailLength = Math.max(
         2,
         Math.floor(proj.trailLength * velocityFactor)
@@ -222,8 +222,8 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
 
       const lastPos = proj.trailHistory[0] ?? proj.position.clone();
       const dist = Math.ceil(proj.position.distanceTo(lastPos));
-      if (dist > 0.20) {
-        const steps = Math.ceil(dist / 0.20);
+      if (dist > 0.80) {
+        const steps = Math.ceil(dist / 0.80);
         for (let s = 1; s <= steps; s++) {
           const interpolated = lastPos.clone().lerp(proj.position, s / steps);
           proj.trailHistory.unshift(interpolated);

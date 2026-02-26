@@ -695,7 +695,7 @@ const generateRandomUpgrades = (takenUpgrades: Set<string>): Upgrade[] => {
   });
 
   const shuffled = [...available].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, 9);
+  return shuffled.slice(0, 5);
 };
 
 // ============================================================================
@@ -736,7 +736,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   piercing: 0,
   bouncing: 0,
   accuracy: 1.0,
-  trailLength: 80,
+  trailLength: 20,
   explosive: undefined,
   chainLightning: undefined,
   

@@ -80,7 +80,7 @@ export class GameCamera2D {
     const mouseDx = mouse.x - centerX;
     const mouseDy = mouse.y - centerY;
     const distance = Math.hypot(mouseDx, mouseDy);
-    const pullFactor = distance > 0 ? Math.min(1, distance / 460) : 0;
+    const pullFactor = distance > 0 ? Math.min(1, distance / 260) : 0;
 
     const targetPullX = distance > 0 ? (mouseDx / distance) * this.maxMousePullPx * pullFactor : 0;
     const targetPullY = distance > 0 ? (mouseDy / distance) * this.maxMousePullPx * pullFactor : 0;
@@ -89,18 +89,16 @@ export class GameCamera2D {
     this.pullX += (targetPullX - this.pullX) * blend;
     this.pullY += (targetPullY - this.pullY) * blend;
 
-    if (deltaSeconds <= 0) {
-      this.shakeX = 0;
-      this.shakeY = 0;
-      return;
-    }
-
     if (this.shakeTimeRemainingMs > 0) {
       this.shakeTimeRemainingMs = Math.max(0, this.shakeTimeRemainingMs - deltaSeconds * 1000);
       const t = this.shakeDurationMs <= 0 ? 0 : this.shakeTimeRemainingMs / this.shakeDurationMs;
-      const strength = this.shakeStrength * t;
-      this.shakeX = (Math.random() * 2 - 1) * strength;
-      this.shakeY = (Math.random() * 2 - 1) * strength;
+      const strength = this.shakeStrength * t * 30;
+      const targetX = (Math.random() * 2 - 1) * strength;
+      const targetY = (Math.random() * 2 - 1) * strength;
+
+
+      this.shakeX += (targetX - this.shakeX) * 0.01;
+      this.shakeY += (targetY - this.shakeY) * 0.01;
     } else {
       this.shakeX = 0;
       this.shakeY = 0;

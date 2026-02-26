@@ -81,7 +81,7 @@ export default function Darkness() {
         const y =
           centerY +
           (muzzleFlashPosition.z - playerPosition.z) * WORLD_TO_SCREEN_SCALE;
-        drawThreeStepLight(ctx, x, y, 264);
+        drawThreeStepLight(ctx, x, y, 664);
       }
 
       impactEffects.forEach((impact) => {
@@ -91,7 +91,7 @@ export default function Darkness() {
         const y =
           centerY +
           (impact.y - playerPosition.z) * WORLD_TO_SCREEN_SCALE;
-        const sizeScale = 1;
+        const sizeScale = 1.5;
         drawThreeStepLight(ctx, x, y, impact.size * sizeScale);
       });
 

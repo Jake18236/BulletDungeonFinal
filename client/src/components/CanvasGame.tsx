@@ -41,7 +41,7 @@ import {
 const TILE_SIZE = 50;
 export const CANVAS_WIDTH = 1490;
 export const CANVAS_HEIGHT = 750;
-const ROOM_SIZE = 200;
+const ROOM_SIZE = 2000;
 const SHOGGOTH_BASE_BEAM_LENGTH_WORLD = (304 * 4) / (TILE_SIZE / 2);
 const SHOGGOTH_BEAM_LENGTH_WORLD = SHOGGOTH_BASE_BEAM_LENGTH_WORLD * SHOGGOTH_CONFIG.beamLengthScale;
 
@@ -58,7 +58,7 @@ const electricityLineSpriteSheet = new Image();
 electricityLineSpriteSheet.src = "/sprites/electricity-line-spritesheet.png";
 
 const tentacleSheet = new Image();
-tentacleSheet.src = "/sprites/tentacle-spritesheet.png";
+
 
 const TENTACLE_FRAME_WIDTH = 48;
 const TENTACLE_FRAME_HEIGHT = 64;
@@ -145,7 +145,7 @@ function generateRoomTerrain(roomX: number, roomY: number): TerrainObstacle[] {
     { radius: 30, count: 6 },
     { radius: 58, count: 18 },
     { radius: 88, count: 20 },
-    { radius: 120, count: 0 },
+    { radius: 130, count: 30 },
   ];
 
   radialBands.forEach((band, bandIndex) => {
@@ -686,9 +686,9 @@ export default function CanvasGame() {
               const totalOffset = totalOffsetPixels / (TILE_SIZE / 2);
               const barrelFlashPosition = ps.position.clone().add(
                 new THREE.Vector3(
-                  Math.cos(baseAngle) * totalOffset,
+                  Math.cos(baseAngle) * totalOffset*1.5,
                   0,
-                  Math.sin(baseAngle) * totalOffset,
+                  Math.sin(baseAngle) * totalOffset*1.5,
                 ),
               );
 
@@ -719,6 +719,7 @@ export default function CanvasGame() {
                   trailLength: stats.trailLength, // Add a default trail length
                   source: { type: "player", playerEffects: { splinterBullets: ps.splinterBullets } },
                 });
+                
               };
 
               // Normal projectiles
@@ -745,8 +746,9 @@ export default function CanvasGame() {
               if (ps.fanFire && ammo === 1) {
                 ps.startFanFire();
               }
-              ps.fireMuzzleFlash(barrelFlashPosition);
               if (phase === "playing") cameraRef.current.shake({ strength: 6, durationMs: 60 });
+              ps.fireMuzzleFlash(barrelFlashPosition);
+              
 
               playHit();
 
@@ -843,12 +845,6 @@ export default function CanvasGame() {
                 burn: projectileData?.burn,
                 isPlayerDamage: true,
               }, enemies);
-
-              if (enemy.health <= 0 && !(enemy as any).deathHandled) {
-                (enemy as any).deathHandled = true;
-                playSuccess();
-                handleEnemyDeath(enemy);
-              }
             }
           },
           phase !== "playing",
@@ -895,7 +891,7 @@ export default function CanvasGame() {
             if (updated.projectileCooldown <= 0 && distanceToPlayer <= SHOGGOTH_CONFIG.maxDistance) {
               updated.attackState = "laser_windup";
               // this is gonna cause shake 
-              if (phase === "playing") cameraRef.current.shake({ strength: 1, durationMs: 1000 });
+              
               updated.windUpTimer = 0;
               updated.clawWindUp = 0;
               updated.clawGlowIntensity = 0;
@@ -916,13 +912,14 @@ export default function CanvasGame() {
 
             if (updated.windUpTimer >= (updated.maxWindUpTime ?? 1)) {
               updated.attackState = "laser_firing";
+              
               updated.windUpTimer = 0;
               updated.laserBaseRotation = updated.rotationY ?? Math.atan2(lockedDirection.z, lockedDirection.x);
               updated.projectileCooldown = SHOGGOTH_CONFIG.beamDamageInterval;
               playHit();
             }
           } else if (updated.attackState === "laser_firing") {
-            if (phase === "playing") cameraRef.current.shake({ strength: 5, durationMs: 1000 });
+            if (phase === "playing") cameraRef.current.shake({ strength: 1, durationMs: 1000});
             updated.windUpTimer = (updated.windUpTimer ?? 0) + delta;
             const fireDuration = SHOGGOTH_CONFIG.fireDuration;
             const spinAmount = (updated.windUpTimer ?? 0) * SHOGGOTH_CONFIG.rotationSpeed;
@@ -932,11 +929,12 @@ export default function CanvasGame() {
 
             const circleStrafe = orbitDirection.clone().multiplyScalar(updated.speed * 0.42 * delta);
             updated.position.add(circleStrafe);
-
+            
             updated.projectileCooldown = (updated.projectileCooldown ?? 0) - delta;
             if (updated.projectileCooldown <= 0) {
               const beamOriginOffsetWorld = SHOGGOTH_CONFIG.beamOriginOffsetPx / (TILE_SIZE / 2);
               for (const beamOffset of SHOGGOTH_CONFIG.beamAngles) {
+                
                 const beamAngle = currentRotation + beamOffset;
                 const beamDirection = new THREE.Vector3(Math.cos(beamAngle), 0, Math.sin(beamAngle));
                 const beamOrigin = updated.position.clone().add(beamDirection.clone().multiplyScalar(beamOriginOffsetWorld));
@@ -1117,10 +1115,11 @@ export default function CanvasGame() {
 
           const enemyHitRadius = getEnemyBodyHitRadius(enemy);
           if (dist > 0 && dist < PLAYER_RADIUS + enemyHitRadius) {
-            if (!(enemy.type === "eyeball" && (enemy as any).isRangedAttacking) && enemy.canAttack && invincibilityTimer <= 0 && !damagedThisFrameRef.current) {
+            if (!((enemy as any).isRangedAttacking) && enemy.canAttack && invincibilityTimer <= 0 && !damagedThisFrameRef.current) {
               applyPlayerDamage(1, enemy.position);
               enemy.attackCooldown = enemy.maxAttackCooldown;
               damagedThisFrameRef.current = true;
+              if (phase === "playing") cameraRef.current.shake({ strength: 100, durationMs: 100 });
             }
           }
 
@@ -1648,15 +1647,22 @@ export default function CanvasGame() {
 
     ctx.save();
     const img = getProjectileImage();
-    
+    const drawRotatedProjectile = (x: number, y: number, size: number, angle: number) => {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+      ctx.drawImage(img, -size / 2, -size / 2, size, size);
+      ctx.restore();
+    };
     // --- DRAW ACTIVE PROJECTILES ---
     projectiles.forEach((proj) => {
+      const angle = Math.atan2(proj.velocity.z, proj.velocity.x) + Math.PI / 2;
       const trail = proj.trailHistory;
         for (let i = 0; i < trail.length; i++) {
           const t = i / trail.length; // 0 = head, 1 = tail
           const scale = 1 - t * 0.99;
           const maxSize = Math.ceil(proj.size);
-          const step = 0.5; // shrink by 1 pixel per segment
+          const step = 1.5; //shrink
 
           const size = Math.max(
             2,
@@ -1664,8 +1670,7 @@ export default function CanvasGame() {
           );
           const p = worldToScreen(trail[i]);
           
-
-          ctx.drawImage(img, p.x - size / 2, p.y - size / 2, size, size);
+          drawRotatedProjectile(p.x, p.y, size, angle);
         }
       
 
@@ -1673,13 +1678,7 @@ export default function CanvasGame() {
       const screen = worldToScreen(proj.position);
       const mainSize = Math.floor(proj.size);
       ctx.globalAlpha = 1.5;
-      ctx.drawImage(
-        img,
-        screen.x - mainSize / 2,
-        screen.y - mainSize / 2,
-        mainSize,
-        mainSize
-      );
+      drawRotatedProjectile(screen.x, screen.y, mainSize, angle);
     });
     ctx.globalAlpha = 1;
     ctx.restore();
@@ -1778,11 +1777,6 @@ export default function CanvasGame() {
       const fontSize = 15 * scale;
 
       ctx.font = `bold ${fontSize}px Press Start monospace`;
-
-      // Outline
-      ctx.strokeStyle = "#000000";
-      ctx.lineWidth = 4;
-      ctx.strokeText(dmg.damage.toString(), screenX, screenY);
 
       // White text
       ctx.fillStyle = "#ffffff";
@@ -2133,7 +2127,7 @@ export default function CanvasGame() {
       ctx.font = "bold 14px monospace";
       ctx.fillStyle = "#fff";
       ctx.textAlign = "center";
-      ctx.fillText("SHOGGOTH", screenX, barY - 10);
+      ctx.fillText("BOSS", screenX, barY - 10);
 
       return;
     }
