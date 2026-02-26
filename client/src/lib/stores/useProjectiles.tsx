@@ -183,7 +183,11 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
     }));
   },
 
-  updateProjectiles: (delta, enemies, playerPos, roomBounds, onHit) => {
+  updateProjectiles: (delta, enemies, playerPos, roomBounds, onHit, isPaused) => {
+    if (isPaused) {
+      return;
+    }
+
     const updated: Projectile[] = [];
     const { trailGhosts } = get();
     for (const proj of get().projectiles) {
@@ -340,7 +344,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
           // ===================== BOUNCE LOGIC =====================
           if (proj.bouncesLeft > 0) {
             const hitNormal = toEnemy.lengthSq() > 0.000001
-              ? toEnemy.clone().normalize().multiplyScalar(-1)
+              ? toEnemy.clone().normalize()
               : proj.velocity.clone().normalize().multiplyScalar(-1);
 
             proj.velocity.reflect(hitNormal);
@@ -362,7 +366,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
             proj.position.copy(
               enemy.position
                 .clone()
-                .add(hitNormal.clone().multiplyScalar(enemyRadius + Math.max(0.2, proj.size * 0.01))),
+                .add(hitNormal.clone().multiplyScalar(enemyRadius + Math.max(0.2, proj.size * 0.01) + 0.05)),
             );
 
             continue; // skip piercing logic since we bounced

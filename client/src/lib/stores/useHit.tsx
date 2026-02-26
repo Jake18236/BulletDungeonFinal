@@ -11,6 +11,7 @@ export interface ImpactParams {
   enemy: Enemy;
   damage: number;
   impactPos?: THREE.Vector3;
+  sourcePos?: THREE.Vector3;
   color?: string;
   knockbackStrength?: number;
 
@@ -67,7 +68,7 @@ export const useHit = create<HitState>((set, get) => ({
     }
 
     const playerPosition = usePlayer.getState().position;
-    const knockbackOrigin = params.isPlayerDamage ? playerPosition : impactPos;
+    const knockbackOrigin = params.sourcePos ?? (params.isPlayerDamage ? playerPosition : impactPos);
 
     if (knockbackOrigin) {
       const dir = enemy.position.clone().sub(knockbackOrigin);

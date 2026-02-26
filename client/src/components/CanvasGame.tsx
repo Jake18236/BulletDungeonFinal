@@ -13,6 +13,7 @@ import { useAudio } from "../lib/stores/useAudio";
 import { useProjectiles } from "../lib/stores/useProjectiles";
 import { useHit } from "../lib/stores/useHit";
 import { useSummons } from "../lib/stores/useSummons";
+import { useCamera } from "../lib/stores/useCamera";
 import { useVisualEffects } from "../lib/stores/useVisualEffects";
 import { GameCamera2D, getPixelPerfectScale } from "../lib/camera";
 import GameUI from "./GameUI"  
@@ -517,6 +518,9 @@ export default function CanvasGame() {
         viewportWidth: CANVAS_WIDTH,
         viewportHeight: CANVAS_HEIGHT,
       });
+      useCamera.getState().setScreenCenter(
+        cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT),
+      );
       
       
 
@@ -742,7 +746,7 @@ export default function CanvasGame() {
                 ps.startFanFire();
               }
               ps.fireMuzzleFlash(barrelFlashPosition);
-              cameraRef.current.shake({ strength: 6, durationMs: 60 });
+              if (phase === "playing") cameraRef.current.shake({ strength: 6, durationMs: 60 });
 
               playHit();
 
@@ -846,7 +850,8 @@ export default function CanvasGame() {
                 handleEnemyDeath(enemy);
               }
             }
-          }
+          },
+          phase !== "playing",
         );
 
       const updatedEnemies = enemies.map((enemy) => {
@@ -890,7 +895,7 @@ export default function CanvasGame() {
             if (updated.projectileCooldown <= 0 && distanceToPlayer <= SHOGGOTH_CONFIG.maxDistance) {
               updated.attackState = "laser_windup";
               // this is gonna cause shake 
-              cameraRef.current.shake({ strength: 1, durationMs: 1000 });
+              if (phase === "playing") cameraRef.current.shake({ strength: 1, durationMs: 1000 });
               updated.windUpTimer = 0;
               updated.clawWindUp = 0;
               updated.clawGlowIntensity = 0;
@@ -917,7 +922,7 @@ export default function CanvasGame() {
               playHit();
             }
           } else if (updated.attackState === "laser_firing") {
-            cameraRef.current.shake({ strength: 5, durationMs: 1000 });
+            if (phase === "playing") cameraRef.current.shake({ strength: 5, durationMs: 1000 });
             updated.windUpTimer = (updated.windUpTimer ?? 0) + delta;
             const fireDuration = SHOGGOTH_CONFIG.fireDuration;
             const spinAmount = (updated.windUpTimer ?? 0) * SHOGGOTH_CONFIG.rotationSpeed;
