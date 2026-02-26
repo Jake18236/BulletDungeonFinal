@@ -742,7 +742,7 @@ export default function CanvasGame() {
                 ps.startFanFire();
               }
               ps.fireMuzzleFlash(barrelFlashPosition);
-              cameraRef.current.shake({ strength: 12, durationMs: 110 });
+              cameraRef.current.shake({ strength: 6, durationMs: 60 });
 
               playHit();
 
@@ -889,12 +889,15 @@ export default function CanvasGame() {
             updated.projectileCooldown = (updated.projectileCooldown ?? 0) - delta;
             if (updated.projectileCooldown <= 0 && distanceToPlayer <= SHOGGOTH_CONFIG.maxDistance) {
               updated.attackState = "laser_windup";
+              // this is gonna cause shake 
+              cameraRef.current.shake({ strength: 1, durationMs: 1000 });
               updated.windUpTimer = 0;
               updated.clawWindUp = 0;
               updated.clawGlowIntensity = 0;
               updated.dashDirection = safeDirection.clone();
             }
           } else if (updated.attackState === "laser_windup") {
+            
             updated.windUpTimer = (updated.windUpTimer ?? 0) + delta;
             const windupProgress = Math.min(updated.windUpTimer / (updated.maxWindUpTime ?? 1), 1);
             const lockedDirection = (updated.dashDirection && updated.dashDirection.lengthSq() > 0)
@@ -914,6 +917,7 @@ export default function CanvasGame() {
               playHit();
             }
           } else if (updated.attackState === "laser_firing") {
+            cameraRef.current.shake({ strength: 5, durationMs: 1000 });
             updated.windUpTimer = (updated.windUpTimer ?? 0) + delta;
             const fireDuration = SHOGGOTH_CONFIG.fireDuration;
             const spinAmount = (updated.windUpTimer ?? 0) * SHOGGOTH_CONFIG.rotationSpeed;

@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { usePlayer } from "../lib/stores/usePlayer";
 import { useEnemies } from "../lib/stores/useEnemies";
 import { useVisualEffects } from "../lib/stores/useVisualEffects";
+import { GameCamera2D, getPixelPerfectScale } from "../lib/camera";
 
 const CANVAS_WIDTH = 1490;
 const CANVAS_HEIGHT = 750;
@@ -54,7 +55,7 @@ export default function Darkness() {
   const { position: playerPosition, muzzleFlashPosition } = usePlayer();
   const { xpOrbs } = useEnemies();
   const { impactEffects } = useVisualEffects();
-
+    const cameraRef = useRef(new GameCamera2D());
   useEffect(() => {
     const render = () => {
       const canvas = canvasRef.current;
@@ -71,7 +72,7 @@ export default function Darkness() {
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
       ctx.globalCompositeOperation = "destination-out";
-      drawThreeStepLight(ctx, centerX, centerY, 300);
+      drawThreeStepLight(ctx, centerX + (-playerPosition.x)* WORLD_TO_SCREEN_SCALE, centerY - playerPosition.z* WORLD_TO_SCREEN_SCALE, 300);
 
       if (muzzleFlashPosition) {
         const x =
@@ -106,7 +107,7 @@ export default function Darkness() {
         drawThreeStepLight(ctx, x, y, 32);
       });
       ctx.globalCompositeOperation = "source-over";
-
+      
       animationFrameRef.current = requestAnimationFrame(render);
     };
 

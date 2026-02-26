@@ -63,7 +63,7 @@ export class GameCamera2D {
   private shakeY = 0;
 
   constructor(
-    private readonly maxMousePullPx = 90,
+    private readonly maxMousePullPx = 50,
     private readonly smoothing = 8,
   ) {}
 
@@ -80,7 +80,7 @@ export class GameCamera2D {
     const mouseDx = mouse.x - centerX;
     const mouseDy = mouse.y - centerY;
     const distance = Math.hypot(mouseDx, mouseDy);
-    const pullFactor = distance > 0 ? Math.min(1, distance / 260) : 0;
+    const pullFactor = distance > 0 ? Math.min(1, distance / 460) : 0;
 
     const targetPullX = distance > 0 ? (mouseDx / distance) * this.maxMousePullPx * pullFactor : 0;
     const targetPullY = distance > 0 ? (mouseDy / distance) * this.maxMousePullPx * pullFactor : 0;
