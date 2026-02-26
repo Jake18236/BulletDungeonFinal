@@ -89,6 +89,12 @@ export class GameCamera2D {
     this.pullX += (targetPullX - this.pullX) * blend;
     this.pullY += (targetPullY - this.pullY) * blend;
 
+    if (deltaSeconds <= 0) {
+      this.shakeX = 0;
+      this.shakeY = 0;
+      return;
+    }
+
     if (this.shakeTimeRemainingMs > 0) {
       this.shakeTimeRemainingMs = Math.max(0, this.shakeTimeRemainingMs - deltaSeconds * 1000);
       const t = this.shakeDurationMs <= 0 ? 0 : this.shakeTimeRemainingMs / this.shakeDurationMs;

@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { usePlayer } from "../lib/stores/usePlayer";
 import { useEnemies } from "../lib/stores/useEnemies";
 import { useVisualEffects } from "../lib/stores/useVisualEffects";
-import { GameCamera2D, getPixelPerfectScale } from "../lib/camera";
+import { useCamera } from "../lib/stores/useCamera";
 
 const CANVAS_WIDTH = 1490;
 const CANVAS_HEIGHT = 750;
@@ -55,7 +55,7 @@ export default function Darkness() {
   const { position: playerPosition, muzzleFlashPosition } = usePlayer();
   const { xpOrbs } = useEnemies();
   const { impactEffects } = useVisualEffects();
-    const cameraRef = useRef(new GameCamera2D());
+  const { screenCenter } = useCamera();
   useEffect(() => {
     const render = () => {
       const canvas = canvasRef.current;
@@ -63,8 +63,8 @@ export default function Darkness() {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      const centerX = CANVAS_WIDTH / 2;
-      const centerY = CANVAS_HEIGHT / 2;
+      const centerX = screenCenter.x;
+      const centerY = screenCenter.y;
 
       ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
       ctx.globalCompositeOperation = "source-over";
@@ -72,7 +72,7 @@ export default function Darkness() {
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
       ctx.globalCompositeOperation = "destination-out";
-      drawThreeStepLight(ctx, centerX + (-playerPosition.x)* WORLD_TO_SCREEN_SCALE, centerY - playerPosition.z* WORLD_TO_SCREEN_SCALE, 300);
+      drawThreeStepLight(ctx, centerX, centerY, 300);
 
       if (muzzleFlashPosition) {
         const x =
@@ -115,7 +115,7 @@ export default function Darkness() {
     return () => {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [playerPosition, xpOrbs, impactEffects, muzzleFlashPosition]);
+  }, [playerPosition, xpOrbs, impactEffects, muzzleFlashPosition, screenCenter]);
 
   return (
     <canvas
