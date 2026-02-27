@@ -342,7 +342,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
           );
 
           // ===================== BOUNCE LOGIC =====================
-          if (proj.bouncesLeft > 0) {
+          if (proj.bouncing > 0) {
             const hitNormal = toEnemy.lengthSq() > 0.000001
               ? toEnemy.clone().normalize()
               : proj.velocity.clone().normalize().multiplyScalar(-1);
@@ -356,8 +356,6 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
               proj.velocity.normalize().multiplyScalar(retainedSpeed);
             }
             proj.rotationY = Math.atan2(proj.velocity.x, proj.velocity.z);
-
-            proj.bouncesLeft--;
 
             // Mark this enemy as hit
             proj.piercedEnemies.add(enemy.id);

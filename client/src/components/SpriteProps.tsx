@@ -162,12 +162,6 @@ export const enemyEyeSpritesByType: Record<EnemySpriteType, SpriteDef> = {
   tree: createEnemySprite("/sprites/enemy/tree-enemy-eyes.png", 96, 2),
 };
 
-export const enemyFlashSpritesByType: Record<EnemySpriteType, SpriteDef> = {
-  basic: createEnemySprite("/sprites/enemy/basic-enemy-flash.png", 32, 2),
-  tank: createEnemySprite("/sprites/enemy/tank-enemy-flash.png", 48, 2),
-  eyeball: createEnemySprite("/sprites/enemy/eyeball-enemy-flash.png", 48, 2),
-};
-
 export const enemySprite = enemySpritesByType.basic;
 
 export const bossEnemySprite: SpriteDef = {

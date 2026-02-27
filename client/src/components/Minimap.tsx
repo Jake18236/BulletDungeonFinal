@@ -25,23 +25,11 @@ export default function Minimap() {
               }}
             />
 
-            {/* Room exits */}
-            {currentRoom.exits.map((exit, index) => (
-              <div
-                key={index}
-                className={`absolute w-2 h-2 bg-green-400 ${
-                  exit === 'north' ? 'top-0 left-1/2 -translate-x-1/2' :
-                  exit === 'south' ? 'bottom-0 left-1/2 -translate-x-1/2' :
-                  exit === 'east' ? 'right-0 top-1/2 -translate-y-1/2' :
-                  exit === 'west' ? 'left-0 top-1/2 -translate-y-1/2' : ''
-                }`}
-              />
-            ))}
           </div>
 
-          {/* Room coordinates */}
+          {/* Single room */}
           <div className="absolute -bottom-5 left-0 text-xs text-gray-400">
-            Room ({currentRoom.x}, {currentRoom.y})
+            Room
           </div>
         </div>
       </CardContent>
