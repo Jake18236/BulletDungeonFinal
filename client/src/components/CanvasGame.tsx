@@ -194,6 +194,41 @@ function checkTerrainCollision(
   return { collision: false };
 }
 
+function resolveTerrainCollision(
+  pos: THREE.Vector3,
+  obstacles: TerrainObstacle[],
+  radius: number,
+  maxIterations = 4,
+) {
+  const resolved = pos.clone();
+
+  for (let i = 0; i < maxIterations; i++) {
+    let adjusted = false;
+
+    for (const obs of obstacles) {
+      const distX = resolved.x - obs.x;
+      const distZ = resolved.z - obs.z;
+      const distSq = distX * distX + distZ * distZ;
+      const combinedRadius = radius + obs.radius;
+
+      if (distSq < combinedRadius * combinedRadius) {
+        const dist = Math.max(Math.sqrt(distSq), 0.0001);
+        const penetration = combinedRadius - dist;
+        const nx = distX / dist;
+        const nz = distZ / dist;
+
+        resolved.x += nx * penetration;
+        resolved.z += nz * penetration;
+        adjusted = true;
+      }
+    }
+
+    if (!adjusted) break;
+  }
+
+  return resolved;
+}
+
 
 function getEnemyType(enemy: { type?: string }): EnemySpriteType {
   if (enemy.type === "tank" || enemy.type === "eyeball") return enemy.type;
@@ -812,13 +847,13 @@ export default function CanvasGame() {
 
           const terrainCheck = checkTerrainCollision(newPos, terrainRef.current, 0.8);
           if (terrainCheck.collision && terrainCheck.normal) {
-            dx = dx - terrainCheck.normal.x * (dx * terrainCheck.normal.x + dz * terrainCheck.normal.y);
-            dz = dz - terrainCheck.normal.y * (dx * terrainCheck.normal.x + dz * terrainCheck.normal.y);
+            const dot = dx * terrainCheck.normal.x + dz * terrainCheck.normal.y;
+            dx = dx - terrainCheck.normal.x * dot;
+            dz = dz - terrainCheck.normal.y * dot;
             newPos = currentPos.clone().add(new THREE.Vector3(dx, 0, dz));
-            if (checkTerrainCollision(newPos, terrainRef.current, 0.8).collision) {
-              newPos = currentPos;
-            }
           }
+
+          newPos = resolveTerrainCollision(newPos, terrainRef.current, 0.8);
 
           const bounced = bounceAgainstBounds(newPos, new THREE.Vector3(0,0,0), ROOM_SIZE, 1);
           usePlayer.setState({ position: bounced.position });
@@ -1020,10 +1055,11 @@ export default function CanvasGame() {
                 enemyCollisionRadius,
               );
 
-              if (!enemyTerrainCheck.collision) {
-                enemy.position.x = newEnemyPos.x;
-                enemy.position.z = newEnemyPos.z;
-              }
+              const resolvedEnemyPos = enemyTerrainCheck.collision
+                ? resolveTerrainCollision(newEnemyPos, terrainRef.current, enemyCollisionRadius)
+                : newEnemyPos;
+              enemy.position.x = resolvedEnemyPos.x;
+              enemy.position.z = resolvedEnemyPos.z;
             }
           } else {
             const moveAmount = enemy.speed * delta;
@@ -1039,10 +1075,11 @@ export default function CanvasGame() {
               enemyCollisionRadius,
             );
 
-            if (!enemyTerrainCheck.collision) {
-              enemy.position.x = newEnemyPos.x;
-              enemy.position.z = newEnemyPos.z;
-            }
+            const resolvedEnemyPos = enemyTerrainCheck.collision
+              ? resolveTerrainCollision(newEnemyPos, terrainRef.current, enemyCollisionRadius)
+              : newEnemyPos;
+            enemy.position.x = resolvedEnemyPos.x;
+            enemy.position.z = resolvedEnemyPos.z;
           }
         }
 
@@ -1064,6 +1101,9 @@ export default function CanvasGame() {
           enemy.position.x = velNewPos.x;
           enemy.position.z = velNewPos.z;
         } else {
+          const resolvedVelPos = resolveTerrainCollision(velNewPos, terrainRef.current, enemyCollisionRadius);
+          enemy.position.x = resolvedVelPos.x;
+          enemy.position.z = resolvedVelPos.z;
           enemy.velocity.multiplyScalar(-0.5);
         }
 
@@ -1090,7 +1130,6 @@ export default function CanvasGame() {
             const dz = e1.position.z - e2.position.z;
             const dist = Math.hypot(dx, dz);
             const minDist = getEnemyCollisionRadius(e1) + getEnemyCollisionRadius(e2);
-            e1.position.x += Math.sin(Math.random() * 10) * 0.002;
             if (dist > 0 && dist < minDist) {
               const push = (minDist - dist) / 2;
               const nx = dx / dist;
@@ -1099,6 +1138,12 @@ export default function CanvasGame() {
               e1.position.z += nz * push;
               e2.position.x -= nx * push;
               e2.position.z -= nz * push;
+              const resolvedE1 = resolveTerrainCollision(e1.position, terrainRef.current, getEnemyCollisionRadius(e1));
+              const resolvedE2 = resolveTerrainCollision(e2.position, terrainRef.current, getEnemyCollisionRadius(e2));
+              e1.position.x = resolvedE1.x;
+              e1.position.z = resolvedE1.z;
+              e2.position.x = resolvedE2.x;
+              e2.position.z = resolvedE2.z;
             }
           }
         }
