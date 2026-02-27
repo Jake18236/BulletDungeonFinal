@@ -746,7 +746,7 @@ export default function CanvasGame() {
               if (ps.fanFire && ammo === 1) {
                 ps.startFanFire();
               }
-              if (phase === "playing") cameraRef.current.shake({ strength: 6, durationMs: 60 });
+              if (phase === "playing") cameraRef.current.shake({ strength: 3, durationMs: 30 });
               ps.fireMuzzleFlash(barrelFlashPosition);
               
 
@@ -890,7 +890,7 @@ export default function CanvasGame() {
             updated.projectileCooldown = (updated.projectileCooldown ?? 0) - delta;
             if (updated.projectileCooldown <= 0 && distanceToPlayer <= SHOGGOTH_CONFIG.maxDistance) {
               updated.attackState = "laser_windup";
-              // this is gonna cause shake 
+
               
               updated.windUpTimer = 0;
               updated.clawWindUp = 0;
@@ -1115,7 +1115,7 @@ export default function CanvasGame() {
 
           const enemyHitRadius = getEnemyBodyHitRadius(enemy);
           if (dist > 0 && dist < PLAYER_RADIUS + enemyHitRadius) {
-            if (!((enemy as any).isRangedAttacking) && enemy.canAttack && invincibilityTimer <= 0 && !damagedThisFrameRef.current) {
+            if (enemy.canAttack && invincibilityTimer <= 0 && !damagedThisFrameRef.current) {
               applyPlayerDamage(1, enemy.position);
               enemy.attackCooldown = enemy.maxAttackCooldown;
               damagedThisFrameRef.current = true;
@@ -1199,7 +1199,6 @@ export default function CanvasGame() {
       drawImpactEffects(ctx); // ADD - behind projectiles
       
       drawEnemyDeaths(ctx, gameplayElapsedMsRef.current);
-      drawParticles(ctx); 
       drawDamageNumbers(ctx); 
       
       drawReloadIndicator(ctx);
@@ -1466,7 +1465,7 @@ export default function CanvasGame() {
       const sprite = xpSprite; // assume you imported or loaded xp.png as xpImage
 
       if (sprite.complete) {
-        const scale = 3; // adjust size as needed
+        const scale = 2; // adjust size as needed
         const w = sprite.width * scale;
         const h = sprite.height * scale;
 
