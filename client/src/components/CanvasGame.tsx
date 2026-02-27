@@ -194,41 +194,6 @@ function checkTerrainCollision(
   return { collision: false };
 }
 
-function resolveTerrainCollision(
-  pos: THREE.Vector3,
-  obstacles: TerrainObstacle[],
-  radius: number,
-  maxIterations = 4,
-) {
-  const resolved = pos.clone();
-
-  for (let i = 0; i < maxIterations; i++) {
-    let adjusted = false;
-
-    for (const obs of obstacles) {
-      const distX = resolved.x - obs.x;
-      const distZ = resolved.z - obs.z;
-      const distSq = distX * distX + distZ * distZ;
-      const combinedRadius = radius + obs.radius;
-
-      if (distSq < combinedRadius * combinedRadius) {
-        const dist = Math.max(Math.sqrt(distSq), 0.0001);
-        const penetration = combinedRadius - dist;
-        const nx = distX / dist;
-        const nz = distZ / dist;
-
-        resolved.x += nx * penetration;
-        resolved.z += nz * penetration;
-        adjusted = true;
-      }
-    }
-
-    if (!adjusted) break;
-  }
-
-  return resolved;
-}
-
 
 function getEnemyType(enemy: { type?: string }): EnemySpriteType {
   if (enemy.type === "tank" || enemy.type === "eyeball") return enemy.type;
@@ -781,7 +746,7 @@ export default function CanvasGame() {
               if (ps.fanFire && ammo === 1) {
                 ps.startFanFire();
               }
-              if (phase === "playing") cameraRef.current.shake({ strength: 3, durationMs: 30 });
+              if (phase === "playing") cameraRef.current.shake({ strength: 35, durationMs: 60 });
               ps.fireMuzzleFlash(barrelFlashPosition);
               
 
@@ -847,13 +812,13 @@ export default function CanvasGame() {
 
           const terrainCheck = checkTerrainCollision(newPos, terrainRef.current, 0.8);
           if (terrainCheck.collision && terrainCheck.normal) {
-            const dot = dx * terrainCheck.normal.x + dz * terrainCheck.normal.y;
-            dx = dx - terrainCheck.normal.x * dot;
-            dz = dz - terrainCheck.normal.y * dot;
+            dx = dx - terrainCheck.normal.x * (dx * terrainCheck.normal.x + dz * terrainCheck.normal.y);
+            dz = dz - terrainCheck.normal.y * (dx * terrainCheck.normal.x + dz * terrainCheck.normal.y);
             newPos = currentPos.clone().add(new THREE.Vector3(dx, 0, dz));
+            if (checkTerrainCollision(newPos, terrainRef.current, 0.8).collision) {
+              newPos = currentPos;
+            }
           }
-
-          newPos = resolveTerrainCollision(newPos, terrainRef.current, 0.8);
 
           const bounced = bounceAgainstBounds(newPos, new THREE.Vector3(0,0,0), ROOM_SIZE, 1);
           usePlayer.setState({ position: bounced.position });
@@ -954,7 +919,7 @@ export default function CanvasGame() {
               playHit();
             }
           } else if (updated.attackState === "laser_firing") {
-            if (phase === "playing") cameraRef.current.shake({ strength: 1, durationMs: 1000});
+            if (phase === "playing") cameraRef.current.shake({ strength: 5, durationMs: 1000});
             updated.windUpTimer = (updated.windUpTimer ?? 0) + delta;
             const fireDuration = SHOGGOTH_CONFIG.fireDuration;
             const spinAmount = (updated.windUpTimer ?? 0) * SHOGGOTH_CONFIG.rotationSpeed;
@@ -1055,11 +1020,10 @@ export default function CanvasGame() {
                 enemyCollisionRadius,
               );
 
-              const resolvedEnemyPos = enemyTerrainCheck.collision
-                ? resolveTerrainCollision(newEnemyPos, terrainRef.current, enemyCollisionRadius)
-                : newEnemyPos;
-              enemy.position.x = resolvedEnemyPos.x;
-              enemy.position.z = resolvedEnemyPos.z;
+              if (!enemyTerrainCheck.collision) {
+                enemy.position.x = newEnemyPos.x;
+                enemy.position.z = newEnemyPos.z;
+              }
             }
           } else {
             const moveAmount = enemy.speed * delta;
@@ -1075,11 +1039,10 @@ export default function CanvasGame() {
               enemyCollisionRadius,
             );
 
-            const resolvedEnemyPos = enemyTerrainCheck.collision
-              ? resolveTerrainCollision(newEnemyPos, terrainRef.current, enemyCollisionRadius)
-              : newEnemyPos;
-            enemy.position.x = resolvedEnemyPos.x;
-            enemy.position.z = resolvedEnemyPos.z;
+            if (!enemyTerrainCheck.collision) {
+              enemy.position.x = newEnemyPos.x;
+              enemy.position.z = newEnemyPos.z;
+            }
           }
         }
 
@@ -1101,9 +1064,6 @@ export default function CanvasGame() {
           enemy.position.x = velNewPos.x;
           enemy.position.z = velNewPos.z;
         } else {
-          const resolvedVelPos = resolveTerrainCollision(velNewPos, terrainRef.current, enemyCollisionRadius);
-          enemy.position.x = resolvedVelPos.x;
-          enemy.position.z = resolvedVelPos.z;
           enemy.velocity.multiplyScalar(-0.5);
         }
 
@@ -1130,6 +1090,7 @@ export default function CanvasGame() {
             const dz = e1.position.z - e2.position.z;
             const dist = Math.hypot(dx, dz);
             const minDist = getEnemyCollisionRadius(e1) + getEnemyCollisionRadius(e2);
+            e1.position.x += Math.sin(Math.random() * 10) * 0.002;
             if (dist > 0 && dist < minDist) {
               const push = (minDist - dist) / 2;
               const nx = dx / dist;
@@ -1138,12 +1099,6 @@ export default function CanvasGame() {
               e1.position.z += nz * push;
               e2.position.x -= nx * push;
               e2.position.z -= nz * push;
-              const resolvedE1 = resolveTerrainCollision(e1.position, terrainRef.current, getEnemyCollisionRadius(e1));
-              const resolvedE2 = resolveTerrainCollision(e2.position, terrainRef.current, getEnemyCollisionRadius(e2));
-              e1.position.x = resolvedE1.x;
-              e1.position.z = resolvedE1.z;
-              e2.position.x = resolvedE2.x;
-              e2.position.z = resolvedE2.z;
             }
           }
         }
@@ -1725,51 +1680,6 @@ export default function CanvasGame() {
       drawRotatedProjectile(screen.x, screen.y, mainSize, angle);
     });
     ctx.globalAlpha = 1;
-    ctx.restore();
-  };
-
-
-  const drawParticles = (ctx: CanvasRenderingContext2D) => {
-    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
-
-    ctx.save();
-
-    particles.forEach(particle => {
-      const screenX = centerX + ((particle.position.x - position.x) * TILE_SIZE) / 2;
-      const screenY = centerY + ((particle.position.z - position.z) * TILE_SIZE) / 2;
-
-      ctx.globalAlpha = particle.alpha;
-
-      if (particle.type === "spark") {
-        // Bright yellow/white sparks
-        ctx.fillStyle = particle.color;
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, particle.size, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Glow
-        ctx.fillStyle = particle.color;
-        ctx.globalAlpha = particle.alpha * 0.3;
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, particle.size * 2, 0, Math.PI * 2);
-        ctx.fill();
-      } else {
-        // Impact and explosion particles
-        const gradient = ctx.createRadialGradient(
-          screenX, screenY, 0,
-          screenX, screenY, particle.size
-        );
-        gradient.addColorStop(0, particle.color);
-        gradient.addColorStop(0.7, particle.color + "aa");
-        gradient.addColorStop(1, particle.color + "00");
-
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, particle.size, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    });
-
     ctx.restore();
   };
 

@@ -306,7 +306,7 @@ export default function GameUI() {
   const { phase, start, restart } = useGame();
   const { hearts, maxHearts, ammo, maxAmmo, xp, xpToNextLevel, level, showLevelUpScreen, reset: resetPlayer } = usePlayer();
   const { generateDungeon, reset: resetDungeon } = useDungeon();
-  const { generateRoomEnemies, reset: resetEnemies } = useEnemies();
+  const { reset: resetEnemies } = useEnemies();
   const progress = showLevelUpScreen ? 1 : Math.min(xp / xpToNextLevel, 1);
 
   const handleStart = () => {
@@ -314,7 +314,6 @@ export default function GameUI() {
     resetEnemies();
     resetDungeon();
     generateDungeon();
-    generateRoomEnemies();
     start();
   };
   const [xpFlash, setXpFlash] = useState(false);

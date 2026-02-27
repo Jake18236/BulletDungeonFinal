@@ -54,9 +54,8 @@ export const useDungeon = create<DungeonState>((set, get) => ({
       newRoom = generateRoom(newX, newY);
       visitedRooms.set(roomKey, newRoom);
 
-      // Generate enemies for new room
       import("./useEnemies").then(({ useEnemies }) => {
-        useEnemies.getState().generateRoomEnemies();
+
       });
     }
 

@@ -13,12 +13,6 @@ export interface CameraShake {
   durationMs: number;
 }
 
-interface ActiveCameraShake {
-  strength: number;
-  remainingMs: number;
-  durationMs: number;
-}
-
 export interface CameraUpdateOptions {
   deltaSeconds: number;
   target: CameraTarget;
@@ -62,7 +56,9 @@ export function getPixelPerfectScale(
 export class GameCamera2D {
   private pullX = 0;
   private pullY = 0;
-  private activeShakes: ActiveCameraShake[] = [];
+  private shakeTimeRemainingMs = 0;
+  private shakeDurationMs = 0;
+  private shakeStrength = 0;
   private shakeX = 0;
   private shakeY = 0;
 
@@ -93,42 +89,28 @@ export class GameCamera2D {
     this.pullX += (targetPullX - this.pullX) * blend;
     this.pullY += (targetPullY - this.pullY) * blend;
 
-    if (this.activeShakes.length > 0) {
-      const deltaMs = deltaSeconds * 1000;
-      let combinedStrength = 0;
+    const shakeDecay = 5; // higher = faster decay
+if (this.shakeTimeRemainingMs > 0) {
+    this.shakeTimeRemainingMs = Math.max(0, this.shakeTimeRemainingMs - deltaSeconds * 1000);
+    const t = this.shakeDurationMs <= 0 ? 0 : this.shakeTimeRemainingMs / this.shakeDurationMs;
+    const strength = this.shakeStrength * t;
 
-      this.activeShakes = this.activeShakes
-        .map((shake) => {
-          const remainingMs = Math.max(0, shake.remainingMs - deltaMs);
-          const intensity = shake.durationMs > 0 ? remainingMs / shake.durationMs : 0;
-          combinedStrength += shake.strength * intensity;
-          return {
-            ...shake,
-            remainingMs,
-          };
-        })
-        .filter((shake) => shake.remainingMs > 0);
+    const targetX = (Math.random() * 2 - 1) * strength;
+    const targetY = (Math.random() * 2 - 1) * strength;
 
-      const strength = combinedStrength * 30;
-      const targetX = (Math.random() * 2 - 1) * strength;
-      const targetY = (Math.random() * 2 - 1) * strength;
-
-      const shakeBlend = 1 - Math.exp(-25 * deltaSeconds);
-      this.shakeX += (targetX - this.shakeX) * shakeBlend;
-      this.shakeY += (targetY - this.shakeY) * shakeBlend;
-    } else {
-      this.shakeX = 0;
-      this.shakeY = 0;
-    }
+    this.shakeX += (targetX - this.shakeX) * 0.15;
+    this.shakeY += (targetY - this.shakeY) * 0.15;
+} else {
+    // Smoothly decay shake instead of snapping
+    this.shakeX *= Math.exp(-shakeDecay * deltaSeconds);
+    this.shakeY *= Math.exp(-shakeDecay * deltaSeconds);
+}
   }
 
   shake({ strength, durationMs }: CameraShake) {
-    if (durationMs <= 0 || strength <= 0) return;
-    this.activeShakes.push({
-      strength,
-      durationMs,
-      remainingMs: durationMs,
-    });
+    this.shakeStrength = strength;
+    this.shakeDurationMs = durationMs;
+    this.shakeTimeRemainingMs = Math.max(this.shakeTimeRemainingMs, durationMs);
   }
 
   getRenderOffset() {

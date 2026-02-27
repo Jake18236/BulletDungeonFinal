@@ -127,7 +127,6 @@ interface EnemiesState {
   addEnemy: (enemy: Partial<Enemy>) => void;
   removeEnemy: (id: string) => void;
   updateEnemies: (enemies: Enemy[]) => void;
-  generateRoomEnemies: () => void;
   registerHit: (id: string, dmg: number) => void;
   reset: () => void;
   elapsedTime: number;
@@ -177,13 +176,13 @@ export const useEnemies = create<EnemiesState>((set, get) => {
     //eyes
     createSession("eyeball_1_6", "eyeball", "0:30", "2:00", 20, 10, 6, 1),
     createSession("eyeball_6_9", "eyeball", "2:00", "3:00", 50, 20, 5, 3),
-    createSession("eyeball_6_2", "eyeball", "3:01", "30:00", 30, 200, 1, 13),
+    createSession("eyeball_6_2", "eyeball", "3:01", "30:00", 80, 200, 1, 13),
     //tanks
     createSession("tank_3_6", "tank", "1:00", "2:00", 100, 4, 1, 2),
     createSession("tank_6_9", "tank", "2:00", "3:00", 200, 6, 2, 2),
-    createSession("tank_6_2", "tank", "3:00", "30:00", 1000, 580, 5, 100),
+    createSession("tank_6_2", "tank", "3:00", "30:00", 1000, 580, 5, 10),
     //boss
-    createSession("shoggoth_5_10", "shoggoth", "1:00", "30:00", 2500, 1, 0.1, 1),
+    createSession("shoggoth_5_10", "shoggoth", "1:00", "30:00", 2500, 1, 30, 1),
     
     
   ];
@@ -227,9 +226,9 @@ export const useEnemies = create<EnemiesState>((set, get) => {
         position: position.clone(),
         value,
         velocity: new THREE.Vector3(
-          (Math.random() - 0.5) * 2,
+          (Math.random() - 0.5) * 4,
           0,
-          (Math.random() - 0.5) * 2
+          (Math.random() - 0.5) * 4,
         ),
       };
       set((state) => ({ xpOrbs: [...state.xpOrbs, orb] }));
@@ -253,8 +252,6 @@ export const useEnemies = create<EnemiesState>((set, get) => {
           if (distance < COLLECT_RANGE) {
             addXP(orb.value);
 
-            // ADD VISUAL POP EFFECT
-            // Create particles at collection point
             for (let i = 0; i < 8; i++) {
               const angle = (i / 8) * Math.PI * 2;
               const speed = 20 + Math.random() * 10;
@@ -416,20 +413,6 @@ export const useEnemies = create<EnemiesState>((set, get) => {
     },
     
     updateEnemies: (enemies) => set({ enemies }),
-
-    generateRoomEnemies: () => {
-      set({ enemies: [] });
-      const { addEnemy } = get();
-      const numEnemies = Math.floor(Math.random() * 3) + 1;
-      for (let i = 0; i < numEnemies; i++) {
-        const pos = new THREE.Vector3(
-          (Math.random() - 0.5) * 15,
-          0,
-          (Math.random() - 0.5) * 15
-        );
-        addEnemy({ position: pos });
-      }
-    },
 
     updateAutoSpawn: (delta, playerPos) => {
       const elapsedTime = get().elapsedTime + delta;
