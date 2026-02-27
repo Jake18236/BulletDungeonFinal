@@ -4,7 +4,6 @@ import * as THREE from "three";
 import Matter from "matter-js";
 import { usePlayer } from "../lib/stores/usePlayer";
 import { ENEMY_TYPE_CONFIG, SHOGGOTH_CONFIG, useEnemies } from "../lib/stores/useEnemies";
-import { useDungeon } from "../lib/stores/useDungeon";
 import { bounceAgainstBounds } from "../lib/collision";
 import { useGame } from "../lib/stores/useGame";
 import { useAudio } from "../lib/stores/useAudio";
@@ -27,7 +26,6 @@ import {
   SummonSprites,
   xpSprite,
   getProjectileImage,
-  enemyFlashSpritesByType,
   VisualSprites,
   EnemySpriteType,
   enemyEyeballProjectileSprite,
@@ -132,10 +130,10 @@ function normalizeAngle(angle: number) {
   return normalized;
 }
 
-function generateRoomTerrain(roomX: number, roomY: number): TerrainObstacle[] {
+function generateRoomTerrain(): TerrainObstacle[] {
   const trees: TerrainObstacle[] = [];
   let obstacleId = 0;
-  const seed = roomX * 911 + roomY * 131;
+  const seed = 1337;
   const random = (n: number) => {
     const value = Math.sin(seed * 0.13 + n * 12.9898) * 43758.5453;
     return value - Math.floor(value);
@@ -323,7 +321,6 @@ export default function CanvasGame() {
   const player = usePlayer.getState();
   const mouseRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const { enemies, updateEnemies, removeEnemy } = useEnemies();
-  const { currentRoom, changeRoom } = useDungeon();
   const { playHit, playSuccess } = useAudio();
   const { summons, updateSummons, updateStatusEffects, electroMage, electroShotCounter, handleEnemyKilledBySummon } = useSummons();
   const fireTimer = useRef(0);
@@ -371,12 +368,10 @@ export default function CanvasGame() {
 
   
   useEffect(() => {
-    if (currentRoom) {
-      terrainRef.current = generateRoomTerrain(currentRoom.x, currentRoom.y);
-      treeLightningRef.current = [];
-      treeLightningSpawnTimerRef.current = 0;
-    }
-  }, [currentRoom]);
+    terrainRef.current = generateRoomTerrain();
+    treeLightningRef.current = [];
+    treeLightningSpawnTimerRef.current = 0;
+  }, []);
 
   useEffect(() => {
     if (phase === "playing" && gameStartTimeRef.current == null) {
@@ -527,7 +522,7 @@ export default function CanvasGame() {
       ctx.fillStyle = "#1a1a1a";
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-      if (currentRoom) drawDungeon(ctx, animationNowMs);
+      drawDungeon(ctx, animationNowMs);
       
 
       if (phase === "playing") {
@@ -1262,7 +1257,6 @@ export default function CanvasGame() {
   let grassPattern: CanvasPattern | null = null;
 
   const drawDungeon = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
-    if (!currentRoom) return;
     if (!grassPattern && grassSprite.complete) {
     grassPattern = ctx.createPattern(grassSprite, "repeat");
   }
@@ -1347,41 +1341,33 @@ export default function CanvasGame() {
     ctx.fillStyle = "#2a2a2c";
     const wallThickness = 20;
 
-    if (!currentRoom.exits.includes("north")) {
-      ctx.fillRect(
-        centerX - floorSize / 2 + offsetX,
-        centerY - floorSize / 2 - wallThickness + offsetZ,
-        floorSize,
-        wallThickness,
-      );
-    }
-    if (!currentRoom.exits.includes("south")) {
-      ctx.fillRect(
-        centerX - floorSize / 2 + offsetX,
-        centerY + floorSize / 2 + offsetZ,
-        floorSize,
-        wallThickness,
-      );
-    }
-    if (!currentRoom.exits.includes("east")) {
-      ctx.fillRect(
-        centerX + floorSize / 2 + offsetX,
-        centerY - floorSize / 2 + offsetZ,
-        wallThickness,
-        floorSize,
-      );
-    }
-    if (!currentRoom.exits.includes("west")) {
-      ctx.fillRect(
-        centerX - floorSize / 2 - wallThickness + offsetX,
-        centerY - floorSize / 2 + offsetZ,
-        wallThickness,
-        floorSize,
-      );
-    }
+    ctx.fillRect(
+      centerX - floorSize / 2 + offsetX,
+      centerY - floorSize / 2 - wallThickness + offsetZ,
+      floorSize,
+      wallThickness,
+    );
+    ctx.fillRect(
+      centerX - floorSize / 2 + offsetX,
+      centerY + floorSize / 2 + offsetZ,
+      floorSize,
+      wallThickness,
+    );
+    ctx.fillRect(
+      centerX + floorSize / 2 + offsetX,
+      centerY - floorSize / 2 + offsetZ,
+      wallThickness,
+      floorSize,
+    );
+    ctx.fillRect(
+      centerX - floorSize / 2 - wallThickness + offsetX,
+      centerY - floorSize / 2 + offsetZ,
+      wallThickness,
+      floorSize,
+    );
 
     if (tentacleSheet.complete && tentacleSheet.naturalWidth > 0) {
-      const seed = currentRoom.x * 1000 + currentRoom.y;
+      const seed = 2024;
       const now = animationNowMs;
       const wallInset = wallThickness;
       const wallRangeStart = -ROOM_SIZE;
@@ -1397,8 +1383,6 @@ export default function CanvasGame() {
         baseAngle: number,
         getWorldPosition: (lineOffset: number) => { x: number; z: number },
       ) => {
-        if (currentRoom.exits.includes(wallName)) return;
-
         for (let lineOffset = wallRangeStart; lineOffset <= wallRangeEnd; lineOffset += wallSpacing) {
           const world = getWorldPosition(lineOffset);
 
@@ -1849,7 +1833,6 @@ export default function CanvasGame() {
 
     const enemyType: EnemySpriteType = getEnemyType(enemy);
     const bodySprite = enemySpritesByType[enemyType];
-    const flashSprite = enemyFlashSpritesByType[enemyType];
     const size = bodySprite.size * bodySprite.scale;
     const facingRight = enemy.position.x <= position.x;
 
@@ -1863,11 +1846,9 @@ export default function CanvasGame() {
       ctx.scale(-1, 1);
     }
 
-    if (enemy.hitFlash > 0) {
-      ctx.drawImage(flashSprite.img, -size / 2, -size / 2, size, size);
-    } else {
-      ctx.drawImage(bodySprite.img, Math.floor(-size / 2), Math.floor(-size / 2), Math.floor(size), Math.floor(size));
-    }
+    if (enemy.hitFlash > 0) ctx.filter = "brightness(6)";
+    ctx.drawImage(bodySprite.img, Math.floor(-size / 2), Math.floor(-size / 2), Math.floor(size), Math.floor(size));
+    ctx.filter = "none";
 
     ctx.restore();
   };

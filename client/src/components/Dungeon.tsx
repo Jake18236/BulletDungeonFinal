@@ -49,41 +49,7 @@ export default function Dungeon() {
       );
     });
     
-    // Room exits (gaps in walls)
-    currentRoom.exits.forEach((exit, index) => {
-      const exitSize = 3;
-      let position: [number, number, number] | undefined;
-      let args: [number, number, number] | undefined;
 
-      switch (exit) {
-        case 'north':
-          position = [0, 2, roomSize];
-          args = [exitSize, 4, 1];
-          break;
-        case 'south':
-          position = [0, 2, -roomSize];
-          args = [exitSize, 4, 1];
-          break;
-        case 'east':
-          position = [roomSize, 2, 0];
-          args = [1, 4, exitSize];
-          break;
-        case 'west':
-          position = [-roomSize, 2, 0];
-          args = [1, 4, exitSize];
-          break;
-      }
-
-      if (position && args) {
-        elements.push(
-          <mesh key={`exit-${index}`} position={position}>
-            <boxGeometry args={args} />
-            <meshBasicMaterial color="#111111" transparent opacity={0} />
-          </mesh>
-        );
-      }
-    });
-    
     return elements;
   }, [currentRoom, grassTexture, asphaltTexture]);
 
