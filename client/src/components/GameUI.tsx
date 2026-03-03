@@ -9,7 +9,11 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from "../components/CanvasGame"
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
 import { Volume2, VolumeX } from "lucide-react";
-import { HeartHUD, AmmoHUD, UI_SPRITES } from "./SpriteProps";
+import { HeartHUD, AmmoHUD, } from "./SpriteProps";
+
+const LEVEL_UP_BEAM_SPRITESHEET = "/sprites/upgrades/level-up-spritesheet.png";
+const CONTAINER_SPRITESHEET = "/sprites/upgrades/containers-spritesheet.png";
+const UPGRADES_SPRITESHEET = "/sprites/upgrades/upgrades-spritesheet.png";
 
 const hashText = (text: string) => {
   let hash = 0;
@@ -99,7 +103,7 @@ export function LevelUpScreen() {
             height: "420px",
             transform: "translate(-50%, -100%)",
 
-            backgroundImage: `url(${UI_SPRITES.levelUpBeamSheet})`,
+            backgroundImage: `url(${LEVEL_UP_BEAM_SPRITESHEET})`,
             backgroundRepeat: "no-repeat",
             backgroundSize: "600% 100%",
             backgroundPosition: `${(beamFrame / 5) * 100}% 0%`,
@@ -174,21 +178,21 @@ export function LevelUpScreen() {
                   <div
                     className="upgrade-container-sprite"
                     style={{
-                      backgroundImage: `url(${UI_SPRITES.containerSheet})`,
+                      backgroundImage: `url(${CONTAINER_SPRITESHEET})`,
                       backgroundPosition: `0% ${containerRow * 100}%`,
                     }}
                   />
                   <div
                     className="upgrade-filler-sprite"
                     style={{
-                      backgroundImage: `url(${UI_SPRITES.containerSheet})`,
+                      backgroundImage: `url(${CONTAINER_SPRITESHEET})`,
                       backgroundPosition: `100% ${containerRow * 100}%`,
                     }}
                   />
                   <div
                     className="upgrade-sprite"
                     style={{
-                      backgroundImage: `url(${UI_SPRITES.upgradesSheet})`,
+                      backgroundImage: `url(${UPGRADES_SPRITESHEET})`,
                       backgroundSize: "400% 400%",
                       backgroundPosition: `${(iconCol / 3) * 100}% ${(iconRow / 3) * 100}%`,
                     }}
@@ -302,12 +306,8 @@ export default function GameUI() {
   const { phase, start, restart } = useGame();
   const { hearts, maxHearts, ammo, maxAmmo, xp, xpToNextLevel, level, showLevelUpScreen, reset: resetPlayer } = usePlayer();
   const { generateDungeon, reset: resetDungeon } = useDungeon();
-  const { reset: resetEnemies, elapsedTime } = useEnemies();
+  const { reset: resetEnemies } = useEnemies();
   const progress = showLevelUpScreen ? 1 : Math.min(xp / xpToNextLevel, 1);
-  const totalSeconds = Math.floor(elapsedTime);
-  const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
-  const seconds = String(totalSeconds % 60).padStart(2, "0");
-
 
   const handleStart = () => {
     resetPlayer();
@@ -410,22 +410,6 @@ export default function GameUI() {
             >
               Lv {level}
             </span>
-          </div>
-
-          <div
-            style={{
-              position: "absolute",
-              top: 8,
-              left: 16,
-              color: "#f8fafc",
-              fontFamily: "'Pixelify Sans', monospace",
-              letterSpacing: "0.08em",
-              fontSize: 24,
-              textShadow: "2px 2px 0 #000",
-              imageRendering: "pixelated",
-            }}
-          >
-            {minutes}:{seconds}
           </div>
 
           <CardContent className="p-0">

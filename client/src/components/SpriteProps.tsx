@@ -1,12 +1,7 @@
-export const BASE_SPRITE_SIZE = 32; // native sprite resolution
-export const GLOBAL_SCALE = 2;
-export const BASE_SCALE = GLOBAL_SCALE; // global pixel upscaling factor
+import { useEffect, useState } from "react";
 
-const loadImage = (src: string) => {
-  const img = new Image();
-  img.src = src;
-  return img;
-};
+export const BASE_SPRITE_SIZE = 32; // native sprite resolution
+export const BASE_SCALE = 3;        // global pixel upscaling factor
 
 export type SpriteDef = {
   img: HTMLImageElement;
@@ -17,16 +12,11 @@ export type SpriteDef = {
 export type EnemySpriteType = "basic" | "tank" | "eyeball" | "tree";
 
 export const WeaponSprites = {
-  revolver: loadImage("/sprites/revolver.png"),
-};
-
-export const UI_SPRITES = {
-  levelUpBeamSheet: "/sprites/upgrades/level-up-spritesheet.png",
-  containerSheet: "/sprites/upgrades/containers-spritesheet.png",
-  upgradesSheet: "/sprites/upgrades/upgrades-spritesheet.png",
-  heart: "/sprites/heart.png",
-  ammo: "/sprites/ammo.png",
-  crosshair: "/sprites/crosshair.png",
+  revolver: (() => {
+    const img = new Image();
+    img.src = "/sprites/revolver.png";
+    return img;
+  })(),
 };
 
 export function UpgradeIcon({
@@ -68,7 +58,7 @@ export function HeartHUD({ currentHP, maxHP }: HeartHUDProps) {
         return (
           <img
             key={i}
-            src={UI_SPRITES.heart}
+            src="/sprites/heart.png"
             draggable={false}
             style={{
               width: size,
@@ -98,7 +88,7 @@ export function AmmoHUD({ ammo, maxAmmo }: AmmoHUDProps) {
         return (
           <img
             key={i}
-            src={UI_SPRITES.ammo}
+            src="/sprites/ammo.png"
             draggable={false}
             style={{
               width: size,
@@ -123,7 +113,7 @@ export function CursorSprite({ x, y }: CursorSpriteProps) {
 
   return (
     <img
-      src={UI_SPRITES.crosshair}
+      src="/sprites/crosshair.png"
       draggable={false}
       className="cursor-sprite image-rendering-pixelated"
       style={{
@@ -148,24 +138,28 @@ export function getProjectileImage() {
 
 let enemyProjectileImage: HTMLImageElement | null = null;
 
-const createEnemySprite = (src: string, size = 32, scale = GLOBAL_SCALE): SpriteDef => ({
-  img: loadImage(src),
+const createEnemySprite = (src: string, size = 32, scale = 2): SpriteDef => ({
+  img: (() => {
+    const img = new Image();
+    img.src = src;
+    return img;
+  })(),
   size,
   scale,
 });
 
 export const enemySpritesByType: Record<EnemySpriteType, SpriteDef> = {
-  basic: createEnemySprite("/sprites/enemy/basic-enemy.png", 32, GLOBAL_SCALE),
-  tank: createEnemySprite("/sprites/enemy/tank-enemy.png", 48, GLOBAL_SCALE),
-  eyeball: createEnemySprite("/sprites/enemy/eyeball-enemy.png", 48, GLOBAL_SCALE),
-  tree: createEnemySprite("/sprites/enemy/tree-enemy.png", 48, GLOBAL_SCALE),
+  basic: createEnemySprite("/sprites/enemy/basic-enemy.png", 32, 2),
+  tank: createEnemySprite("/sprites/enemy/tank-enemy.png", 48, 2),
+  eyeball: createEnemySprite("/sprites/enemy/eyeball-enemy.png", 48, 2),
+  tree: createEnemySprite("/sprites/enemy/tree-enemy.png", 48, 2),
 };
 
 export const enemyEyeSpritesByType: Record<EnemySpriteType, SpriteDef> = {
-  basic: createEnemySprite("/sprites/enemy/basic-enemy-eyes.png", 32, GLOBAL_SCALE),
-  tank: createEnemySprite("/sprites/enemy/tank-enemy-eyes.png", 48, GLOBAL_SCALE),
-  eyeball: createEnemySprite("/sprites/enemy/eyeball-enemy-eyes.png", 48, GLOBAL_SCALE),
-  tree: createEnemySprite("/sprites/enemy/tree-enemy-eyes.png", 96, GLOBAL_SCALE),
+  basic: createEnemySprite("/sprites/enemy/basic-enemy-eyes.png", 32, 2),
+  tank: createEnemySprite("/sprites/enemy/tank-enemy-eyes.png", 48, 2),
+  eyeball: createEnemySprite("/sprites/enemy/eyeball-enemy-eyes.png", 48, 2),
+  tree: createEnemySprite("/sprites/enemy/tree-enemy-eyes.png", 96, 2),
 };
 
 export const enemySprite = enemySpritesByType.basic;
@@ -173,40 +167,80 @@ export const enemySprite = enemySpritesByType.basic;
 export const bossEnemySprite: SpriteDef = {
   img: enemySprite.img,
   size: 32,
-  scale: GLOBAL_SCALE,
+  scale: 2,
 };
 
-export const xpSprite = loadImage("/sprites/xp.png");
+export const xpSprite = (() => {
+  const img = new Image();
+  img.src = "/sprites/xp.png";
+  return img;
+})();
 
 export const SummonSprites = {
-  ghostSheet: loadImage("/sprites/ghost-spritesheet.png"),
-  scythe: loadImage("/sprites/scythe.png"),
-  dagger: loadImage("/sprites/dagger.png"),
+  ghostSheet: (() => {
+    const img = new Image();
+    img.src = "/sprites/ghost-spritesheet.png";
+    return img;
+  })(),
+  scythe: (() => {
+    const img = new Image();
+    img.src = "/sprites/scythe.png";
+    return img;
+  })(),
+  dagger: (() => {
+    const img = new Image();
+    img.src = "/sprites/dagger.png";
+    return img;
+  })(),
 };
 
-export const enemyEyeballProjectileSprite = loadImage("/sprites/enemy/enemy-projectile.png");
+export const enemyEyeballProjectileSprite = (() => {
+  const img = new Image();
+  img.src = "/sprites/enemy/enemy-projectile.png";
+  return img;
+})();
 
-export const enemyDeathSpritesheet = loadImage("/sprites/enemy/enemy-death-spritesheet.png");
+export const enemyDeathSpritesheet = (() => {
+  const img = new Image();
+  img.src = "/sprites/enemy/enemy-death-spritesheet.png";
+  return img;
+})();
 
-export const lazarusBossSpriteSheet = loadImage("/sprites/enemy/lazarus-boss.png");
+export const shoggothBossSpriteSheet = (() => {
+  const img = new Image();
+  img.src = "/sprites/enemy/shoggoth-boss.png";
+  return img;
+})();
 
-export const bossLaserSpriteSheet = loadImage("/sprites/enemy/boss-laser.png");
+export const bossLaserSpriteSheet = (() => {
+  const img = new Image();
+  img.src = "/sprites/enemy/boss-laser.png";
+  return img;
+})();
 
-export const bossLaserContinueSprite = loadImage("/sprites/enemy/boss-laser-continued.png");
+export const bossLaserContinueSprite = (() => {
+  const img = new Image();
+  img.src = "/sprites/enemy/boss-laser-continued.png";
+  return img;
+})();
 
-export const bossLaserWindupSprite = loadImage("/sprites/enemy/boss-laser-windup.png");
+export const bossLaserWindupSprite = (() => {
+  const img = new Image();
+  img.src = "/sprites/enemy/boss-laser-windup.png";
+  return img;
+})();
 
 export const VisualSprites = {
-  impactSheet: loadImage("/sprites/impact-spritesheet.png"),
-  muzzleFlash: loadImage("/sprites/muzzle-flash.png"),
-};
-
-export const EnvironmentSprites = {
-  grass: loadImage("/textures/grass.png"),
-  treeEnemy: loadImage("/sprites/enemy/tree-enemy.png"),
-  treeEnemyEyes: loadImage("/sprites/enemy/tree-enemy-eyes.png"),
-  electricityLine: loadImage("/sprites/electricity-line-spritesheet.png"),
-  tentacleSheet: loadImage("/sprites/tentacle-spritesheet.png"),
+  impactSheet: (() => {
+    const img = new Image();
+    img.src = "/sprites/impact-spritesheet.png"; // your spritesheet
+    return img;
+  })(),
+  muzzleFlash: (() => {
+    const img = new Image();
+    img.src = "/sprites/muzzle-flash.png";
+    return img;
+  })(),
 };
 
 
