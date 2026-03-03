@@ -1601,7 +1601,6 @@ export default function CanvasGame() {
         const w = sprite.naturalWidth;
         const h = sprite.naturalHeight;
 
-        // Grip anchor: left-middle of sprite
         ctx.drawImage(sprite, -w, -h / 2, w, h);
 
         ctx.restore();
@@ -1645,10 +1644,10 @@ export default function CanvasGame() {
           const t = i / trail.length; // 0 = head, 1 = tail
           const scale = 1 - t * 0.99;
           const maxSize = Math.ceil(proj.size);
-          const step = 1.5; //shrink
+          const step = 1; //shrink
 
           const size = Math.max(
-            2,
+            1,
             Math.floor(maxSize - i * step)
           );
           const p = worldToScreen(trail[i]);

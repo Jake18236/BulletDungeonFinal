@@ -51,16 +51,10 @@ export interface Projectile {
   triggerOnHit?: boolean;
 }
 
-interface TrailGhost {
-  id: string;
-  trail: THREE.Vector3[];
-  segments: { x: number; y: number; alpha: number; size: number }[];
-  life: number; // 0.15 seconds fade
-}
 
 interface ProjectilesState {
   projectiles: Projectile[];
-  trailGhosts: TrailGhost[];
+
 
   addProjectile: (config: {
     position: THREE.Vector3;
@@ -111,7 +105,7 @@ interface ProjectilesState {
 
 export const useProjectiles = create<ProjectilesState>((set, get) => ({
   projectiles: [],
-  trailGhosts: [],
+
 
   addProjectile: (config: {
     position: THREE.Vector3;
@@ -189,7 +183,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
     }
 
     const updated: Projectile[] = [];
-    const { trailGhosts } = get();
+
     for (const proj of get().projectiles) {
       // --- Move projectile ---
 
@@ -197,15 +191,6 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       
       const drag = proj.drag;
       proj.velocity.multiplyScalar(Math.pow(drag, delta * 60));
-
-      // Subtle curvature (perpendicular force)
-      const lateral = new THREE.Vector3(
-        -proj.velocity.z,
-        0,
-        proj.velocity.x
-      ).normalize();
-
-      proj.velocity.add(lateral.multiplyScalar(0.15 * delta));
       // --- Move projectile ---
       const move = proj.velocity.clone().multiplyScalar(delta);
       proj.position.add(move);
@@ -222,8 +207,8 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
 
       const lastPos = proj.trailHistory[0] ?? proj.position.clone();
       const dist = Math.ceil(proj.position.distanceTo(lastPos));
-      if (dist > 0.80) {
-        const steps = Math.ceil(dist / 0.80);
+      if (dist > 0.20) {
+        const steps = Math.ceil(dist / 0.20);
         for (let s = 1; s <= steps; s++) {
           const interpolated = lastPos.clone().lerp(proj.position, s / steps);
           proj.trailHistory.unshift(interpolated);
@@ -259,13 +244,6 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
 
       if (proj.life <= 0) {
         if (proj.trailHistory.length > 1) {
-          trailGhosts.push({
-            id: proj.id,
-            life: 0.2,
-            trail: [...proj.trailHistory],
-            color: proj.color,
-            size: proj.size,
-          });
         }
         continue;
       }
@@ -342,33 +320,25 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
           );
 
           // ===================== BOUNCE LOGIC =====================
-          if (proj.bouncing > 0) {
-            const hitNormal = toEnemy.lengthSq() > 0.000001
-              ? toEnemy.clone().normalize()
-              : proj.velocity.clone().normalize().multiplyScalar(-1);
 
-            proj.velocity.reflect(hitNormal);
+if (proj.bouncesLeft > 0) {
+      
+  const normal = proj.position.clone().sub(enemy.position);
+  normal.y = 0;
 
-            const retainedSpeed = Math.max(proj.speed * 0.7, proj.velocity.length() * 0.9);
-            if (proj.velocity.lengthSq() < 0.000001) {
-              proj.velocity.copy(hitNormal).multiplyScalar(-retainedSpeed);
-            } else {
-              proj.velocity.normalize().multiplyScalar(retainedSpeed);
-            }
-            proj.rotationY = Math.atan2(proj.velocity.x, proj.velocity.z);
+const outward = proj.position.clone().sub(enemy.position).normalize();
+proj.velocity.copy(outward.multiplyScalar(proj.speed));
 
-            // Mark this enemy as hit
-            proj.piercedEnemies.add(enemy.id);
 
-            // Move projectile slightly away to prevent overlap
-            proj.position.copy(
-              enemy.position
-                .clone()
-                .add(hitNormal.clone().multiplyScalar(enemyRadius + Math.max(0.2, proj.size * 0.01) + 0.05)),
-            );
+  proj.rotationY = Math.atan2(proj.velocity.x, proj.velocity.z);
 
-            continue; // skip piercing logic since we bounced
-          }
+  proj.bouncesLeft--;
+
+  // Important: do NOT mark as pierced during bounce phase
+  // or piercing logic will get corrupted
+
+  continue;
+}
 
           // ===================== PIERCE LOGIC =====================
           proj.piercedEnemies.add(enemy.id);
@@ -390,13 +360,9 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
     }
 
     // --- Update ghost trails ---
-    const newGhosts = trailGhosts
-      .map((g) => ({ ...g, life: g.life - delta }))
-      .filter((g) => g.life > 0);
 
     set({
       projectiles: updated,
-      trailGhosts: newGhosts,
     });
   },
   
@@ -405,7 +371,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       projectiles: s.projectiles.filter((p) => p.id !== id),
     })),
 
-  reset: () => set({ projectiles: [], trailGhosts: [] }),
+  reset: () => set({ projectiles: []}),
 }));
 
 
