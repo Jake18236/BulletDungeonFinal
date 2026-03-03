@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import Matter from "matter-js";
 import { usePlayer } from "../lib/stores/usePlayer";
-import { ENEMY_TYPE_CONFIG, SHOGGOTH_CONFIG, useEnemies } from "../lib/stores/useEnemies";
+import { ENEMY_TYPE_CONFIG, LAZARUS_CONFIG, useEnemies } from "../lib/stores/useEnemies";
 import { bounceAgainstBounds } from "../lib/collision";
 import { useGame } from "../lib/stores/useGame";
 import { useAudio } from "../lib/stores/useAudio";
@@ -30,32 +30,26 @@ import {
   EnemySpriteType,
   enemyEyeballProjectileSprite,
   enemyDeathSpritesheet,
-  shoggothBossSpriteSheet,
+  lazarusBossSpriteSheet,
   bossLaserSpriteSheet,
   bossLaserContinueSprite,
   bossLaserWindupSprite,
+  EnvironmentSprites,
+  GLOBAL_SCALE,
 } from "./SpriteProps";
 
 const TILE_SIZE = 50;
 export const CANVAS_WIDTH = 1490;
 export const CANVAS_HEIGHT = 750;
 const ROOM_SIZE = 2000;
-const SHOGGOTH_BASE_BEAM_LENGTH_WORLD = (304 * 4) / (TILE_SIZE / 2);
-const SHOGGOTH_BEAM_LENGTH_WORLD = SHOGGOTH_BASE_BEAM_LENGTH_WORLD * SHOGGOTH_CONFIG.beamLengthScale;
+const LAZARUS_BASE_BEAM_LENGTH_WORLD = (304 * 4) / (TILE_SIZE / 2);
+const LAZARUS_BEAM_LENGTH_WORLD = LAZARUS_BASE_BEAM_LENGTH_WORLD * LAZARUS_CONFIG.beamLengthScale;
 
-const grassSprite = new Image();
-grassSprite.src = "/textures/grass.png";
-
-const treeSprite = new Image();
-treeSprite.src = "/sprites/enemy/tree-enemy.png";
-
-const treeEnemyEyesSprite = new Image();
-treeEnemyEyesSprite.src = "/sprites/enemy/tree-enemy-eyes.png";
-
-const electricityLineSpriteSheet = new Image();
-electricityLineSpriteSheet.src = "/sprites/electricity-line-spritesheet.png";
-
-const tentacleSheet = new Image();
+const grassSprite = EnvironmentSprites.grass;
+const treeSprite = EnvironmentSprites.treeEnemy;
+const treeEnemyEyesSprite = EnvironmentSprites.treeEnemyEyes;
+const electricityLineSpriteSheet = EnvironmentSprites.electricityLine;
+const tentacleSheet = EnvironmentSprites.tentacleSheet;
 
 
 const TENTACLE_FRAME_WIDTH = 48;
@@ -199,8 +193,8 @@ function getEnemyType(enemy: { type?: string }): EnemySpriteType {
 }
 
 function getEnemyBodyHitRadius(enemy: { type?: string; isBoss?: boolean; bossType?: string }) {
-  if (enemy.isBoss && enemy.bossType === "shoggoth") {
-    return SHOGGOTH_CONFIG.bodyHitRadius;
+  if (enemy.isBoss && enemy.bossType === "lazarus") {
+    return LAZARUS_CONFIG.bodyHitRadius;
   }
   return ENEMY_TYPE_CONFIG[getEnemyType(enemy)].bodyHitRadius;
 }
@@ -400,7 +394,7 @@ export default function CanvasGame() {
     
     if (e.code === "KeyB") {
       const spawnPos = position.clone().add(new THREE.Vector3(20, 0, 0));
-      useEnemies.getState().spawnShoggothBoss(spawnPos);
+      useEnemies.getState().spawnLazarusBoss(spawnPos);
     }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -851,7 +845,7 @@ export default function CanvasGame() {
 
 
         // #########################################################################
-        if (enemy.isBoss && enemy.bossType === "shoggoth") {
+        if (enemy.isBoss && enemy.bossType === "lazarus") {
           const updated = { ...enemy };
 
           if (!updated.isEnraged && updated.health < updated.maxHealth * 0.45) {
@@ -866,8 +860,8 @@ export default function CanvasGame() {
           const safeDirection = distanceToPlayer > 0.001 ? dirToPlayer.clone().normalize() : new THREE.Vector3(1, 0, 0);
           const orbitDirection = new THREE.Vector3(-safeDirection.z, 0, safeDirection.x);
 
-          const canAdvance = distanceToPlayer > SHOGGOTH_CONFIG.idealDistance;
-          const canRetreat = distanceToPlayer < SHOGGOTH_CONFIG.minDistance;
+          const canAdvance = distanceToPlayer > LAZARUS_CONFIG.idealDistance;
+          const canRetreat = distanceToPlayer < LAZARUS_CONFIG.minDistance;
 
           if (updated.attackState === "chasing") {
             let moveDirection = new THREE.Vector3();
@@ -883,7 +877,7 @@ export default function CanvasGame() {
 
             updated.rotationY = Math.atan2(safeDirection.z, safeDirection.x);
             updated.projectileCooldown = (updated.projectileCooldown ?? 0) - delta;
-            if (updated.projectileCooldown <= 0 && distanceToPlayer <= SHOGGOTH_CONFIG.maxDistance) {
+            if (updated.projectileCooldown <= 0 && distanceToPlayer <= LAZARUS_CONFIG.maxDistance) {
               updated.attackState = "laser_windup";
 
               
@@ -910,14 +904,14 @@ export default function CanvasGame() {
               
               updated.windUpTimer = 0;
               updated.laserBaseRotation = updated.rotationY ?? Math.atan2(lockedDirection.z, lockedDirection.x);
-              updated.projectileCooldown = SHOGGOTH_CONFIG.beamDamageInterval;
+              updated.projectileCooldown = LAZARUS_CONFIG.beamDamageInterval;
               playHit();
             }
           } else if (updated.attackState === "laser_firing") {
             if (phase === "playing") cameraRef.current.shake({ strength: 5, durationMs: 1000});
             updated.windUpTimer = (updated.windUpTimer ?? 0) + delta;
-            const fireDuration = SHOGGOTH_CONFIG.fireDuration;
-            const spinAmount = (updated.windUpTimer ?? 0) * SHOGGOTH_CONFIG.rotationSpeed;
+            const fireDuration = LAZARUS_CONFIG.fireDuration;
+            const spinAmount = (updated.windUpTimer ?? 0) * LAZARUS_CONFIG.rotationSpeed;
             const baseRotation = updated.laserBaseRotation ?? updated.rotationY ?? 0;
             const currentRotation = baseRotation + spinAmount;
             updated.rotationY = currentRotation;
@@ -927,8 +921,8 @@ export default function CanvasGame() {
             
             updated.projectileCooldown = (updated.projectileCooldown ?? 0) - delta;
             if (updated.projectileCooldown <= 0) {
-              const beamOriginOffsetWorld = SHOGGOTH_CONFIG.beamOriginOffsetPx / (TILE_SIZE / 2);
-              for (const beamOffset of SHOGGOTH_CONFIG.beamAngles) {
+              const beamOriginOffsetWorld = LAZARUS_CONFIG.beamOriginOffsetPx / (TILE_SIZE / 2);
+              for (const beamOffset of LAZARUS_CONFIG.beamAngles) {
                 
                 const beamAngle = currentRotation + beamOffset;
                 const beamDirection = new THREE.Vector3(Math.cos(beamAngle), 0, Math.sin(beamAngle));
@@ -939,20 +933,20 @@ export default function CanvasGame() {
 
                 if (
                   along >= 0.35 &&
-                  along <= SHOGGOTH_BEAM_LENGTH_WORLD &&
-                  lateral <= SHOGGOTH_CONFIG.beamHalfWidthWorld &&
+                  along <= LAZARUS_BEAM_LENGTH_WORLD &&
+                  lateral <= LAZARUS_CONFIG.beamHalfWidthWorld &&
                   invincibilityTimer <= 0 &&
                   !damagedThisFrameRef.current
                 ) {
                   applyPlayerDamage(
                     updated.isEnraged ? 1 : 1,
-                    beamOrigin.clone().add(beamDirection.clone().multiplyScalar(Math.min(along, SHOGGOTH_BEAM_LENGTH_WORLD))),
+                    beamOrigin.clone().add(beamDirection.clone().multiplyScalar(Math.min(along, LAZARUS_BEAM_LENGTH_WORLD))),
                   );
                   damagedThisFrameRef.current = true;
                 }
               }
 
-              updated.projectileCooldown = SHOGGOTH_CONFIG.beamDamageInterval;
+              updated.projectileCooldown = LAZARUS_CONFIG.beamDamageInterval;
             }
 
             if (updated.windUpTimer >= fireDuration) {
@@ -1312,7 +1306,7 @@ export default function CanvasGame() {
 
         const frameW = treeSprite.naturalWidth / 3;
         const frameH = treeSprite.naturalHeight;
-        const scale = 2;
+        const scale = GLOBAL_SCALE;
         const drawW = frameW * scale;
         const drawH = frameH * scale;
         ctx.drawImage(
@@ -1449,7 +1443,7 @@ export default function CanvasGame() {
       const sprite = xpSprite; // assume you imported or loaded xp.png as xpImage
 
       if (sprite.complete) {
-        const scale = 2; // adjust size as needed
+        const scale = GLOBAL_SCALE; // adjust size as needed
         const w = sprite.width * scale;
         const h = sprite.height * scale;
 
@@ -1550,7 +1544,7 @@ export default function CanvasGame() {
 
     if (type === "revolver") {
       
-      const scale = 2;
+      const scale = GLOBAL_SCALE;
       let gunRotation = mouseAngle;
       
       
@@ -1821,7 +1815,7 @@ export default function CanvasGame() {
     if (!enemy || !enemy.position) return;
     if (enemy.position.x == null || enemy.position.z == null) return;
 
-    if (enemy.isBoss && enemy.bossType === "shoggoth") {
+    if (enemy.isBoss && enemy.bossType === "lazarus") {
       return;
     }
 
@@ -1867,7 +1861,7 @@ export default function CanvasGame() {
         const frameH = treeEnemyEyesSprite.naturalHeight;
         const eyeFrame = enemy.spriteFrame === 1 ? 0 : 1;
         const radiusPx = enemy.radius * (TILE_SIZE / 2);
-        const scale = 2;
+        const scale = GLOBAL_SCALE;
         const drawW = frameW * scale;
         const drawH = frameH * scale;
 
@@ -1891,11 +1885,11 @@ export default function CanvasGame() {
 
     if (!enemy.position) return;
 
-    if (enemy.isBoss && enemy.bossType === "shoggoth") {
+    if (enemy.isBoss && enemy.bossType === "lazarus") {
       const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
       const screenX = centerX + ((enemy.position.x - position.x) * TILE_SIZE) / 2;
       const screenY = centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2;
-      const bossSheet = shoggothBossSpriteSheet;
+      const bossSheet = lazarusBossSpriteSheet;
       const windupSheet = bossLaserWindupSprite;
       const laserSheet = bossLaserSpriteSheet;
       const laserContinueSheet = bossLaserContinueSprite;
@@ -1934,9 +1928,9 @@ export default function CanvasGame() {
       }
 
       const aimAngle = enemy.rotationY ?? 0;
-      const beamLengthPx = 304 * SHOGGOTH_CONFIG.beamLengthScale;
+      const beamLengthPx = 304 * LAZARUS_CONFIG.beamLengthScale;
       const beamWidthPx = 32;
-      const beamOriginOffsetPx = SHOGGOTH_CONFIG.beamOriginOffsetPx;
+      const beamOriginOffsetPx = LAZARUS_CONFIG.beamOriginOffsetPx;
       const laserBaseRotation = enemy.laserBaseRotation ?? aimAngle;
 
       const drawTiledBeam = (
@@ -1988,7 +1982,7 @@ export default function CanvasGame() {
       if (enemy.attackState === "laser_windup" && hasWindupSheet) {
         const pulse = 0.82 + Math.sin(animationNowMs / 85) * 0.16;
 
-        for (const beamOffset of SHOGGOTH_CONFIG.beamAngles) {
+        for (const beamOffset of LAZARUS_CONFIG.beamAngles) {
           const beamAngle = aimAngle + beamOffset;
           const startX = screenX + Math.cos(beamAngle) * beamOriginOffsetPx;
           const startY = screenY + Math.sin(beamAngle) * beamOriginOffsetPx;
@@ -2013,7 +2007,7 @@ export default function CanvasGame() {
         const frameH = laserSheet.naturalHeight;
         const continueFrameW = hasLaserContinueSheet ? laserContinueSheet.naturalWidth / 6 : frameW;
         const continueFrameH = hasLaserContinueSheet ? laserContinueSheet.naturalHeight : frameH;
-        const fireProgress = Math.min(1, (enemy.windUpTimer ?? 0) / SHOGGOTH_CONFIG.fireDuration);
+        const fireProgress = Math.min(1, (enemy.windUpTimer ?? 0) / LAZARUS_CONFIG.fireDuration);
 
         let frame = 1;
         if (fireProgress < 0.03) {
@@ -2023,8 +2017,8 @@ export default function CanvasGame() {
           frame = Math.min(5, 2 + Math.floor(dissipationProgress * 4));
         }
 
-        for (const beamOffset of SHOGGOTH_CONFIG.beamAngles) {
-          const beamAngle = laserBaseRotation + ((enemy.windUpTimer ?? 0) * SHOGGOTH_CONFIG.rotationSpeed) + beamOffset;
+        for (const beamOffset of LAZARUS_CONFIG.beamAngles) {
+          const beamAngle = laserBaseRotation + ((enemy.windUpTimer ?? 0) * LAZARUS_CONFIG.rotationSpeed) + beamOffset;
           const startX = screenX + Math.cos(beamAngle) * beamOriginOffsetPx;
           const startY = screenY + Math.sin(beamAngle) * beamOriginOffsetPx;
           
@@ -2220,7 +2214,7 @@ export default function CanvasGame() {
 
         if (!canDrawDagger) return;
 
-        const scale = 2;
+        const scale = GLOBAL_SCALE;
         const w = sprite.naturalWidth * scale;
         const h = sprite.naturalHeight * scale;
 
@@ -2242,7 +2236,7 @@ export default function CanvasGame() {
         const canDrawScythe = sprite.complete && sprite.naturalWidth > 0 && sprite.naturalHeight > 0;
 
         if (canDrawScythe) {
-          const scale = 4;
+          const scale = GLOBAL_SCALE * 2;
           const w = sprite.naturalWidth * scale;
           const h = sprite.naturalHeight * scale;
           ctx.rotate(summon.rotation ?? 0);

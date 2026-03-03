@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import * as THREE from "three";
-import { ENEMY_TYPE_CONFIG, SHOGGOTH_CONFIG } from "./useEnemies";
+import { ENEMY_TYPE_CONFIG, LAZARUS_CONFIG } from "./useEnemies";
 import { useVisualEffects } from "./useVisualEffects";
 
 export type DamageSource = {
@@ -292,7 +292,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
         toEnemy.y = 0; // ignore vertical for 2D plane
 
         const enemyRadius = enemy.type === "boss"
-          ? SHOGGOTH_CONFIG.bodyHitRadius
+          ? LAZARUS_CONFIG.bodyHitRadius
           : ENEMY_TYPE_CONFIG[enemy.type === "tank" || enemy.type === "eyeball" ? enemy.type : "basic"].bodyHitRadius;
         const distance = toEnemy.length();
 

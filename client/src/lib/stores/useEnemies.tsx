@@ -36,7 +36,7 @@ export const ENEMY_TYPE_CONFIG: Record<"basic" | "tank" | "eyeball", EnemyTypeBe
   },
 };
 
-export const SHOGGOTH_CONFIG = {
+export const LAZARUS_CONFIG = {
   bodyHitRadius: 3.0,
   collisionRadius: 10,
   idealDistance: 12,
@@ -76,7 +76,7 @@ export interface Enemy {
 
   // BOSSS PROPERTIES:
   isBoss?: boolean;
-  bossType?: "shoggoth";
+  bossType?: "lazarus";
   dashCooldown?: number;
   maxDashCooldown?: number;
   windUpTimer?: number;
@@ -105,7 +105,7 @@ export interface DamagePopup {
   life: number; 
 }
 
-type SpawnSessionEnemyType = "basic" | "tank" | "eyeball" | "shoggoth";
+type SpawnSessionEnemyType = "basic" | "tank" | "eyeball" | "lazarus";
 
 interface SpawnSession {
   id: string;
@@ -132,7 +132,7 @@ interface EnemiesState {
   elapsedTime: number;
   updateAutoSpawn: (delta: number, playerPos: THREE.Vector3) => void;
   updateDamagePopups: (delta: number) => void;
-  spawnShoggothBoss: (position: THREE.Vector3) => void;
+  spawnLazarusBoss: (position: THREE.Vector3) => void;
 }
 
 export const useEnemies = create<EnemiesState>((set, get) => {
@@ -182,7 +182,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
     createSession("tank_6_9", "tank", "2:00", "3:00", 200, 6, 2, 2),
     createSession("tank_6_2", "tank", "3:00", "30:00", 1000, 580, 5, 10),
     //boss
-    createSession("shoggoth_5_10", "shoggoth", "1:00", "30:00", 2500, 1, 30, 1),
+    createSession("lazarus_5_10", "lazarus", "1:00", "30:00", 2500, 1, 30, 1),
     
     
   ];
@@ -373,9 +373,9 @@ export const useEnemies = create<EnemiesState>((set, get) => {
     removeEnemy: (id) =>
       set((state) => ({ enemies: state.enemies.filter((e) => e.id !== id) })),
 
-    spawnShoggothBoss: (position) => {
+    spawnLazarusBoss: (position) => {
       const boss: Enemy = {
-        id: "boss_shoggoth_" + Date.now(),
+        id: "boss_lazarus_" + Date.now(),
         position: position.clone(),
         health: 420,
         maxHealth: 420,
@@ -391,7 +391,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
         hitFlash: 0,
 
         isBoss: true,
-        bossType: "shoggoth",
+        bossType: "lazarus",
 
         dashCooldown: 3.2,
         maxDashCooldown: 3.2,
@@ -446,8 +446,8 @@ export const useEnemies = create<EnemiesState>((set, get) => {
             playerPos.z + Math.sin(angle) * distance,
           );
 
-          if (session.enemy === "shoggoth") {
-            get().spawnShoggothBoss(spawnPos);
+          if (session.enemy === "lazarus") {
+            get().spawnLazarusBoss(spawnPos);
             const currentEnemies = get().enemies;
             const spawnedBoss = currentEnemies[currentEnemies.length - 1];
             if (!spawnedBoss) continue;
