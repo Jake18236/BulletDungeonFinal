@@ -1627,7 +1627,7 @@ export default function CanvasGame() {
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate(angle);
-      ctx.drawImage(img, -size / 2, -size / 2, size, size);
+      ctx.drawImage(img, Math.floor(-size / 2), Math.floor(-size / 2), Math.floor(size), Math.floor(size));
       ctx.restore();
     };
     // --- DRAW ACTIVE PROJECTILES ---
@@ -1636,7 +1636,7 @@ export default function CanvasGame() {
       const trail = proj.trailHistory;
         for (let i = 0; i < trail.length; i++) {
           const t = i / trail.length; // 0 = head, 1 = tail
-          const scale = 1 - t * 0.99;
+
           const maxSize = Math.ceil(proj.size);
           const step = 1; //shrink
 
