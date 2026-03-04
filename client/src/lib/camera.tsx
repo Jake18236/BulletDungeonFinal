@@ -113,6 +113,14 @@ if (this.shakeTimeRemainingMs > 0) {
     this.shakeTimeRemainingMs = Math.max(this.shakeTimeRemainingMs, durationMs);
   }
 
+  resetShake() {
+    this.shakeTimeRemainingMs = 0;
+    this.shakeDurationMs = 0;
+    this.shakeStrength = 0;
+    this.shakeX = 0;
+    this.shakeY = 0;
+  }
+
   getRenderOffset() {
     return {
       x: -this.pullX + this.shakeX,

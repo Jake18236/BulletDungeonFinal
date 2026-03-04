@@ -206,7 +206,7 @@ export const enemyDeathSpritesheet = (() => {
   return img;
 })();
 
-export const shoggothBossSpriteSheet = (() => {
+export const lazarusBossSpriteSheet = (() => {
   const img = new Image();
   img.src = "/sprites/enemy/shoggoth-boss.png";
   return img;

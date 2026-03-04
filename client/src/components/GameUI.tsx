@@ -306,8 +306,11 @@ export default function GameUI() {
   const { phase, start, restart } = useGame();
   const { hearts, maxHearts, ammo, maxAmmo, xp, xpToNextLevel, level, showLevelUpScreen, reset: resetPlayer } = usePlayer();
   const { generateDungeon, reset: resetDungeon } = useDungeon();
-  const { reset: resetEnemies } = useEnemies();
+  const { reset: resetEnemies, elapsedTime } = useEnemies();
   const progress = showLevelUpScreen ? 1 : Math.min(xp / xpToNextLevel, 1);
+  const elapsedMinutes = Math.floor(elapsedTime / 60);
+  const elapsedSeconds = Math.floor(elapsedTime % 60);
+  const timerText = `${elapsedMinutes.toString().padStart(2, "0")}:${elapsedSeconds.toString().padStart(2, "0")}`;
 
   const handleStart = () => {
     resetPlayer();
@@ -443,6 +446,14 @@ export default function GameUI() {
 
 
       
+
+      <div className="fixed top-4 right-4 z-40">
+        <Card className="bg-black bg-opacity-80 text-white border-gray-600">
+          <CardContent className="px-4 py-2">
+            <p className="text-lg font-mono">{timerText}</p>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Instructions */}
       <div className="fixed bottom-4 left-4 z-40">

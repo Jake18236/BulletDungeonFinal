@@ -1,9 +1,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import Matter from "matter-js";
 import { usePlayer } from "../lib/stores/usePlayer";
-import { ENEMY_TYPE_CONFIG, SHOGGOTH_CONFIG, useEnemies } from "../lib/stores/useEnemies";
+import { ENEMY_TYPE_CONFIG, SHOGGOTH_CONFIG, useEnemies, type Enemy } from "../lib/stores/useEnemies";
 import { bounceAgainstBounds } from "../lib/collision";
 import { useGame } from "../lib/stores/useGame";
 import { useAudio } from "../lib/stores/useAudio";
@@ -30,7 +29,7 @@ import {
   EnemySpriteType,
   enemyEyeballProjectileSprite,
   enemyDeathSpritesheet,
-  shoggothBossSpriteSheet,
+  lazarusBossSpriteSheet,
   bossLaserSpriteSheet,
   bossLaserContinueSprite,
   bossLaserWindupSprite,
@@ -40,8 +39,8 @@ const TILE_SIZE = 50;
 export const CANVAS_WIDTH = window.innerWidth;
 export const CANVAS_HEIGHT = window.innerHeight;
 const ROOM_SIZE = 2000;
-const SHOGGOTH_BASE_BEAM_LENGTH_WORLD = (304 * 4) / (TILE_SIZE / 2);
-const SHOGGOTH_BEAM_LENGTH_WORLD = SHOGGOTH_BASE_BEAM_LENGTH_WORLD * SHOGGOTH_CONFIG.beamLengthScale;
+const LAZARUS_BASE_BEAM_LENGTH_WORLD = (304 * 4) / (TILE_SIZE / 2);
+const LAZARUS_BEAM_LENGTH_WORLD = LAZARUS_BASE_BEAM_LENGTH_WORLD * SHOGGOTH_CONFIG.beamLengthScale;
 
 const grassSprite = new Image();
 grassSprite.src = "/textures/grass.png";
@@ -54,13 +53,6 @@ treeEnemyEyesSprite.src = "/sprites/enemy/tree-enemy-eyes.png";
 
 const electricityLineSpriteSheet = new Image();
 electricityLineSpriteSheet.src = "/sprites/electricity-line-spritesheet.png";
-
-const tentacleSheet = new Image();
-
-
-const TENTACLE_FRAME_WIDTH = 48;
-const TENTACLE_FRAME_HEIGHT = 64;
-const TENTACLE_TOTAL_FRAMES = 6;
 
 
 interface EnemyProjectile {
@@ -82,12 +74,13 @@ interface EnemyDeathAnimation {
   frameDurationMs: number;
 }
 
-interface Position {
-  x: number;
-  y: number;
-  z: number;
+interface FootstepMark {
+  id: string;
+  position: THREE.Vector3;
+  life: number;
+  maxLife: number;
+  radius: number;
 }
-
 
 interface TerrainObstacle {
   id: number;
@@ -117,18 +110,6 @@ interface TreeLightningAttack {
 
 const { addSummon } = useSummons.getState();
 addSummon("dagger")
-
-function seededTileRandom(seed: number, x: number, z: number, salt: number) {
-  const value = Math.sin(seed * 0.17 + x * 12.9898 + z * 78.233 + salt * 37.719) * 43758.5453;
-  return value - Math.floor(value);
-}
-
-function normalizeAngle(angle: number) {
-  let normalized = angle;
-  while (normalized > Math.PI) normalized -= Math.PI * 2;
-  while (normalized < -Math.PI) normalized += Math.PI * 2;
-  return normalized;
-}
 
 function generateRoomTerrain(): TerrainObstacle[] {
   const trees: TerrainObstacle[] = [];
@@ -192,6 +173,62 @@ function checkTerrainCollision(
   return { collision: false };
 }
 
+function resolveTerrainPenetration(
+  pos: THREE.Vector3,
+  obstacles: TerrainObstacle[],
+  radius: number,
+): THREE.Vector3 {
+  const resolved = pos.clone();
+  for (let i = 0; i < 2; i++) {
+    for (const obs of obstacles) {
+      const dx = resolved.x - obs.x;
+      const dz = resolved.z - obs.z;
+      const combined = radius + obs.radius;
+      const distSq = dx * dx + dz * dz;
+      if (distSq >= combined * combined) continue;
+
+      const dist = Math.max(Math.sqrt(distSq), 0.0001);
+      const pushOut = combined - dist + 0.01;
+      resolved.x += (dx / dist) * pushOut;
+      resolved.z += (dz / dist) * pushOut;
+    }
+  }
+  return resolved;
+}
+
+function moveWithTerrainSlide(
+  currentPos: THREE.Vector3,
+  move: THREE.Vector3,
+  obstacles: TerrainObstacle[],
+  radius: number,
+): THREE.Vector3 {
+  const targetPos = currentPos.clone().add(move);
+  if (!checkTerrainCollision(targetPos, obstacles, radius).collision) {
+    return resolveTerrainPenetration(targetPos, obstacles, radius);
+  }
+
+  const move2 = new THREE.Vector2(move.x, move.z);
+  const length = move2.length();
+  if (length <= 0.00001) {
+    return resolveTerrainPenetration(currentPos, obstacles, radius);
+  }
+
+  const options = [
+    new THREE.Vector3(move.x, 0, 0),
+    new THREE.Vector3(0, 0, move.z),
+    new THREE.Vector3(move.z * 0.7, 0, -move.x * 0.7),
+    new THREE.Vector3(-move.z * 0.7, 0, move.x * 0.7),
+  ];
+
+  for (const option of options) {
+    const attempt = currentPos.clone().add(option);
+    if (!checkTerrainCollision(attempt, obstacles, radius).collision) {
+      return resolveTerrainPenetration(attempt, obstacles, radius);
+    }
+  }
+
+  return resolveTerrainPenetration(currentPos, obstacles, radius);
+}
 
 function getEnemyType(enemy: { type?: string }): EnemySpriteType {
   if (enemy.type === "tank" || enemy.type === "eyeball") return enemy.type;
@@ -199,7 +236,7 @@ function getEnemyType(enemy: { type?: string }): EnemySpriteType {
 }
 
 function getEnemyBodyHitRadius(enemy: { type?: string; isBoss?: boolean; bossType?: string }) {
-  if (enemy.isBoss && enemy.bossType === "shoggoth") {
+  if (enemy.isBoss && enemy.bossType === "lazarus") {
     return SHOGGOTH_CONFIG.bodyHitRadius;
   }
   return ENEMY_TYPE_CONFIG[getEnemyType(enemy)].bodyHitRadius;
@@ -278,6 +315,9 @@ export default function CanvasGame() {
   const treeLightningRef = useRef<TreeLightningAttack[]>([]);
   const gameStartTimeRef = useRef<number | null>(null);
   const treeLightningSpawnTimerRef = useRef<number>(0);
+  const footstepMarksRef = useRef<FootstepMark[]>([]);
+  const footstepSpawnTimerRef = useRef<number>(0);
+  const footstepSideRef = useRef<1 | -1>(1);
   const { particles, damageNumbers, impactEffects, addImpact, addExplosion, addDamageNumber, updateEffects } = useVisualEffects();
   const { phase, end } = useGame();
   const {
@@ -287,6 +327,7 @@ export default function CanvasGame() {
     level,
     availableUpgrades,
     takenUpgrades,
+    showLevelUpScreen,
     hearts,
     maxHearts,
     maxAmmo,
@@ -371,6 +412,8 @@ export default function CanvasGame() {
     terrainRef.current = generateRoomTerrain();
     treeLightningRef.current = [];
     treeLightningSpawnTimerRef.current = 0;
+    footstepMarksRef.current = [];
+    footstepSpawnTimerRef.current = 0;
   }, []);
 
   useEffect(() => {
@@ -386,8 +429,17 @@ export default function CanvasGame() {
       pausedAnimationTimeRef.current = 0;
       treeLightningRef.current = [];
       treeLightningSpawnTimerRef.current = 0;
+      footstepMarksRef.current = [];
+      footstepSpawnTimerRef.current = 0;
+      cameraRef.current.resetShake();
     }
   }, [phase]);
+
+  useEffect(() => {
+    if (showLevelUpScreen) {
+      cameraRef.current.resetShake();
+    }
+  }, [showLevelUpScreen]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -400,7 +452,7 @@ export default function CanvasGame() {
     
     if (e.code === "KeyB") {
       const spawnPos = position.clone().add(new THREE.Vector3(20, 0, 0));
-      useEnemies.getState().spawnShoggothBoss(spawnPos);
+      useEnemies.getState().spawnLazarusBoss(spawnPos);
     }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -802,21 +854,31 @@ export default function CanvasGame() {
           let dx = (moveX / len) * speed * delta * speedModifier;
           let dz = (moveZ / len) * speed * delta * speedModifier;
 
-          let currentPos = usePlayer.getState().position.clone();
-          let newPos = currentPos.clone().add(new THREE.Vector3(dx, 0, dz));
+          const currentPos = usePlayer.getState().position.clone();
+          const moveStep = new THREE.Vector3(dx, 0, dz);
+          const movedPos = moveWithTerrainSlide(currentPos, moveStep, terrainRef.current, 0.8);
 
-          const terrainCheck = checkTerrainCollision(newPos, terrainRef.current, 0.8);
-          if (terrainCheck.collision && terrainCheck.normal) {
-            dx = dx - terrainCheck.normal.x * (dx * terrainCheck.normal.x + dz * terrainCheck.normal.y);
-            dz = dz - terrainCheck.normal.y * (dx * terrainCheck.normal.x + dz * terrainCheck.normal.y);
-            newPos = currentPos.clone().add(new THREE.Vector3(dx, 0, dz));
-            if (checkTerrainCollision(newPos, terrainRef.current, 0.8).collision) {
-              newPos = currentPos;
+          const bounced = bounceAgainstBounds(movedPos, new THREE.Vector3(0,0,0), ROOM_SIZE, 1);
+          usePlayer.setState({ position: bounced.position });
+
+          footstepSpawnTimerRef.current += delta;
+          if (footstepSpawnTimerRef.current >= 0.11) {
+            footstepSpawnTimerRef.current = 0;
+            const moveDir = new THREE.Vector3(dx, 0, dz).normalize();
+            const side = footstepSideRef.current;
+            footstepSideRef.current = side === 1 ? -1 : 1;
+            const lateral = new THREE.Vector3(-moveDir.z, 0, moveDir.x).multiplyScalar(0.35 * side);
+            footstepMarksRef.current.push({
+              id: crypto.randomUUID(),
+              position: bounced.position.clone().sub(moveDir.clone().multiplyScalar(0.35)).add(lateral),
+              life: 0,
+              maxLife: 0.6,
+              radius: 6,
+            });
+            if (footstepMarksRef.current.length > 40) {
+              footstepMarksRef.current.shift();
             }
           }
-
-          const bounced = bounceAgainstBounds(newPos, new THREE.Vector3(0,0,0), ROOM_SIZE, 1);
-          usePlayer.setState({ position: bounced.position });
         } else {
           usePlayer.getState().setMoving(false);
         }
@@ -851,7 +913,7 @@ export default function CanvasGame() {
 
 
         // #########################################################################
-        if (enemy.isBoss && enemy.bossType === "shoggoth") {
+        if (enemy.isBoss && enemy.bossType === "lazarus") {
           const updated = { ...enemy };
 
           if (!updated.isEnraged && updated.health < updated.maxHealth * 0.45) {
@@ -939,14 +1001,14 @@ export default function CanvasGame() {
 
                 if (
                   along >= 0.35 &&
-                  along <= SHOGGOTH_BEAM_LENGTH_WORLD &&
+                  along <= LAZARUS_BEAM_LENGTH_WORLD &&
                   lateral <= SHOGGOTH_CONFIG.beamHalfWidthWorld &&
                   invincibilityTimer <= 0 &&
                   !damagedThisFrameRef.current
                 ) {
                   applyPlayerDamage(
                     updated.isEnraged ? 1 : 1,
-                    beamOrigin.clone().add(beamDirection.clone().multiplyScalar(Math.min(along, SHOGGOTH_BEAM_LENGTH_WORLD))),
+                    beamOrigin.clone().add(beamDirection.clone().multiplyScalar(Math.min(along, LAZARUS_BEAM_LENGTH_WORLD))),
                   );
                   damagedThisFrameRef.current = true;
                 }
@@ -1003,63 +1065,41 @@ export default function CanvasGame() {
               }
             } else {
               const moveAmount = enemy.speed * delta;
-              const newEnemyPos = new THREE.Vector3(
-                enemy.position.x + dirX * moveAmount,
-                0,
-                enemy.position.z + dirZ * moveAmount,
-              );
-
-              const enemyTerrainCheck = checkTerrainCollision(
-                newEnemyPos,
+              const movedEnemyPos = moveWithTerrainSlide(
+                enemy.position,
+                new THREE.Vector3(dirX * moveAmount, 0, dirZ * moveAmount),
                 terrainRef.current,
                 enemyCollisionRadius,
               );
-
-              if (!enemyTerrainCheck.collision) {
-                enemy.position.x = newEnemyPos.x;
-                enemy.position.z = newEnemyPos.z;
-              }
+              enemy.position.x = movedEnemyPos.x;
+              enemy.position.z = movedEnemyPos.z;
             }
           } else {
             const moveAmount = enemy.speed * delta;
-            const newEnemyPos = new THREE.Vector3(
-              enemy.position.x + dirX * moveAmount,
-              0,
-              enemy.position.z + dirZ * moveAmount,
-            );
-
-            const enemyTerrainCheck = checkTerrainCollision(
-              newEnemyPos,
+            const movedEnemyPos = moveWithTerrainSlide(
+              enemy.position,
+              new THREE.Vector3(dirX * moveAmount, 0, dirZ * moveAmount),
               terrainRef.current,
               enemyCollisionRadius,
             );
-
-            if (!enemyTerrainCheck.collision) {
-              enemy.position.x = newEnemyPos.x;
-              enemy.position.z = newEnemyPos.z;
-            }
+            enemy.position.x = movedEnemyPos.x;
+            enemy.position.z = movedEnemyPos.z;
           }
         }
 
         if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
 
-        const velNewPos = new THREE.Vector3(
-          enemy.position.x + enemy.velocity.x * delta,
-          0,
-          enemy.position.z + enemy.velocity.z * delta,
-        );
-
-        const velTerrainCheck = checkTerrainCollision(
-          velNewPos,
+        const velMovedPos = moveWithTerrainSlide(
+          enemy.position,
+          enemy.velocity.clone().multiplyScalar(delta),
           terrainRef.current,
           enemyCollisionRadius,
         );
-
-        if (!velTerrainCheck.collision) {
-          enemy.position.x = velNewPos.x;
-          enemy.position.z = velNewPos.z;
-        } else {
-          enemy.velocity.multiplyScalar(-0.5);
+        const movedByVelocity = !velMovedPos.equals(enemy.position);
+        enemy.position.x = velMovedPos.x;
+        enemy.position.z = velMovedPos.z;
+        if (!movedByVelocity) {
+          enemy.velocity.multiplyScalar(-0.35);
         }
 
         enemy.velocity.multiplyScalar(Math.max(0, 1 - 6 * delta));
@@ -1171,6 +1211,9 @@ export default function CanvasGame() {
         updateEnemies(aliveEnemies);
         
         useEnemies.getState().updateAutoSpawn(delta, player.position);
+        footstepMarksRef.current = footstepMarksRef.current
+          .map((mark) => ({ ...mark, life: mark.life + delta }))
+          .filter((mark) => mark.life < mark.maxLife);
         if (hearts <= 0) end();
       }
       
@@ -1189,6 +1232,7 @@ export default function CanvasGame() {
         drawProjectilesAndTrails(eyeCtx, phase !== "playing", position);
         drawSummons(eyeCtx, animationNowMs);
       }
+      drawFootsteps(ctx);
       drawPlayer(ctx);
       
       drawStatusEffects(ctx, animationNowMs);
@@ -1367,77 +1411,7 @@ export default function CanvasGame() {
       floorSize,
     );
 
-    if (tentacleSheet.complete && tentacleSheet.naturalWidth > 0) {
-      const seed = 2024;
-      const now = animationNowMs;
-      const wallInset = wallThickness;
-      const wallRangeStart = -ROOM_SIZE;
-      const wallRangeEnd = ROOM_SIZE;
-      const wallSpacing = 2;
-      const maxTurnRadians = Math.PI / 8;
-      const drawScale = 2;
-      const drawWidth = TENTACLE_FRAME_WIDTH * drawScale;
-      const drawHeight = TENTACLE_FRAME_HEIGHT * drawScale;
 
-      const drawTentaclesForWall = (
-        wallName: "north" | "south" | "east" | "west",
-        baseAngle: number,
-        getWorldPosition: (lineOffset: number) => { x: number; z: number },
-      ) => {
-        for (let lineOffset = wallRangeStart; lineOffset <= wallRangeEnd; lineOffset += wallSpacing) {
-          const world = getWorldPosition(lineOffset);
-
-          const animationOffsetMs = seededTileRandom(seed, world.x, world.z, 21) * 1200;
-          const animationSpeed = 45 + seededTileRandom(seed, world.x, world.z, 22) * 90;
-          const frameIndex = Math.floor(((now + animationOffsetMs) / animationSpeed) % TENTACLE_TOTAL_FRAMES);
-
-          const desiredAngle = Math.atan2(position.z - world.z, position.x - world.x);
-          const deltaFromBase = normalizeAngle(desiredAngle - baseAngle);
-          const clampedDelta = Math.max(-maxTurnRadians, Math.min(maxTurnRadians, deltaFromBase));
-          const spriteRotation = baseAngle + clampedDelta;
-
-          const screenX = centerX + ((world.x - position.x) * TILE_SIZE) / 2;
-          const screenY = centerY + ((world.z - position.z) * TILE_SIZE) / 2;
-
-          ctx.save();
-          ctx.imageSmoothingEnabled = false;
-          ctx.translate(screenX, screenY);
-          ctx.rotate(spriteRotation+Math.PI/2);
-          ctx.drawImage(
-            tentacleSheet,
-            frameIndex * TENTACLE_FRAME_WIDTH,
-            0,
-            TENTACLE_FRAME_WIDTH,
-            TENTACLE_FRAME_HEIGHT,
-            -drawWidth / 2,
-            -drawHeight / 2,
-            drawWidth,
-            drawHeight,
-          );
-          ctx.restore();
-        }
-      };
-
-      drawTentaclesForWall("north", Math.PI / 2, (lineOffset) => ({
-        x: lineOffset,
-        z: -ROOM_SIZE + wallInset,
-      }));
-
-      drawTentaclesForWall("south", -Math.PI / 2, (lineOffset) => ({
-        x: lineOffset,
-        z: ROOM_SIZE - wallInset,
-      }));
-
-      drawTentaclesForWall("east", Math.PI, (lineOffset) => ({
-        x: ROOM_SIZE - wallInset,
-        z: lineOffset,
-      }));
-
-      drawTentaclesForWall("west", 0, (lineOffset) => ({
-        x: -ROOM_SIZE + wallInset,
-        z: lineOffset,
-      }));
-    }
   };
 
   const drawXPOrbs = (ctx: CanvasRenderingContext2D) => {
@@ -1793,6 +1767,22 @@ export default function CanvasGame() {
     }
   };
 
+  const drawFootsteps = (ctx: CanvasRenderingContext2D) => {
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+    for (const mark of footstepMarksRef.current) {
+      const alpha = 1 - mark.life / mark.maxLife;
+      const screenX = centerX + ((mark.position.x - position.x) * TILE_SIZE) / 2;
+      const screenY = centerY + ((mark.position.z - position.z) * TILE_SIZE) / 2;
+
+      ctx.save();
+      ctx.fillStyle = `rgba(45, 30, 20, ${0.35 * alpha})`;
+      ctx.beginPath();
+      ctx.ellipse(screenX, screenY, mark.radius * alpha, (mark.radius * 0.6) * alpha, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  };
+
   const drawPlayer = (ctx: CanvasRenderingContext2D) => {
     const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -1822,7 +1812,7 @@ export default function CanvasGame() {
     if (!enemy || !enemy.position) return;
     if (enemy.position.x == null || enemy.position.z == null) return;
 
-    if (enemy.isBoss && enemy.bossType === "shoggoth") {
+    if (enemy.isBoss && enemy.bossType === "lazarus") {
       return;
     }
 
@@ -1892,11 +1882,11 @@ export default function CanvasGame() {
 
     if (!enemy.position) return;
 
-    if (enemy.isBoss && enemy.bossType === "shoggoth") {
+    if (enemy.isBoss && enemy.bossType === "lazarus") {
       const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
       const screenX = centerX + ((enemy.position.x - position.x) * TILE_SIZE) / 2;
       const screenY = centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2;
-      const bossSheet = shoggothBossSpriteSheet;
+      const bossSheet = lazarusBossSpriteSheet;
       const windupSheet = bossLaserWindupSprite;
       const laserSheet = bossLaserSpriteSheet;
       const laserContinueSheet = bossLaserContinueSprite;
