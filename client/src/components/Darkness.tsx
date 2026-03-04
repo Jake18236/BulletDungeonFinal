@@ -3,9 +3,8 @@ import { usePlayer } from "../lib/stores/usePlayer";
 import { useEnemies } from "../lib/stores/useEnemies";
 import { useVisualEffects } from "../lib/stores/useVisualEffects";
 import { useCamera } from "../lib/stores/useCamera";
+import { CANVAS_WIDTH, CANVAS_HEIGHT } from "../components/CanvasGame"
 
-const CANVAS_WIDTH = 1490;
-const CANVAS_HEIGHT = 750;
 const TILE_SIZE = 50;
 const WORLD_TO_SCREEN_SCALE = TILE_SIZE / 2;
 const PIXEL_SIZE = 2;

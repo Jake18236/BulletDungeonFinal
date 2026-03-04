@@ -37,8 +37,8 @@ import {
 } from "./SpriteProps";
 
 const TILE_SIZE = 50;
-export const CANVAS_WIDTH = 1490;
-export const CANVAS_HEIGHT = 750;
+export const CANVAS_WIDTH = window.innerWidth;
+export const CANVAS_HEIGHT = window.innerHeight;
 const ROOM_SIZE = 2000;
 const SHOGGOTH_BASE_BEAM_LENGTH_WORLD = (304 * 4) / (TILE_SIZE / 2);
 const SHOGGOTH_BEAM_LENGTH_WORLD = SHOGGOTH_BASE_BEAM_LENGTH_WORLD * SHOGGOTH_CONFIG.beamLengthScale;
@@ -341,7 +341,7 @@ export default function CanvasGame() {
       canvasRectRef.current = canvasRef.current.getBoundingClientRect();
     }
   }, []);
-
+  
   useEffect(() => {
     const updatePixelScale = () => {
       const scaled = getPixelPerfectScale(CANVAS_WIDTH, CANVAS_HEIGHT, window.innerWidth, window.innerHeight);
@@ -1187,9 +1187,10 @@ export default function CanvasGame() {
         drawTreeLightning(eyeCtx, gameplayElapsedMsRef.current);
         drawEnemyProjectiles(eyeCtx);
         drawProjectilesAndTrails(eyeCtx, phase !== "playing", position);
+        drawSummons(eyeCtx, animationNowMs);
       }
       drawPlayer(ctx);
-      drawSummons(ctx, animationNowMs);
+      
       drawStatusEffects(ctx, animationNowMs);
       drawImpactEffects(ctx); // ADD - behind projectiles
       
@@ -1845,7 +1846,7 @@ export default function CanvasGame() {
       ctx.scale(-1, 1);
     }
 
-    if (enemy.hitFlash > 0) ctx.filter = "brightness(6)";
+    if (enemy.hitFlash > 0) ctx.filter = "brightness(60)";
     ctx.drawImage(bodySprite.img, Math.floor(-size / 2), Math.floor(-size / 2), Math.floor(size), Math.floor(size));
     ctx.filter = "none";
 

@@ -488,7 +488,7 @@ export const useSummons = create<SummonState>((set, get) => ({
           const MAX_SPEED = 40;
           const dist = desiredDir.length();
 
-          if (dist > 1) {
+          if (dist > 0.1) {
             desiredDir.normalize();
 
             const ACCEL = 20;
@@ -498,7 +498,7 @@ export const useSummons = create<SummonState>((set, get) => ({
             const steering = desiredVelocity.sub(updated.velocity);
 
             // Clamp steering force
-            const MAX_STEER = 100 * delta;
+            const MAX_STEER = 50 * delta;
             if (steering.length() > MAX_STEER) {
               steering.setLength(MAX_STEER);
             }
@@ -538,7 +538,7 @@ export const useSummons = create<SummonState>((set, get) => ({
                 damage,
                 impactPos: updated.position,
                 color: "#ff4444",
-                knockbackStrength: 10,
+                knockbackStrength: 20,
                 curse: state.scytheCurse,
                 isSummonDamage: true,
               });
