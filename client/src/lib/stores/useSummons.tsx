@@ -538,7 +538,7 @@ export const useSummons = create<SummonState>((set, get) => ({
                 damage,
                 impactPos: updated.position,
                 color: "#ff4444",
-                knockbackStrength: 20,
+                knockbackStrength: 10,
                 curse: state.scytheCurse,
                 isSummonDamage: true,
               });

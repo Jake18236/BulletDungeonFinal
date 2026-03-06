@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 export const BASE_SPRITE_SIZE = 32; // native sprite resolution
-export const BASE_SCALE = 3;        // global pixel upscaling factor
+export const BASE_SCALE = 2;        // global pixel upscaling factor
 
 export type SpriteDef = {
   img: HTMLImageElement;
@@ -138,7 +138,7 @@ export function getProjectileImage() {
 
 let enemyProjectileImage: HTMLImageElement | null = null;
 
-const createEnemySprite = (src: string, size = 32, scale = 2): SpriteDef => ({
+const createEnemySprite = (src: string, size = 32, scale = BASE_SCALE): SpriteDef => ({
   img: (() => {
     const img = new Image();
     img.src = src;
@@ -149,17 +149,17 @@ const createEnemySprite = (src: string, size = 32, scale = 2): SpriteDef => ({
 });
 
 export const enemySpritesByType: Record<EnemySpriteType, SpriteDef> = {
-  basic: createEnemySprite("/sprites/enemy/basic-enemy.png", 32, 2),
-  tank: createEnemySprite("/sprites/enemy/tank-enemy.png", 48, 2),
-  eyeball: createEnemySprite("/sprites/enemy/eyeball-enemy.png", 48, 2),
-  tree: createEnemySprite("/sprites/enemy/tree-enemy.png", 48, 2),
+  basic: createEnemySprite("/sprites/enemy/basic-enemy.png", 32, BASE_SCALE),
+  tank: createEnemySprite("/sprites/enemy/tank-enemy.png", 48, BASE_SCALE),
+  eyeball: createEnemySprite("/sprites/enemy/eyeball-enemy.png", 48, BASE_SCALE),
+  tree: createEnemySprite("/sprites/enemy/tree-enemy.png", 48, BASE_SCALE),
 };
 
 export const enemyEyeSpritesByType: Record<EnemySpriteType, SpriteDef> = {
-  basic: createEnemySprite("/sprites/enemy/basic-enemy-eyes.png", 32, 2),
-  tank: createEnemySprite("/sprites/enemy/tank-enemy-eyes.png", 48, 2),
-  eyeball: createEnemySprite("/sprites/enemy/eyeball-enemy-eyes.png", 48, 2),
-  tree: createEnemySprite("/sprites/enemy/tree-enemy-eyes.png", 96, 2),
+  basic: createEnemySprite("/sprites/enemy/basic-enemy-eyes.png", 32, BASE_SCALE),
+  tank: createEnemySprite("/sprites/enemy/tank-enemy-eyes.png", 48, BASE_SCALE),
+  eyeball: createEnemySprite("/sprites/enemy/eyeball-enemy-eyes.png", 48, BASE_SCALE),
+  tree: createEnemySprite("/sprites/enemy/tree-enemy-eyes.png", 96, BASE_SCALE),
 };
 
 export const enemySprite = enemySpritesByType.basic;
@@ -167,7 +167,7 @@ export const enemySprite = enemySpritesByType.basic;
 export const bossEnemySprite: SpriteDef = {
   img: enemySprite.img,
   size: 32,
-  scale: 2,
+  scale: BASE_SCALE,
 };
 
 export const xpSprite = (() => {

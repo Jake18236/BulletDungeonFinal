@@ -54,6 +54,16 @@ treeEnemyEyesSprite.src = "/sprites/enemy/tree-enemy-eyes.png";
 const electricityLineSpriteSheet = new Image();
 electricityLineSpriteSheet.src = "/sprites/electricity-line-spritesheet.png";
 
+const playerSpriteSheet = new Image();
+playerSpriteSheet.src = "/sprites/character.png";
+
+const PLAYER_SPRITE_FRAME_SIZE = 32;
+const PLAYER_SPRITE_RENDER_SIZE = 64;
+const PLAYER_SPRITE_ANIMATIONS = {
+  idle: { row: 0, frames: 6, fps: 10 },
+  running: { row: 1, frames: 4, fps: 12 },
+  walking: { row: 2, frames: 8, fps: 14 },
+} as const;
 
 interface EnemyProjectile {
   id: string;
@@ -109,7 +119,7 @@ interface TreeLightningAttack {
 }
 
 const { addSummon } = useSummons.getState();
-addSummon("dagger")
+
 
 function generateRoomTerrain(): TerrainObstacle[] {
   const trees: TerrainObstacle[] = [];
@@ -332,6 +342,7 @@ export default function CanvasGame() {
     maxHearts,
     maxAmmo,
     invincibilityTimer,
+    isMoving,
     speed,
     firerate,
     reloadTime,
@@ -1233,7 +1244,7 @@ export default function CanvasGame() {
         drawSummons(eyeCtx, animationNowMs);
       }
       drawFootsteps(ctx);
-      drawPlayer(ctx);
+      drawPlayer(ctx, animationNowMs);
       
       drawStatusEffects(ctx, animationNowMs);
       drawImpactEffects(ctx); // ADD - behind projectiles
@@ -1611,7 +1622,6 @@ export default function CanvasGame() {
       ctx.drawImage(img, Math.floor(-size / 2), Math.floor(-size / 2), Math.floor(size), Math.floor(size));
       ctx.restore();
     };
-    // --- DRAW ACTIVE PROJECTILES ---
     projectiles.forEach((proj) => {
       const angle = Math.atan2(proj.velocity.z, proj.velocity.x) + Math.PI / 2;
       const trail = proj.trailHistory;
@@ -1684,13 +1694,11 @@ export default function CanvasGame() {
 
       ctx.globalAlpha = alpha;
 
-      // Scale and positioning
       const scale = dmg.scale;
       const fontSize = 15 * scale;
 
       ctx.font = `bold ${fontSize}px Press Start monospace`;
 
-      // White text
       ctx.fillStyle = "#ffffff";
       ctx.fillText(dmg.damage.toString(), screenX, screenY);
     });
@@ -1775,7 +1783,7 @@ export default function CanvasGame() {
       const screenY = centerY + ((mark.position.z - position.z) * TILE_SIZE) / 2;
 
       ctx.save();
-      ctx.fillStyle = `rgba(45, 30, 20, ${0.35 * alpha})`;
+      ctx.fillStyle = `rgba(61, 85, 85, ${1.35 * alpha})`;
       ctx.beginPath();
       ctx.ellipse(screenX, screenY, mark.radius * alpha, (mark.radius * 0.6) * alpha, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -1783,7 +1791,7 @@ export default function CanvasGame() {
     }
   };
 
-  const drawPlayer = (ctx: CanvasRenderingContext2D) => {
+const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
 
     ctx.save();
@@ -1799,14 +1807,31 @@ export default function CanvasGame() {
       }
     }
 
-    ctx.fillStyle = "#4a9eff";
-    ctx.beginPath();
-    
-    ctx.arc(0, 0, 15, 0, Math.PI * 2);
-    ctx.fill();
+    if (playerSpriteSheet.complete && playerSpriteSheet.naturalWidth > 0) {
+      const animState = isMoving
+        ? (isFiring ? PLAYER_SPRITE_ANIMATIONS.walking : PLAYER_SPRITE_ANIMATIONS.running)
+        : PLAYER_SPRITE_ANIMATIONS.idle;
+      const frame = Math.floor((animationNowMs / 1000) * animState.fps) % animState.frames;
+      const sourceX = frame * PLAYER_SPRITE_FRAME_SIZE;
+      const sourceY = animState.row * PLAYER_SPRITE_FRAME_SIZE;
+      ctx.scale(1,1)
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(
+        playerSpriteSheet,
+        sourceX,
+        sourceY,
+        PLAYER_SPRITE_FRAME_SIZE,
+        PLAYER_SPRITE_FRAME_SIZE,
+        -PLAYER_SPRITE_RENDER_SIZE / 2,
+        -PLAYER_SPRITE_RENDER_SIZE / 2,
+        PLAYER_SPRITE_RENDER_SIZE,
+        PLAYER_SPRITE_RENDER_SIZE,
+      );
+    }
 
     ctx.restore();
   };
+
 
   const drawEnemy = (ctx: CanvasRenderingContext2D, enemy: any) => {
     if (!enemy || !enemy.position) return;

@@ -164,19 +164,20 @@ export const useEnemies = create<EnemiesState>((set, get) => {
       end: normalizedEnd,
       hp,
       max,
-      spawnCD,
       numPerSpawn,
+      spawnCD,
     };
   };
 
   const spawnSessions: SpawnSession[] = [
-    createSession("basic_0_1", "basic", "0:00", "0:30", 28, 20, 4, 3),
+    createSession("basic_0_1", "basic", "0:00", "0:30", 28, 200, 40, 3),
     createSession("basic_1_2", "basic", "0:30", "1:00", 36, 40, 10, 4),
-    createSession("basic_2_6", "basic", "1:00", "3:00", 48, 4000, 7, 4),
+    createSession("basic_1_3", "basic", "1:00", "3:00", 48, 4000, 7, 4),
+    createSession("basic_3_6", "basic", "3:00", "30:00", 60, 4000, 0.5, 9),
     //eyes
     createSession("eyeball_1_6", "eyeball", "0:30", "2:00", 20, 10, 6, 1),
-    createSession("eyeball_6_9", "eyeball", "2:00", "3:00", 50, 20, 5, 3),
-    createSession("eyeball_6_2", "eyeball", "3:01", "30:00", 80, 200, 1, 13),
+    createSession("eyeball_6_9", "eyeball", "2:00", "3:00", 50, 20, 5, 2),
+    createSession("eyeball_6_2", "eyeball", "3:01", "30:00", 80, 200, 1, 1),
     //tanks
     createSession("tank_3_6", "tank", "1:00", "2:00", 100, 4, 1, 2),
     createSession("tank_6_9", "tank", "2:00", "3:00", 200, 6, 2, 2),
@@ -254,7 +255,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
 
             for (let i = 0; i < 8; i++) {
               const angle = (i / 8) * Math.PI * 2;
-              const speed = 20 + Math.random() * 10;
+              const speed = 20;
 
               
               const { particles } = useVisualEffects.getState();
@@ -318,7 +319,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
           health: 22,
           maxHealth: 22,
           attack: 1,
-          speed: 3.8 + Math.random() * 0.7,
+          speed: 3.8,
           detectionRange: 70000,
           attackRange: 1.4,
           maxAttackCooldown: 0.95,
@@ -327,7 +328,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
           health: 55,
           maxHealth: 55,
           attack: 2,
-          speed: 2.2 + Math.random() * 0.4,
+          speed: 2.2,
           detectionRange: 70000,
           attackRange: 1.55,
           maxAttackCooldown: 1.25,
@@ -336,7 +337,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
           health: 16,
           maxHealth: 16,
           attack: 2,
-          speed: 4.6 + Math.random() * 0.8,
+          speed: 4.6,
           detectionRange: 70000,
           attackRange: 1.25,
           maxAttackCooldown: 0.8,

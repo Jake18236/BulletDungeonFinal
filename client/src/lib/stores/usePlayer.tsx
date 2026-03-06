@@ -542,6 +542,19 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     },
   },
 
+  dagger: {
+    id: "magic_dagger",
+    name: "Magic Dagger",
+    description: "Summon a Dagger",
+    icon: "🗡️",
+    category: "summon",
+    tier: 1,
+    apply: () => {
+      const { addSummon } = useSummons.getState();
+      addSummon("dagger");
+    },
+  },
+
   shadowblade: {
     id: "shadowblade",
     name: "Shadowblade",
@@ -585,58 +598,6 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
       const player = usePlayer.getState();
       usePlayer.setState({ baseDamage: player.baseDamage * 1.1 });
       useSummons.setState({ scytheDamageBonus: true });
-    },
-  },
-
-  magic_spear: {
-    id: "magic_spear",
-    name: "Magic Spear",
-    description: "Summon 2 Magic Spears that orbit and deal 20 damage",
-    icon: "🔱",
-    category: "summon",
-    tier: 1,
-    apply: () => {
-      const { addSummon } = useSummons.getState();
-      addSummon("spear");
-    },
-  },
-
-  holy_spear: {
-    id: "holy_spear",
-    name: "Holy Spear",
-    description: "Spear deals +10 damage for every Max HP you have",
-    icon: "✨",
-    category: "summon",
-    tier: 2,
-    requires: ["magic_spear"],
-    apply: () => {
-      useSummons.setState({ spearHolyBonus: true });
-    },
-  },
-
-  soul_drain: {
-    id: "soul_drain",
-    name: "Soul Drain",
-    description: "Every 500th enemy killed by a summon drops a Heart",
-    icon: "💜",
-    category: "summon",
-    tier: 3,
-    requires: ["holy_spear"],
-    apply: () => {
-      useSummons.setState({ soulDrain: true });
-    },
-  },
-
-  soul_knight: {
-    id: "soul_knight",
-    name: "Soul Knight",
-    description: "Spear gains +15 damage for every Soul Heart",
-    icon: "🛡️",
-    category: "summon",
-    tier: 4,
-    requires: ["soul_drain"],
-    apply: () => {
-      useSummons.setState({ soulKnight: true });
     },
   },
 
@@ -731,10 +692,10 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   baseProjectileRange: 50,
   projectileCount: 1,
   life: 3.0,
-  projectileSize: 64.0,
+  projectileSize: 32.0,
   homing: false,
-  piercing: 2,
-  bouncing: 1,
+  piercing: 0,
+  bouncing: 0,
   accuracy: 1.0,
   trailLength: 30,
   explosive: undefined,
@@ -743,7 +704,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   
 
   // Special Upgrades
-  knockbackMultiplier: 1.0,
+  knockbackMultiplier: 2.0,
   instantKillThreshold: 0,
   splinterBullets: false,
   pierceKilledEnemies: false,
@@ -1007,14 +968,14 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     projectileCount: 1,
     life: 3.0,
     homing: false,
-    piercing: 2,
-    bouncing: 1,
+    piercing: 0,
+    bouncing: 0,
     trailLength: 30,
     explosive: undefined,
     chainLightning: undefined,
     accuracy: 1.0,
     knockbackMultiplier: 1.0,
-    projectileSize: 64.0,
+    projectileSize: 32.0,
     instantKillThreshold: 0,
     splinterBullets: false,
     pierceKilledEnemies: false,
