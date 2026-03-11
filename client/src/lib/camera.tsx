@@ -40,7 +40,7 @@ export function getPixelPerfectScale(
   availableWidth: number,
   availableHeight: number,
 ): PixelPerfectScale {
-  const scale = Math.max(1, Math.floor(Math.min(availableWidth / referenceWidth, availableHeight / referenceHeight)));
+  const scale = Math.floor(Math.min(availableWidth / referenceWidth, availableHeight / referenceHeight));
   const width = referenceWidth * scale;
   const height = referenceHeight * scale;
 

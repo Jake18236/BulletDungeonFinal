@@ -36,8 +36,8 @@ function drawThreeStepLight(
     snappedRadius,
   );
 
-  gradient.addColorStop(0, "rgb(255, 255, 255)");
-    gradient.addColorStop(0.45, "rgba(255,255,255)");
+  gradient.addColorStop(0, "rgb(255, 255, 255, 0.80)");
+    gradient.addColorStop(0.45, "rgba(255,255,255, 0.65)");
   gradient.addColorStop(0.5, "rgba(255,255,255,0.5)");
     gradient.addColorStop(0.70, "rgba(255,255,255, 0.25)");
   gradient.addColorStop(1, "rgba(255,255,255,0)");

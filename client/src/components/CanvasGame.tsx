@@ -55,7 +55,7 @@ const electricityLineSpriteSheet = new Image();
 electricityLineSpriteSheet.src = "/sprites/electricity-line-spritesheet.png";
 
 const playerSpriteSheet = new Image();
-playerSpriteSheet.src = "/sprites/character.png";
+playerSpriteSheet.src = "/sprites/character2.png";
 
 const PLAYER_SPRITE_FRAME_SIZE = 32;
 const PLAYER_SPRITE_RENDER_SIZE = 64;
