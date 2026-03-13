@@ -328,6 +328,7 @@ export default function CanvasGame() {
   const footstepMarksRef = useRef<FootstepMark[]>([]);
   const footstepSpawnTimerRef = useRef<number>(0);
   const footstepSideRef = useRef<1 | -1>(1);
+  const playerFacingRef = useRef<1 | -1>(1);
   const { particles, damageNumbers, impactEffects, addImpact, addExplosion, addDamageNumber, updateEffects } = useVisualEffects();
   const { phase, end } = useGame();
   const {
@@ -737,7 +738,12 @@ export default function CanvasGame() {
                 mouseRef.current.y - centerY,
                 mouseRef.current.x - centerX
               );
-
+              const horizontalAim = Math.cos(baseAngle);
+              if (horizontalAim < 0) {
+                playerFacingRef.current = -1;
+              } else if (horizontalAim > 0) {
+                playerFacingRef.current = 1;
+              }
               const handOffset = 8;
               const barrelLength = 28;
               const totalOffsetPixels = handOffset + barrelLength;
@@ -856,6 +862,12 @@ export default function CanvasGame() {
         if (keysPressed.current.has("KeyS") || keysPressed.current.has("ArrowDown")) moveZ += 1;
         if (keysPressed.current.has("KeyA") || keysPressed.current.has("ArrowLeft")) moveX -= 1;
         if (keysPressed.current.has("KeyD") || keysPressed.current.has("ArrowRight")) moveX += 1;
+        
+        if (moveX < 0 && !((isMouseDown.current && !isReloading && ammo > 0))) {
+          playerFacingRef.current = -1;
+        } else if (moveX > 0  && !((isMouseDown.current && !isReloading && ammo > 0))) {
+          playerFacingRef.current = 1;
+        }
 
           if (moveX !== 0 || moveZ !== 0) { 
             usePlayer.getState().setMoving(true);
@@ -1814,7 +1826,7 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
       const frame = Math.floor((animationNowMs / 1000) * animState.fps) % animState.frames;
       const sourceX = frame * PLAYER_SPRITE_FRAME_SIZE;
       const sourceY = animState.row * PLAYER_SPRITE_FRAME_SIZE;
-      ctx.scale(1,1)
+      ctx.scale(playerFacingRef.current, 1);
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(
         playerSpriteSheet,
