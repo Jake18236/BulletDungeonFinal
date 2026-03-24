@@ -55,12 +55,10 @@ export default function Enemy({ enemy }: EnemyProps) {
       }
     }
 
-    // After movement, bounce off room bounds
     const bounced = bounceAgainstBounds(enemy.position, enemy.velocity, ROOM_LIMIT, 0.6);
     enemy.position.copy(bounced.position);
     enemy.velocity.copy(bounced.velocity);
 
-    // Update mesh position
     meshRef.current.position.copy(enemy.position).add(new THREE.Vector3(0, 0.5, 0));
   });
 

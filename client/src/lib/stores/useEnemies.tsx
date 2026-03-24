@@ -331,7 +331,6 @@ export const useEnemies = create<EnemiesState>((set, get) => {
           speed: 2.2,
           detectionRange: 70000,
           attackRange: 1.55,
-          maxAttackCooldown: 1.25,
         },
         eyeball: {
           health: 16,
@@ -340,7 +339,6 @@ export const useEnemies = create<EnemiesState>((set, get) => {
           speed: 4.6,
           detectionRange: 70000,
           attackRange: 1.25,
-          maxAttackCooldown: 0.8,
         },
       };
 

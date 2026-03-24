@@ -14,7 +14,7 @@ export type EnemySpriteType = "basic" | "tank" | "eyeball" | "tree";
 export const WeaponSprites = {
   revolver: (() => {
     const img = new Image();
-    img.src = "/sprites/revolver.png";
+    img.src = "/sprites/revolver-spritesheet.png";
     return img;
   })(),
 };

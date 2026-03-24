@@ -55,14 +55,14 @@ const electricityLineSpriteSheet = new Image();
 electricityLineSpriteSheet.src = "/sprites/electricity-line-spritesheet.png";
 
 const playerSpriteSheet = new Image();
-playerSpriteSheet.src = "/sprites/character2.png";
+playerSpriteSheet.src = "/sprites/character4.png";
 
 const PLAYER_SPRITE_FRAME_SIZE = 32;
 const PLAYER_SPRITE_RENDER_SIZE = 64;
 const PLAYER_SPRITE_ANIMATIONS = {
   idle: { row: 0, frames: 6, fps: 10 },
   running: { row: 1, frames: 4, fps: 12 },
-  walking: { row: 2, frames: 8, fps: 14 },
+  walking: { row: 2, frames: 8, fps: 12 },
 } as const;
 
 interface EnemyProjectile {
@@ -537,22 +537,6 @@ export default function CanvasGame() {
     });
   };
 
-  const spawnBossLaserProjectile = (enemy: any, direction: THREE.Vector3) => {
-    enemyProjectilesRef.current.push({
-      id: crypto.randomUUID(),
-      position: enemy.position.clone().add(direction.clone().multiplyScalar(2.2)),
-      velocity: direction.clone().multiplyScalar(enemy.isEnraged ? 22 : 18),
-      damage: enemy.isEnraged ? 2 : 1,
-      life: enemy.isEnraged ? 1.2 : 1,
-      maxLife: enemy.isEnraged ? 1.2 : 1,
-      size: enemy.isEnraged ? 0.8 : 0.7,
-      kind: "laser",
-      frame: Math.floor(Math.random() * 6),
-    });
-  };
-
-
-
   useEffect(() => {
     const gameLoop = (currentTime: number) => {
       const rawDelta = lastTimeRef.current
@@ -600,12 +584,25 @@ export default function CanvasGame() {
           const fanIndex = usePlayer.getState().fanFireIndex;
           const angle = (fanIndex / 10) * Math.PI * 2;
           const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
-
+          const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+          const aimAngle = Math.atan2(
+            mouseRef.current.y - centerY,
+            mouseRef.current.x - centerX,
+          );
+          const gunOffsetPixels = 2;
+          const gunOffset = gunOffsetPixels / (TILE_SIZE / 2);
+          const gunPosition = ps.position.clone().add(
+            new THREE.Vector3(
+              Math.cos(aimAngle) * gunOffset,
+              0,
+              Math.sin(aimAngle) * gunOffset,
+            ),
+          );
           
           const stats = usePlayer.getState().getProjectileStats();
 
           addProjectile({
-            position: ps.position.clone(),
+            position: gunPosition,
             direction,
             size: stats.projectileSize,
             damage: stats.damage * 0.15,
@@ -744,8 +741,8 @@ export default function CanvasGame() {
               } else if (horizontalAim > 0) {
                 playerFacingRef.current = 1;
               }
-              const handOffset = 8;
-              const barrelLength = 28;
+              const handOffset = 0;
+              const barrelLength = 2;
               const totalOffsetPixels = handOffset + barrelLength;
               const totalOffset = totalOffsetPixels / (TILE_SIZE / 2);
               const barrelFlashPosition = ps.position.clone().add(
@@ -1548,24 +1545,17 @@ export default function CanvasGame() {
 
     if (type === "revolver") {
       
-      const scale = 2;
-      let gunRotation = mouseAngle;
+      const scale = 1.5;
+      const gunRotation = mouseAngle;
       
-      
-
-      // Reload spin (spin around its own axis)
-      if (isReloading) {
-        const p = reloadProgress / reloadTime;
-        const spins = 2;
-        gunRotation += spins * 2 * Math.PI * p;
-      }
+    
 
       const flipGun = Math.abs(mouseAngle) > Math.PI / 2;
 
       
       
       ctx.rotate(gunRotation);
-      ctx.translate(-10, 0);
+      ctx.translate(2, 0);
 
       ctx.scale(-scale, scale);
       
@@ -1580,7 +1570,7 @@ export default function CanvasGame() {
         
         ctx.save();
         ctx.scale(-1,1)
-        ctx.translate(10 / scale, -3 / scale);
+        ctx.translate(-3,-2)
         
         const w = sprite.width;
         const h = sprite.height;
@@ -1596,13 +1586,27 @@ export default function CanvasGame() {
       const sprite = WeaponSprites.revolver;
       if (sprite.complete && sprite.naturalWidth > 0 && sprite.naturalHeight > 0) {
         ctx.save();
-        const w = sprite.naturalWidth;
-        const h = sprite.naturalHeight;
+        const frameCount = 5;
+        const frameWidth = Math.floor(sprite.naturalWidth / frameCount);
+        const frameHeight = sprite.naturalHeight;
+        const reloadFrame = 1 + Math.floor((reloadProgress * 14) % 4);
+        const frameIndex = isReloading ? reloadFrame : 0;
 
-        ctx.drawImage(sprite, -w, -h / 2, w, h);
+        ctx.drawImage(
+          sprite,
+          frameWidth * frameIndex,
+          0,
+          frameWidth,
+          frameHeight,
+          -frameWidth,
+          -frameHeight / 2,
+          frameWidth,
+          frameHeight,
+        );
 
         ctx.restore();
       }
+    
     }
 
 
@@ -1641,7 +1645,7 @@ export default function CanvasGame() {
           const t = i / trail.length; // 0 = head, 1 = tail
 
           const maxSize = Math.ceil(proj.size);
-          const step = 1; //shrink
+          const step = 1.5; //shrink
 
           const size = Math.max(
             1,
