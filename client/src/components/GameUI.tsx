@@ -307,6 +307,9 @@ export default function GameUI() {
   const { hearts, maxHearts, ammo, maxAmmo, xp, xpToNextLevel, level, showLevelUpScreen, reset: resetPlayer } = usePlayer();
   const { generateDungeon, reset: resetDungeon } = useDungeon();
   const { reset: resetEnemies, elapsedTime } = useEnemies();
+  const { isMuted, toggleMute } = useAudio();
+  const [menuScreen, setMenuScreen] = useState<"main" | "settings" | "controls">("main");
+  const [showInGameInstructions, setShowInGameInstructions] = useState(true);
   const progress = showLevelUpScreen ? 1 : Math.min(xp / xpToNextLevel, 1);
   const elapsedMinutes = Math.floor(elapsedTime / 60);
   const elapsedSeconds = Math.floor(elapsedTime % 60);
@@ -338,15 +341,62 @@ export default function GameUI() {
   if (phase === "ready") {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-90 z-50">
-        <Card className="w-96 bg-gray-900 text-white border-gray-700">
-          <CardContent className="p-8 text-center">
-            <h1 className="text-4xl font-bold mb-4 text-blue-400">Bullet Dungeon Game Thing</h1>
-            <p className="text-gray-300 mb-6">
-              Currently incomplete start screen.
-            </p>
-            <Button onClick={handleStart} className="bg-blue-600 hover:bg-blue-700 text-lg px-8 py-3">
-              Start Game!
-            </Button>
+        <Card className="w-[30rem] bg-gray-900 text-white border-gray-700 shadow-2xl">
+          <CardContent className="p-8">
+            <h1 className="text-4xl font-bold mb-2 text-blue-400 text-center">Bullet Dungeon</h1>
+            <p className="text-gray-300 mb-6 text-center">Choose an option to begin.</p>
+
+            {menuScreen === "main" && (
+              <div className="space-y-3">
+                <Button onClick={handleStart} className="w-full bg-blue-600 hover:bg-blue-700 text-lg py-6">
+                  Play
+                </Button>
+                <Button onClick={() => setMenuScreen("settings")} variant="secondary" className="w-full text-lg py-6">
+                  Settings
+                </Button>
+                <Button onClick={() => setMenuScreen("controls")} variant="secondary" className="w-full text-lg py-6">
+                  Controls
+                </Button>
+              </div>
+            )}
+
+            {menuScreen === "settings" && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between rounded-md border border-gray-700 bg-black/30 p-3">
+                  <span className="text-gray-200">Audio</span>
+                  <Button onClick={toggleMute} variant="outline" className="gap-2 border-gray-500">
+                    {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                    {isMuted ? "Muted" : "Enabled"}
+                  </Button>
+                </div>
+                <div className="flex items-center justify-between rounded-md border border-gray-700 bg-black/30 p-3">
+                  <span className="text-gray-200">In-game help card</span>
+                  <Button
+                    onClick={() => setShowInGameInstructions((prev) => !prev)}
+                    variant="outline"
+                    className="border-gray-500"
+                  >
+                    {showInGameInstructions ? "Shown" : "Hidden"}
+                  </Button>
+                </div>
+                <Button onClick={() => setMenuScreen("main")} variant="secondary" className="w-full mt-2">
+                  Back
+                </Button>
+              </div>
+            )}
+
+            {menuScreen === "controls" && (
+              <div className="space-y-4">
+                <div className="rounded-md border border-gray-700 bg-black/30 p-4 text-sm text-gray-200 space-y-2">
+                  <p><span className="font-semibold">Move:</span> WASD</p>
+                  <p><span className="font-semibold">Aim:</span> Mouse cursor</p>
+                  <p><span className="font-semibold">Shoot:</span> Left click</p>
+                </div>
+                <Button onClick={() => setMenuScreen("main")} variant="secondary" className="w-full">
+                  Back
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -456,17 +506,19 @@ export default function GameUI() {
       </div>
 
       {/* Instructions */}
-      <div className="fixed bottom-4 left-4 z-40">
-        <Card className="bg-black bg-opacity-80 text-white border-gray-600">
-          <CardContent className="p-3">
-            <div className="text-xs space-y-1">
-              <p>
-                <span className="font-semibold">WASD:</span> Move
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {showInGameInstructions && (
+        <div className="fixed bottom-4 left-4 z-40">
+          <Card className="bg-black bg-opacity-80 text-white border-gray-600">
+            <CardContent className="p-3">
+              <div className="text-xs space-y-1">
+                <p>
+                  <span className="font-semibold">WASD:</span> Move
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <style jsx>{`
           
