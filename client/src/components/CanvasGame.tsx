@@ -589,7 +589,7 @@ export default function CanvasGame() {
             mouseRef.current.y - centerY,
             mouseRef.current.x - centerX,
           );
-          const gunOffsetPixels = 2;
+          const gunOffsetPixels = 3;
           const gunOffset = gunOffsetPixels / (TILE_SIZE / 2);
           const gunPosition = ps.position.clone().add(
             new THREE.Vector3(
@@ -778,7 +778,6 @@ export default function CanvasGame() {
                   explosive: stats.explosive,
                   chainLightning: stats.chainLightning,
                   trailLength: stats.trailLength, // Add a default trail length
-                  source: { type: "player", playerEffects: { splinterBullets: ps.splinterBullets } },
                 });
                 
               };
@@ -1060,7 +1059,7 @@ export default function CanvasGame() {
         const distance = Math.sqrt(dx * dx + dz * dz);
         const enemyCollisionRadius = getEnemyCollisionRadius(enemy);
 
-        if (distance <= enemy.detectionRange) {
+        if (distance >= 1) {
           const dirX = dx / distance;
           const dirZ = dz / distance;
 
@@ -1145,7 +1144,7 @@ export default function CanvasGame() {
             const dz = e1.position.z - e2.position.z;
             const dist = Math.hypot(dx, dz);
             const minDist = getEnemyCollisionRadius(e1) + getEnemyCollisionRadius(e2);
-            e1.position.x += Math.sin(Math.random() * 10) * 0.002;
+
             if (dist > 0 && dist < minDist) {
               const push = (minDist - dist) / 2;
               const nx = dx / dist;
@@ -1170,11 +1169,9 @@ export default function CanvasGame() {
 
           const enemyHitRadius = getEnemyBodyHitRadius(enemy);
           if (dist > 0 && dist < PLAYER_RADIUS + enemyHitRadius) {
-            if (enemy.canAttack && invincibilityTimer <= 0 && !damagedThisFrameRef.current) {
+            if (invincibilityTimer <= 0 && !damagedThisFrameRef.current) {
               applyPlayerDamage(1, enemy.position);
-              enemy.attackCooldown = enemy.maxAttackCooldown;
               damagedThisFrameRef.current = true;
-              if (phase === "playing") cameraRef.current.shake({ strength: 100, durationMs: 100 });
             }
           }
 
@@ -1224,6 +1221,10 @@ export default function CanvasGame() {
           }
 
           updatedEnemyProjectiles.push(projectile);
+        }
+
+        if(damagedThisFrameRef.current) {
+          if (phase === "playing") cameraRef.current.shake({ strength: 100, durationMs: 100 });
         }
         enemyProjectilesRef.current = updatedEnemyProjectiles;
 
@@ -1545,7 +1546,7 @@ export default function CanvasGame() {
 
     if (type === "revolver") {
       
-      const scale = 1.5;
+      const scale = 2;
       const gunRotation = mouseAngle;
       
     
@@ -1570,7 +1571,7 @@ export default function CanvasGame() {
         
         ctx.save();
         ctx.scale(-1,1)
-        ctx.translate(-3,-2)
+        ctx.translate(-3.5,0)
         
         const w = sprite.width;
         const h = sprite.height;

@@ -64,7 +64,9 @@ export const useHit = create<HitState>((set, get) => ({
     if (impactPos) {
       addImpact(impactPos);
     }
-    addDamageNumber(enemy.position.x, enemy.position.z, damage);
+    addDamageNumber(enemy.position.x + (Math.random() * 2 - 1), 
+    enemy.position.z + (Math.random() * 2 - 1), 
+    damage);
 
     if (!enemy.velocity) {
       enemy.velocity = new THREE.Vector3();
@@ -208,18 +210,11 @@ export const useHit = create<HitState>((set, get) => ({
     }
   },
 
-  applyPlayerDamage: (damage, impactPos) => {
+  applyPlayerDamage: (impactPos) => {
     const { loseHeart, position, invincibilityTimer } = usePlayer.getState();
-
     if (invincibilityTimer > 0) return;
-
-    const { addImpact } = useVisualEffects.getState();
     const { playHit } = useAudio.getState();
-    
     loseHeart();
-
-    const resolvedImpact = impactPos?.clone?.() ?? position.clone();
-
     playHit();
 
   },

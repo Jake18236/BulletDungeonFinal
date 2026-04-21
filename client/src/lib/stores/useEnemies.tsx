@@ -63,13 +63,7 @@ export interface Enemy {
   position: THREE.Vector3;
   health: number;
   maxHealth: number;
-  attack: number;
   speed: number;
-  detectionRange: number;
-  attackRange: number;
-  canAttack: boolean;
-  attackCooldown: number;
-  maxAttackCooldown: number;
   type?: "basic" | "tank" | "eyeball" | "tree" | "boss";
   velocity: THREE.Vector3;
   hitFlash: number;
@@ -170,20 +164,20 @@ export const useEnemies = create<EnemiesState>((set, get) => {
   };
 
   const spawnSessions: SpawnSession[] = [
-    createSession("basic_0_1", "basic", "0:00", "0:30", 28, 200, 40, 3),
-    createSession("basic_1_2", "basic", "0:30", "1:00", 36, 40, 10, 4),
-    createSession("basic_1_3", "basic", "1:00", "3:00", 48, 4000, 7, 4),
-    createSession("basic_3_6", "basic", "3:00", "30:00", 60, 4000, 0.5, 9),
+    createSession("basic_1", "basic", "0:00", "0:30", 24, 20, 4, 3),
+    createSession("basic_2", "basic", "0:30", "1:00", 24, 50, 10, 4),
+    createSession("basic_3", "basic", "1:00", "3:00", 30, 200, 7, 4),
+    createSession("basic_4", "basic", "3:00", "30:00", 80, 400, 8, 1),
     //eyes
-    createSession("eyeball_1_6", "eyeball", "0:30", "2:00", 20, 10, 6, 1),
-    createSession("eyeball_6_9", "eyeball", "2:00", "3:00", 50, 20, 5, 2),
-    createSession("eyeball_6_2", "eyeball", "3:01", "30:00", 80, 200, 1, 1),
+    createSession("eyeball_1", "eyeball", "0:30", "2:00", 30, 2, 2, 10),
+    createSession("eyeball_2", "eyeball", "2:00", "3:00", 50, 20, 5, 2),
+    createSession("eyeball_3", "eyeball", "3:01", "30:00", 80, 200, 1, 1),
     //tanks
-    createSession("tank_3_6", "tank", "1:00", "2:00", 100, 4, 1, 2),
-    createSession("tank_6_9", "tank", "2:00", "3:00", 200, 6, 2, 2),
-    createSession("tank_6_2", "tank", "3:00", "30:00", 1000, 580, 5, 10),
+    createSession("tank_1", "tank", "1:00", "2:00", 200, 4, 1, 5),
+    createSession("tank_2", "tank", "2:00", "3:00", 200, 6, 2, 2),
+    createSession("tank_3", "tank", "3:00", "30:00", 1000, 580, 5, 10),
     //boss
-    createSession("lazarus_5_10", "lazarus", "1:00", "30:00", 2500, 1, 30, 1),
+    createSession("lazarus_1", "lazarus", "1:00", "30:00", 2500, 1, 1, 10),
     
     
   ];
@@ -316,29 +310,22 @@ export const useEnemies = create<EnemiesState>((set, get) => {
 
       const baseStatsByType: Record<"basic" | "tank" | "eyeball", Partial<Enemy>> = {
         basic: {
-          health: 22,
-          maxHealth: 22,
-          attack: 1,
+          health: 22, // these health values are all technically meaningless
+          maxHealth: 22, // but I wanted bosses summoning enemies to be possible
           speed: 3.8,
-          detectionRange: 70000,
-          attackRange: 1.4,
-          maxAttackCooldown: 0.95,
+          hitFlash: 0,
         },
         tank: {
           health: 55,
           maxHealth: 55,
-          attack: 2,
           speed: 2.2,
-          detectionRange: 70000,
-          attackRange: 1.55,
+          hitFlash: 0,
         },
         eyeball: {
           health: 16,
           maxHealth: 16,
-          attack: 2,
           speed: 4.6,
-          detectionRange: 70000,
-          attackRange: 1.25,
+          hitFlash: 0,
         },
       };
 
@@ -351,16 +338,10 @@ export const useEnemies = create<EnemiesState>((set, get) => {
         position: enemyData.position ?? defaultPosition,
         health: enemyData.health ?? baseStats.health!,
         maxHealth: enemyData.maxHealth ?? baseStats.maxHealth!,
-        attack: enemyData.attack ?? baseStats.attack!,
+        hitFlash: 0,
         speed: enemyData.speed ?? baseStats.speed!,
-        detectionRange: enemyData.detectionRange ?? baseStats.detectionRange!,
-        attackRange: enemyData.attackRange ?? baseStats.attackRange!,
-        canAttack: true,
-        attackCooldown: 0,
-        maxAttackCooldown: enemyData.maxAttackCooldown ?? baseStats.maxAttackCooldown!,
         type: chosenType,
         velocity: new THREE.Vector3(0, 0, 0),
-        hitFlash: 0,
         isRangedAttacking: false,
         rangedShotCooldown: 0,
         ...enemyData,
@@ -378,13 +359,8 @@ export const useEnemies = create<EnemiesState>((set, get) => {
         position: position.clone(),
         health: 420,
         maxHealth: 420,
-        attack: 1,
         speed: 6.5,
-        detectionRange: 999999,
-        attackRange: 2.9,
-        canAttack: true,
-        attackCooldown: 0,
-        maxAttackCooldown: 0.5,
+
         type: "boss",
         velocity: new THREE.Vector3(),
         hitFlash: 0,
@@ -438,7 +414,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
 
         for (let i = 0; i < enemiesToSpawn; i++) {
           const angle = Math.random() * Math.PI * 2;
-          const distance = 30 + Math.random() * 20;
+          const distance = 50;
           const spawnPos = new THREE.Vector3(
             playerPos.x + Math.cos(angle) * distance,
             0,

@@ -48,7 +48,7 @@ type HeartHUDProps = {
 };
 
 export function HeartHUD({ currentHP, maxHP }: HeartHUDProps) {
-  const size = BASE_SPRITE_SIZE * BASE_SCALE;
+  const size = BASE_SPRITE_SIZE * BASE_SCALE * 1.5;
 
   return (
     <div className="heart-hud">
@@ -78,7 +78,7 @@ type AmmoHUDProps = {
 };
 
 export function AmmoHUD({ ammo, maxAmmo }: AmmoHUDProps) {
-  const size = BASE_SPRITE_SIZE * BASE_SCALE;
+  const size = BASE_SPRITE_SIZE * BASE_SCALE * 1.5;
 
   return (
     <div className="ammo-hud">
