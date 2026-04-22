@@ -14,6 +14,7 @@ import { useSummons } from "../lib/stores/useSummons";
 import { useCamera } from "../lib/stores/useCamera";
 import { useVisualEffects } from "../lib/stores/useVisualEffects";
 import { GameCamera2D, getPixelPerfectScale } from "../lib/camera";
+import { drawBitmapText } from "../lib/bitmapText";
 import GameUI from "./GameUI"  
 import { LevelUpScreen } from "./GameUI";
 import Darkness from "./Darkness";
@@ -1501,10 +1502,11 @@ export default function CanvasGame() {
       ctx.translate(centerX, barY - 12);
       ctx.scale(textScale, textScale);
 
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 16px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText("RELOADING", 0, 0);
+      drawBitmapText(ctx, "RELOADING", 0, 0, {
+        align: "center",
+        baseline: "middle",
+        scale: 0.42,
+      });
 
       ctx.restore();
 
@@ -1699,9 +1701,6 @@ export default function CanvasGame() {
     const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
 
     ctx.save();
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-
     damageNumbers.forEach(dmg => {
       const screenX = centerX + ((dmg.x - position.x) * TILE_SIZE) / 2;
       const screenY = centerY + ((dmg.y - position.z) * TILE_SIZE) / 2;
@@ -1712,12 +1711,11 @@ export default function CanvasGame() {
       ctx.globalAlpha = alpha;
 
       const scale = dmg.scale;
-      const fontSize = 15 * scale;
-
-      ctx.font = `bold ${fontSize}px Press Start monospace`;
-
-      ctx.fillStyle = "#ffffff";
-      ctx.fillText(dmg.damage.toString(), screenX, screenY);
+      drawBitmapText(ctx, dmg.damage.toString(), screenX, screenY, {
+        align: "center",
+        baseline: "middle",
+        scale: 0.28 * scale,
+      });
     });
 
     ctx.restore();
@@ -2091,10 +2089,11 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
       ctx.strokeStyle = "#fff";
       ctx.lineWidth = 2;
       ctx.strokeRect(screenX - barW / 2, barY, barW, barH);
-      ctx.font = "bold 14px monospace";
-      ctx.fillStyle = "#fff";
-      ctx.textAlign = "center";
-      ctx.fillText("BOSS", screenX, barY - 10);
+      drawBitmapText(ctx, "BOSS", screenX, barY - 10, {
+        align: "center",
+        baseline: "bottom",
+        scale: 0.34,
+      });
 
       return;
     }
