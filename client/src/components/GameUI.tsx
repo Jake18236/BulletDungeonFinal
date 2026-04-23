@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useGame } from "../lib/stores/useGame";
 import { usePlayer } from "../lib/stores/usePlayer";
 import { useAudio } from "../lib/stores/useAudio";
@@ -11,6 +11,12 @@ import { Card, CardContent } from "./ui/card";
 import { Volume2, VolumeX } from "lucide-react";
 import { HeartHUD, AmmoHUD, } from "./SpriteProps";
 import { Slider } from "./ui/slider";
+import fontJson from "./Lantern.json";
+import { buildFont, drawBitmapText } from "../lib/font";
+const font = buildFont(fontJson);
+
+const fontImage = new Image();
+fontImage.src = "/sprites/font-atlas.png";
 
 const LEVEL_UP_BEAM_SPRITESHEET = "/sprites/upgrades/level-up-spritesheet.png";
 const CONTAINER_SPRITESHEET = "/sprites/upgrades/containers-spritesheet.png";
@@ -33,7 +39,11 @@ export function LevelUpScreen() {
   const [animationPhase, setAnimationPhase] = useState<"beam" | "dropdown" | "ready">("beam");
   const [beamProgress, setBeamProgress] = useState(0);
   const [beamFrame, setBeamFrame] = useState(0);
-  
+  const titleCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const descCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const chooseCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const upgradeNameCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
   useEffect(() => {
     if (showLevelUpScreen) {
       // Force immediate state reset
@@ -78,12 +88,108 @@ export function LevelUpScreen() {
       return () => clearTimeout(timeout);
     }
   }, [animationPhase]);
+  
+  useEffect(() => {
+    if (animationPhase !== "ready") return;
 
-  if (!showLevelUpScreen || availableUpgrades.length === 0) return null;
+    const canvas = titleCanvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    drawBitmapText(
+      ctx,
+      "CHOOSE AN UPGRADE",
+      canvas.width / 2,
+      canvas.height / 2,
+      font,
+      fontImage,
+      {
+        align: "center",
+        scale: 2,
+        color: "#fd5161",
+      }
+    );
+
+    drawBitmapText(
+      ctx,
+      "LEVEL: " + level,
+      canvas.width / 2,
+      canvas.height,
+      font,
+      fontImage,
+      {
+        align: "center",
+        scale: 1,
+        color: "#F5D6C1",
+      }
+    );
+  }, [animationPhase]);
+
+  
 
   const displayedUpgrade = availableUpgrades[hoveredIndex ?? selectedIndex];
   const playerScreenX = (window.innerWidth - CANVAS_WIDTH) / 2 + CANVAS_WIDTH / 2;
   const playerScreenY = (window.innerHeight - CANVAS_HEIGHT) / 2 + CANVAS_HEIGHT / 2;
+
+// description text
+useEffect(() => {
+  if (animationPhase !== "ready") return;
+
+  const canvas = descCanvasRef.current;
+  if (!canvas) return;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  drawBitmapText(
+    ctx,
+    displayedUpgrade.description,
+    canvas.width / 2,
+    20,
+    font,
+    fontImage,
+    {
+      align: "center",
+      scale: 1,      
+      color: "#ffffff",
+    }
+  );
+}, [animationPhase, displayedUpgrade]);
+  
+// choose button text
+useEffect(() => {
+    if (animationPhase !== "ready") return;
+
+    const canvas = chooseCanvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    drawBitmapText(
+      ctx,
+      "CHOOSE",
+      canvas.width / 2,
+      canvas.height / 1.5,
+      font,
+      fontImage,
+      {
+        align: "center",
+        scale: 1.5,
+        color: "#fd5161",
+      }
+    );
+  }, [animationPhase]);
+
+if (!showLevelUpScreen || availableUpgrades.length === 0) return null;
 
   return (
     <div className="fixed inset-0 z-[20] font-pixel pointer-events-none">
@@ -127,26 +233,18 @@ export function LevelUpScreen() {
         >
           {/* Level text */}
           <div className="text-center mb-4">
-            <h1
-              className="text-5xl font-pixel bold text-red-500 drop-shadow-lg mb-2"
+            <canvas
+              ref={titleCanvasRef}
+              width={600}
+              height={80}
               style={{
-                transform: animationPhase === "ready" ? "translateY(0) scale(1)" : "translateY(-50px) scale(0.8)",
-                opacity: animationPhase === "ready" ? 1 : 0,
-                transition: "all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s",
+                display: "block",
+                margin: "0 auto",
+                opacity:
+                  animationPhase === "ready" ? 1 : 0,
+                transition: "opacity 0.3s ease",
               }}
-            >
-              Choose an Upgrade
-            </h1>
-            <p
-              className="text-xl text-gray-300 font-bold"
-              style={{
-                transform: animationPhase === "ready" ? "translateY(0)" : "translateY(-30px)",
-                opacity: animationPhase === "ready" ? 1 : 0,
-                transition: "all 0.4s ease-out 0.2s",
-              }}
-            >
-              Level {level}
-            </p>
+            />
           </div>
 
           {/* Upgrade icons */}
@@ -223,11 +321,29 @@ export function LevelUpScreen() {
             }}
           >
             <h2 className="text-5xl font-bold text-white mb-2">
-              {displayedUpgrade.name}
+              <canvas
+                ref={upgradeNameCanvasRef}
+                width={600}
+                height={120}
+                style={{
+                  display: "block",
+                  margin: "0 auto",
+                  opacity: animationPhase === "ready" ? 1 : 0,
+                 transition: "opacity 0.3s ease",
+                }}
+              />
             </h2>
-            <p className="text-2xl text-gray-300">
-              {displayedUpgrade.description}
-            </p>
+            <canvas
+  ref={descCanvasRef}
+  width={600}
+  height={120}
+  style={{
+    display: "block",
+    margin: "0 auto",
+    opacity: animationPhase === "ready" ? 1 : 0,
+    transition: "opacity 0.3s ease",
+  }}
+/>
           </div>
 
           {/* Choose button */}
@@ -256,7 +372,17 @@ export function LevelUpScreen() {
                     : "none",
               }}
             >
-              CHOOSE
+              <canvas
+                ref={chooseCanvasRef}
+                width={100}
+                height={40}
+                style={{
+                  display: "block",
+                  margin: "0 auto",
+                  opacity: animationPhase === "ready" ? 1 : 0,
+                  transition: "opacity 0.3s ease",
+                  }}
+              />
             </button>
           </div>
         </div>

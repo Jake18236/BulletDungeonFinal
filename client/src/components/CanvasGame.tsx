@@ -14,7 +14,8 @@ import { useSummons } from "../lib/stores/useSummons";
 import { useCamera } from "../lib/stores/useCamera";
 import { useVisualEffects } from "../lib/stores/useVisualEffects";
 import { GameCamera2D, getPixelPerfectScale } from "../lib/camera";
-import { drawBitmapText } from "../lib/bitmapText";
+import fontJson from "./Lantern.json";
+import { buildFont, drawBitmapText } from "../lib/font";
 import GameUI from "./GameUI"  
 import { LevelUpScreen } from "./GameUI";
 import Darkness from "./Darkness";
@@ -35,6 +36,12 @@ import {
   bossLaserContinueSprite,
   bossLaserWindupSprite,
 } from "./SpriteProps";
+
+const font = buildFont(fontJson);
+
+const fontImage = new Image();
+fontImage.src = "/sprites/font-atlas.png";
+
 
 const TILE_SIZE = 50;
 export const CANVAS_WIDTH = window.innerWidth;
@@ -1501,12 +1508,19 @@ export default function CanvasGame() {
       ctx.save();
       ctx.translate(centerX, barY - 12);
       ctx.scale(textScale, textScale);
-
-      drawBitmapText(ctx, "RELOADING", 0, 0, {
+      
+      drawBitmapText(
+      ctx,
+      "RELOADING",
+      0,
+      0,
+      font,
+      fontImage,
+      {
         align: "center",
-        baseline: "middle",
-        scale: 0.42,
-      });
+        scale: 1 // IMPORTANT: use integers
+      }
+      );
 
       ctx.restore();
 
@@ -1710,12 +1724,18 @@ export default function CanvasGame() {
 
       ctx.globalAlpha = alpha;
 
-      const scale = dmg.scale;
-      drawBitmapText(ctx, dmg.damage.toString(), screenX, screenY, {
-        align: "center",
-        baseline: "middle",
-        scale: 0.28 * scale,
-      });
+      drawBitmapText(
+      ctx,
+      dmg.damage.toString(),
+      screenX,
+      screenY,
+      font,
+      fontImage,
+  {
+    align: "center",
+    scale: dmg.scale // IMPORTANT: use integers
+  }
+);
     });
 
     ctx.restore();
@@ -2089,12 +2109,18 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
       ctx.strokeStyle = "#fff";
       ctx.lineWidth = 2;
       ctx.strokeRect(screenX - barW / 2, barY, barW, barH);
-      drawBitmapText(ctx, "BOSS", screenX, barY - 10, {
-        align: "center",
-        baseline: "bottom",
-        scale: 0.34,
-      });
-
+      drawBitmapText(
+      ctx,
+      "BOSS",
+      screenX,
+      barY-10,
+      font,
+      fontImage,
+     {
+    align: "center",
+    scale: 1
+    }
+    );
       return;
     }
 
