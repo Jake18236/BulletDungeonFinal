@@ -12,7 +12,7 @@ import { Volume2, VolumeX } from "lucide-react";
 import { HeartHUD, AmmoHUD, } from "./SpriteProps";
 import { Slider } from "./ui/slider";
 import fontJson from "./Lantern.json";
-import { buildFont, drawBitmapText } from "../lib/font";
+import { buildFont, drawBitmapText, drawWrappedText } from "../lib/font";
 const font = buildFont(fontJson);
 
 const fontImage = new Image();
@@ -42,7 +42,6 @@ export function LevelUpScreen() {
   const titleCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const descCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const chooseCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const upgradeNameCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     if (showLevelUpScreen) {
@@ -89,6 +88,10 @@ export function LevelUpScreen() {
     }
   }, [animationPhase]);
   
+  const displayedUpgrade = availableUpgrades[hoveredIndex ?? selectedIndex];
+  const playerScreenX = (window.innerWidth - CANVAS_WIDTH) / 2 + CANVAS_WIDTH / 2;
+  const playerScreenY = (window.innerHeight - CANVAS_HEIGHT) / 2 + CANVAS_HEIGHT / 2;
+
   useEffect(() => {
     if (animationPhase !== "ready") return;
 
@@ -100,40 +103,21 @@ export function LevelUpScreen() {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    drawBitmapText(
-      ctx,
-      "CHOOSE AN UPGRADE",
-      canvas.width / 2,
-      canvas.height / 2,
-      font,
-      fontImage,
-      {
-        align: "center",
-        scale: 2,
-        color: "#fd5161",
-      }
-    );
+    const cx = canvas.width / 2;
 
-    drawBitmapText(
-      ctx,
-      "LEVEL: " + level,
-      canvas.width / 2,
-      canvas.height,
-      font,
-      fontImage,
-      {
-        align: "center",
-        scale: 1,
-        color: "#F5D6C1",
-      }
-    );
+  drawBitmapText(ctx, "CHOOSE AN UPGRADE", cx, 30, font, fontImage, {
+    align: "center",
+    scale: 2,
+    color: "#fd5161",
+  });
+
+  drawBitmapText(ctx, `LEVEL: ${level}`, cx, 70, font, fontImage, {
+    align: "center",
+    scale: 1,
+    color: "#F5D6C1",
+  });
+
   }, [animationPhase]);
-
-  
-
-  const displayedUpgrade = availableUpgrades[hoveredIndex ?? selectedIndex];
-  const playerScreenX = (window.innerWidth - CANVAS_WIDTH) / 2 + CANVAS_WIDTH / 2;
-  const playerScreenY = (window.innerHeight - CANVAS_HEIGHT) / 2 + CANVAS_HEIGHT / 2;
 
 // description text
 useEffect(() => {
@@ -147,19 +131,31 @@ useEffect(() => {
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  drawBitmapText(
+  const cx = canvas.width / 2;
+
+  // --- NAME ---
+  drawBitmapText(ctx, displayedUpgrade.name, cx, 10, font, fontImage, {
+    align: "center",
+    scale: 3,
+    color: "#fd5161",
+  });
+
+  // --- DESCRIPTION ---
+  drawWrappedText(
     ctx,
     displayedUpgrade.description,
-    canvas.width / 2,
-    20,
+    cx,
+    80,
+    canvas.width - 40,
     font,
     fontImage,
     {
       align: "center",
-      scale: 1,      
-      color: "#ffffff",
+      scale: 2,
+      color: "#F5D6C1",
     }
   );
+
 }, [animationPhase, displayedUpgrade]);
   
 // choose button text
@@ -174,19 +170,12 @@ useEffect(() => {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    drawBitmapText(
-      ctx,
-      "CHOOSE",
-      canvas.width / 2,
-      canvas.height / 1.5,
-      font,
-      fontImage,
-      {
-        align: "center",
-        scale: 1.5,
-        color: "#fd5161",
-      }
-    );
+    drawBitmapText(ctx, "CHOOSE", 50, 20, font, fontImage, {
+    align: "center",
+    baseline: "middle",
+    scale: 1.5,
+    color: "#fd5161",
+  });
   }, [animationPhase]);
 
 if (!showLevelUpScreen || availableUpgrades.length === 0) return null;
@@ -236,7 +225,7 @@ if (!showLevelUpScreen || availableUpgrades.length === 0) return null;
             <canvas
               ref={titleCanvasRef}
               width={600}
-              height={80}
+              height={120}
               style={{
                 display: "block",
                 margin: "0 auto",
@@ -320,28 +309,14 @@ if (!showLevelUpScreen || availableUpgrades.length === 0) return null;
                 "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.5s",
             }}
           >
-            <h2 className="text-5xl font-bold text-white mb-2">
-              <canvas
-                ref={upgradeNameCanvasRef}
-                width={600}
-                height={120}
-                style={{
-                  display: "block",
-                  margin: "0 auto",
-                  opacity: animationPhase === "ready" ? 1 : 0,
-                 transition: "opacity 0.3s ease",
-                }}
-              />
-            </h2>
+
             <canvas
   ref={descCanvasRef}
   width={600}
-  height={120}
+  height={200}
   style={{
-    display: "block",
-    margin: "0 auto",
-    opacity: animationPhase === "ready" ? 1 : 0,
-    transition: "opacity 0.3s ease",
+    width: "100%",
+    height: "100%",
   }}
 />
           </div>
