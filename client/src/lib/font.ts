@@ -155,10 +155,14 @@ export function drawBitmapText(
 
     // optional color tint (cheaper version)
     if (color) {
+      ctx.save();
+
       ctx.globalCompositeOperation = "source-atop";
       ctx.fillStyle = color;
+
       ctx.fillRect(dx, dy, g.w * scale, g.h * scale);
-      ctx.globalCompositeOperation = "source-over";
+
+      ctx.restore();
     }
 
     cursorX += (g.advance + spacing) * scale;

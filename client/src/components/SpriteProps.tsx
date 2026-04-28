@@ -162,6 +162,54 @@ export const enemyEyeSpritesByType: Record<EnemySpriteType, SpriteDef> = {
   tree: createEnemySprite("/sprites/enemy/tree-enemy-eyes.png", 96, BASE_SCALE),
 };
 
+export function drawNineSlice(
+  ctx: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  slice: { left: number; right: number; top: number; bottom: number }
+) {
+  const { left, right, top, bottom } = slice;
+
+  const iw = image.width;
+  const ih = image.height;
+
+  ctx.imageSmoothingEnabled = false;
+
+  // corners
+  ctx.drawImage(image, 0, 0, left, top, x, y, left, top); // TL
+  ctx.drawImage(image, iw - right, 0, right, top, x + width - right, y, right, top); // TR
+  ctx.drawImage(image, 0, ih - bottom, left, bottom, x, y + height - bottom, left, bottom); // BL
+  ctx.drawImage(image, iw - right, ih - bottom, right, bottom, x + width - right, y + height - bottom, right, bottom); // BR
+
+  // edges
+  ctx.drawImage(image, left, 0, iw - left - right, top, x + left, y, width - left - right, top); // top
+  ctx.drawImage(image, left, ih - bottom, iw - left - right, bottom, x + left, y + height - bottom, width - left - right, bottom); // bottom
+  ctx.drawImage(image, 0, top, left, ih - top - bottom, x, y + top, left, height - top - bottom); // left
+  ctx.drawImage(image, iw - right, top, right, ih - top - bottom, x + width - right, y + top, right, height - top - bottom); // right
+
+  // center
+  ctx.drawImage(
+    image,
+    left,
+    top,
+    iw - left - right,
+    ih - top - bottom,
+    x + left,
+    y + top,
+    width - left - right,
+    height - top - bottom
+  );
+}
+
+export const frameSprite = (() => {
+  const img = new Image();
+  img.src = "/sprites/frame-sprite.png";
+  return img;
+})();
+
 export const enemySprite = enemySpritesByType.basic;
 
 export const bossEnemySprite: SpriteDef = {

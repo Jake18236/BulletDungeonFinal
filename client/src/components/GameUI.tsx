@@ -9,7 +9,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from "../components/CanvasGame"
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
 import { Volume2, VolumeX } from "lucide-react";
-import { HeartHUD, AmmoHUD, } from "./SpriteProps";
+import { HeartHUD, AmmoHUD, frameSprite, drawNineSlice } from "./SpriteProps";
 import { Slider } from "./ui/slider";
 import fontJson from "./Lantern.json";
 import { buildFont, drawBitmapText, drawWrappedText } from "../lib/font";
@@ -132,6 +132,21 @@ useEffect(() => {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   const cx = canvas.width / 2;
+
+drawNineSlice(
+  ctx,
+  frameSprite,        // your sprite
+  0,
+  0,
+  canvas.width,
+  canvas.height,
+  {
+    left: 16,
+    right: 16,
+    top: 16,
+    bottom: 16,
+  }
+);
 
   // --- NAME ---
   drawBitmapText(ctx, displayedUpgrade.name, cx, 10, font, fontImage, {
@@ -292,14 +307,16 @@ if (!showLevelUpScreen || availableUpgrades.length === 0) return null;
 
           {/* Upgrade description */}
           <div
-            className="bg-black border-2 rounded-lg text-center mb-3"
+            className="text-center mb-3"
             style={{
               width: "600px",
               margin: "0 auto",
               height: "200px",
               overflow: "hidden",
-              borderColor: "white",
-              padding: "1rem",
+              padding: "1.25rem 1.5rem",
+              backgroundImage: `url(${frameSprite})`,
+              backgroundRepeat: "no-repeat",
+              backgroundSize: "100% 100%",
               transform:
                 animationPhase === "ready"
                   ? "translateY(0) scale(1)"
@@ -315,8 +332,7 @@ if (!showLevelUpScreen || availableUpgrades.length === 0) return null;
   width={600}
   height={200}
   style={{
-    width: "100%",
-    height: "100%",
+    width: "600px", height: "200px"
   }}
 />
           </div>
