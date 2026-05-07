@@ -23,7 +23,7 @@ import {
   enemySpritesByType,
   enemyEyeSpritesByType,
   WeaponSprites,
-  CursorSprite,
+  cursorSprite,
   SummonSprites,
   xpSprite,
   getProjectileImage,
@@ -39,8 +39,11 @@ import {
 
 const font = buildFont(fontJson);
 
-const fontImage = new Image();
-fontImage.src = "/sprites/font-atlas.png";
+const fontWhiteImage = new Image();
+fontWhiteImage.src = "/sprites/font-atlas-white.png";
+
+const fontRedImage = new Image();
+fontRedImage.src = "/sprites/font-atlas-red.png";
 
 
 const TILE_SIZE = 50;
@@ -51,7 +54,7 @@ const LAZARUS_BASE_BEAM_LENGTH_WORLD = (304 * 4) / (TILE_SIZE / 2);
 const LAZARUS_BEAM_LENGTH_WORLD = LAZARUS_BASE_BEAM_LENGTH_WORLD * SHOGGOTH_CONFIG.beamLengthScale;
 
 const grassSprite = new Image();
-grassSprite.src = "/textures/grass.png";
+grassSprite.src = "/textures/grass3.png";
 
 const treeSprite = new Image();
 treeSprite.src = "/sprites/enemy/tree-enemy.png";
@@ -318,6 +321,7 @@ function releaseLightningTree(tree: TerrainObstacle, nowMs: number) {
 export default function CanvasGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const eyeCanvasRef = useRef<HTMLCanvasElement>(null);
+  const cursorCanvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number>();
   const animationDeltaRef = useRef<number>(0);
   const enemyProjectilesRef = useRef<EnemyProjectile[]>([]);
@@ -327,7 +331,6 @@ export default function CanvasGame() {
   const pausedAnimationTimeRef = useRef<number>(0);
   const gameplayElapsedMsRef = useRef<number>(0);
   const damagedThisFrameRef = useRef<boolean>(false);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const { applyHit, applyPlayerDamage } = useHit();
   const terrainRef = useRef<TerrainObstacle[]>([]);
   const treeLightningRef = useRef<TreeLightningAttack[]>([]);
@@ -390,6 +393,7 @@ export default function CanvasGame() {
   const canInteract = phase === "playing";
   const canvasRectRef = useRef<DOMRect | null>(null);
   const cameraRef = useRef(new GameCamera2D());
+  const weaponAngleRef = useRef(0);
   const [canvasDisplay, setCanvasDisplay] = useState({
     width: CANVAS_WIDTH,
     height: CANVAS_HEIGHT,
@@ -488,48 +492,45 @@ export default function CanvasGame() {
     };
   }, [canInteract, isReloading, ammo, startReload]);
 
-  useEffect(() => {
-    const handleMouseDown = (e: MouseEvent) => {
-      if (!canInteract || e.button !== 0) return;
-      isMouseDown.current = true;
-    };
+useEffect(() => {
+  const handleMouseDown = (e: MouseEvent) => {
+    if (!canInteract || e.button !== 0) return;
+    isMouseDown.current = true;
+  };
 
-    const handleMouseUp = (e: MouseEvent) => {
-      if (e.button !== 0) return;
-      isMouseDown.current = false;
-    };
+  const handleMouseUp = (e: MouseEvent) => {
+    if (e.button !== 0) return;
+    isMouseDown.current = false;
+  };
 
-    const handleMouseMove = (e: MouseEvent) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
+const handleMouseMove = (e: MouseEvent) => {
+  const canvas = canvasRef.current;
+  if (!canvas) return;
 
-      const rect = canvas.getBoundingClientRect();
-      
-      // Store raw mouse position for UI components
-      const rawX = e.clientX;
-      const rawY = e.clientY;
-      
-      setMousePos({ x: rawX, y: rawY });
+  const rect = canvas.getBoundingClientRect();
 
-      const scaleX = CANVAS_WIDTH / rect.width;
-      const scaleY = CANVAS_HEIGHT / rect.height;
+  const scaleX = CANVAS_WIDTH / rect.width;
+  const scaleY = CANVAS_HEIGHT / rect.height;
 
-      mouseRef.current = {
-        x: (e.clientX - rect.left) * scaleX,
-        y: (e.clientY - rect.top) * scaleY,
-      };
-    };
+  const offsetX = canvasDisplay.offsetX;
+  const offsetY = canvasDisplay.offsetY;
 
-    window.addEventListener("mousedown", handleMouseDown);
-    window.addEventListener("mouseup", handleMouseUp);
-    window.addEventListener("mousemove", handleMouseMove);
+  mouseRef.current = {
+    x: (e.clientX - rect.left + offsetX) * scaleX,
+    y: (e.clientY - rect.top + offsetY) * scaleY,
+  };
+};
 
-    return () => {
-      window.removeEventListener("mousedown", handleMouseDown);
-      window.removeEventListener("mouseup", handleMouseUp);
-      window.removeEventListener("mousemove", handleMouseMove);
-    };
-  }, [canInteract]);
+  window.addEventListener("mousedown", handleMouseDown);
+  window.addEventListener("mouseup", handleMouseUp);
+  window.addEventListener("mousemove", handleMouseMove);
+
+  return () => {
+    window.removeEventListener("mousedown", handleMouseDown);
+    window.removeEventListener("mouseup", handleMouseUp);
+    window.removeEventListener("mousemove", handleMouseMove);
+  };
+}, [canInteract]);
 
 
   const spawnEyeballProjectile = (enemy: any) => {
@@ -1249,6 +1250,14 @@ export default function CanvasGame() {
       drawXPOrbs(ctx);
       enemies.forEach(enemy => drawEnemy(ctx, enemy));
 
+      const cursorCanvas = cursorCanvasRef.current;
+      const cursorCtx = cursorCanvas?.getContext("2d");
+      if (cursorCtx) {
+        cursorCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        cursorCtx.imageSmoothingEnabled = false;
+        drawCursor(cursorCtx);
+      }
+
       const eyeCanvas = eyeCanvasRef.current;
       const eyeCtx = eyeCanvas?.getContext("2d");
       if (eyeCtx) {
@@ -1260,6 +1269,7 @@ export default function CanvasGame() {
         drawEnemyProjectiles(eyeCtx);
         drawProjectilesAndTrails(eyeCtx, phase !== "playing", position);
         drawSummons(eyeCtx, animationNowMs);
+        drawDamageNumbers(eyeCtx); 
       }
       drawFootsteps(ctx);
       drawPlayer(ctx, animationNowMs);
@@ -1268,11 +1278,11 @@ export default function CanvasGame() {
       drawImpactEffects(ctx); // ADD - behind projectiles
       
       drawEnemyDeaths(ctx, gameplayElapsedMsRef.current);
-      drawDamageNumbers(ctx); 
+      
       
       drawReloadIndicator(ctx);
       drawWeapon(ctx, "revolver", phase !== "playing");
-      
+    
       
       animationFrameRef.current = requestAnimationFrame(gameLoop);
     };
@@ -1353,11 +1363,11 @@ export default function CanvasGame() {
   ctx.fillRect(
     -pixelOffsetX,
     -pixelOffsetZ,
-    CANVAS_WIDTH / 2,
-    CANVAS_HEIGHT/ 2
+    CANVAS_WIDTH,
+    CANVAS_HEIGHT
   );
-  ctx.fillStyle = grassPattern;
   
+  ctx.fillStyle = grassPattern;
 
   ctx.restore();
 
@@ -1412,7 +1422,6 @@ export default function CanvasGame() {
     // WALLS
     // ============================================
 
-    ctx.fillStyle = "#2a2a2c";
     const wallThickness = 20;
 
     ctx.fillRect(
@@ -1503,11 +1512,10 @@ export default function CanvasGame() {
       ctx.lineWidth = 4;
       ctx.strokeRect(centerX - radius - 1, barY - 1, radius * 2 + 2, barHeight + 2);
 
-      // Text with animation
-      const textScale = 1 + Math.sin(progress * Math.PI * 4) * 0.1;
+      
       ctx.save();
-      ctx.translate(centerX, barY - 12);
-      ctx.scale(textScale, textScale);
+      ctx.translate(centerX, barY-20);
+  
       
       drawBitmapText(
       ctx,
@@ -1515,10 +1523,10 @@ export default function CanvasGame() {
       0,
       0,
       font,
-      fontImage,
+      fontWhiteImage,
       {
         align: "center",
-        scale: 1 // IMPORTANT: use integers
+        scale: 1 
       }
       );
 
@@ -1552,9 +1560,14 @@ export default function CanvasGame() {
   ) => {
     const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    const dx = mouseRef.current.x - centerX;
-    const dy = mouseRef.current.y - centerY;
-    const mouseAngle = Math.atan2(dy, dx);
+    const canRotate = phase === "playing" && !isPaused;
+
+    if (canRotate) {
+  const dx = mouseRef.current.x - centerX;
+  const dy = mouseRef.current.y - centerY;
+
+  weaponAngleRef.current = Math.atan2(dy, dx);
+}
 
     ctx.save();
     ctx.imageSmoothingEnabled = false;
@@ -1563,11 +1576,11 @@ export default function CanvasGame() {
     if (type === "revolver") {
       
       const scale = 2;
-      const gunRotation = mouseAngle;
+      const gunRotation = weaponAngleRef.current;
       
     
 
-      const flipGun = Math.abs(mouseAngle) > Math.PI / 2;
+      const flipGun = Math.abs(weaponAngleRef.current) > Math.PI / 2;
 
       
       
@@ -1730,7 +1743,7 @@ export default function CanvasGame() {
       screenX,
       screenY,
       font,
-      fontImage,
+      fontWhiteImage,
   {
     align: "center",
     scale: dmg.scale // IMPORTANT: use integers
@@ -1866,7 +1879,6 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
 
     ctx.restore();
   };
-
 
   const drawEnemy = (ctx: CanvasRenderingContext2D, enemy: any) => {
     if (!enemy || !enemy.position) return;
@@ -2115,7 +2127,7 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
       screenX,
       barY-10,
       font,
-      fontImage,
+      fontRedImage,
      {
     align: "center",
     scale: 1
@@ -2250,6 +2262,9 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
         ctx.translate(screenX, screenY);
         ctx.imageSmoothingEnabled = false;
         ctx.globalAlpha = 1;
+        const facing = summon.facing ?? 1;
+        ctx.scale(facing, 1);
+
         ctx.drawImage(sprite, sx, sy, frameW, frameH, -drawW / 2, -drawH / 2, drawW, drawH);
         ctx.restore();
         return;
@@ -2300,7 +2315,7 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
         const canDrawScythe = sprite.complete && sprite.naturalWidth > 0 && sprite.naturalHeight > 0;
 
         if (canDrawScythe) {
-          const scale = 1;
+          const scale = 3;
           const w = sprite.naturalWidth * scale;
           const h = sprite.naturalHeight * scale;
           ctx.rotate(summon.rotation ?? 0);
@@ -2402,13 +2417,48 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     ctx.globalAlpha = 1;
   };
 
+  const drawCursor = (ctx: CanvasRenderingContext2D) => {
+  const size = 32;
+  const half = size / 2;
+const { ammo } = usePlayer.getState();
+  const x = mouseRef.current.x;
+  const y = mouseRef.current.y;
+
+  ctx.imageSmoothingEnabled = false;
+
+  ctx.drawImage(
+    cursorSprite,
+    Math.floor(x - half),
+    Math.floor(y - half),
+    size,
+    size
+  );
+
+  if (phase !== "playing") return;
+
+  
+
+  drawBitmapText(
+    ctx,
+    `${ammo}`,
+    x + 18,
+    y + 10,
+    font,
+    fontWhiteImage,
+    {
+      align: "left",
+      baseline: "middle",
+      scale: 1,
+    }
+  );
+};
 
   return (
     <>
       <div
         className=""
         style={{
-          cursor: phase === "playing" ? "none" : "default",
+          cursor: "none",
           position: "relative",
           width: canvasDisplay.width,
           height: canvasDisplay.height,
@@ -2427,6 +2477,7 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
         height={CANVAS_HEIGHT}
         className="border-2 border-gray-700"
         style={{
+          cursor: "none",
           position: "relative",
           zIndex: 0,
           width: canvasDisplay.width,
@@ -2439,6 +2490,7 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
         width={CANVAS_WIDTH}
         height={CANVAS_HEIGHT}
         style={{
+          cursor: "none",
           position: "absolute",
           top: 0,
           left: 0,
@@ -2449,11 +2501,22 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
           imageRendering: "pixelated",
         }}
       />
-        
-      <CursorSprite
-        x={mousePos.x}
-        y={mousePos.y}
-      />
+      <canvas
+  ref={cursorCanvasRef}
+  width={CANVAS_WIDTH}
+  height={CANVAS_HEIGHT}
+  style={{
+    cursor: "none",
+    position: "absolute",  
+    top: canvasDisplay.offsetY,
+    left: canvasDisplay.offsetX,
+    pointerEvents: "none",
+    zIndex: 3000,        
+    width: canvasDisplay.width,
+    height: canvasDisplay.height,
+    imageRendering: "pixelated",
+  }}
+/>
       </div>
     </>
   );

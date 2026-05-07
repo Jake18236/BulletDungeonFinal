@@ -3,116 +3,117 @@ import { usePlayer } from "../lib/stores/usePlayer";
 import { useEnemies } from "../lib/stores/useEnemies";
 import { useVisualEffects } from "../lib/stores/useVisualEffects";
 import { useCamera } from "../lib/stores/useCamera";
-import { CANVAS_WIDTH, CANVAS_HEIGHT } from "../components/CanvasGame"
+import { CANVAS_WIDTH, CANVAS_HEIGHT } from "../components/CanvasGame";
 
-const TILE_SIZE = 50;
-const WORLD_TO_SCREEN_SCALE = TILE_SIZE / 2;
-const PIXEL_SIZE = 2;
-const LIGHT_LEVELS = [1, 0.3, 0.5] as const;
+const WORLD_TO_SCREEN_SCALE = 25; // simplified (your TILE_SIZE/2)
+const LIGHT_SAMPLES = 32; // quality vs perf knob
 
-function drawThreeStepLight(
+function drawLight(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
-  radius: number,
+  radius: number
 ) {
-  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(radius)) {
-    return;
-  }
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(radius)) return;
 
-  const snappedRadius =
-    Math.max(1, Math.round(radius / PIXEL_SIZE) * PIXEL_SIZE);
+  const r = Math.max(1, radius);
 
-  if (!Number.isFinite(snappedRadius)) {
-    return;
-  }
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
 
-  const gradient = ctx.createRadialGradient(
-    x,
-    y,
-    0,
-    x,
-    y,
-    snappedRadius,
-  );
+  // Smooth 20MTD-style falloff (single curve, no banding)
+  g.addColorStop(0.0, "rgba(255,255,255,0.95)");
+  g.addColorStop(0.4, "rgba(255,255,255,0.35)");
+  g.addColorStop(0.7, "rgba(255,255,255,0.12)");
+  g.addColorStop(1.0, "rgba(255,255,255,0)");
 
-  gradient.addColorStop(0, "rgb(255, 255, 255, 0.80)");
-    gradient.addColorStop(0.45, "rgba(255,255,255, 0.65)");
-  gradient.addColorStop(0.5, "rgba(255,255,255,0.5)");
-    gradient.addColorStop(0.70, "rgba(255,255,255, 0.25)");
-  gradient.addColorStop(1, "rgba(255,255,255,0)");
-
-  ctx.fillStyle = gradient;
+  ctx.fillStyle = g;
   ctx.beginPath();
-  ctx.arc(x, y, snappedRadius, 0, Math.PI * 2);
+  ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
 }
 
 export default function Darkness() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationFrameRef = useRef<number>();
+  const frameRef = useRef<number>();
+
   const { position: playerPosition, muzzleFlashPosition } = usePlayer();
   const { xpOrbs } = useEnemies();
   const { impactEffects } = useVisualEffects();
   const { screenCenter } = useCamera();
+
   useEffect(() => {
     const render = () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
+
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      const centerX = screenCenter.x;
-      const centerY = screenCenter.y;
+      const cx = screenCenter.x;
+      const cy = screenCenter.y;
 
-      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      // =========================================
+      // BASE DARKNESS (cheap full-screen fill)
+      // =========================================
       ctx.globalCompositeOperation = "source-over";
-      ctx.fillStyle = "rgba(0,0,0,0.7)";
+      ctx.fillStyle = "rgba(0,0,0,0.82)";
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
+      // =========================================
+      // LIGHT PASS (cut holes)
+      // =========================================
       ctx.globalCompositeOperation = "destination-out";
-      drawThreeStepLight(ctx, centerX, centerY, 300);
 
+      // 1. Player light (main)
+      drawLight(ctx, cx, cy, 820);
+
+      // 2. Muzzle flash (temporary)
       if (muzzleFlashPosition) {
-        const x =
-          centerX +
-          (muzzleFlashPosition.x - playerPosition.x) * WORLD_TO_SCREEN_SCALE;
-        const y =
-          centerY +
-          (muzzleFlashPosition.z - playerPosition.z) * WORLD_TO_SCREEN_SCALE;
-        drawThreeStepLight(ctx, x, y, 664);
+        drawLight(
+          ctx,
+          cx +
+            (muzzleFlashPosition.x - playerPosition.x) *
+              WORLD_TO_SCREEN_SCALE,
+          cy +
+            (muzzleFlashPosition.z - playerPosition.z) *
+              WORLD_TO_SCREEN_SCALE,
+          180
+        );
       }
 
-      impactEffects.forEach((impact) => {
-        const x =
-          centerX +
-          (impact.x - playerPosition.x) * WORLD_TO_SCREEN_SCALE;
-        const y =
-          centerY +
-          (impact.y - playerPosition.z) * WORLD_TO_SCREEN_SCALE;
-        const sizeScale = 1.5;
-        drawThreeStepLight(ctx, x, y, impact.size * sizeScale);
-      });
+      // 3. Impact effects (limited influence)
+      for (let i = 0; i < impactEffects.length; i++) {
+        const e = impactEffects[i];
 
-      xpOrbs.forEach((orb) => {
-        const x =
-          centerX +
-          (orb.position.x - playerPosition.x) * WORLD_TO_SCREEN_SCALE;
+        drawLight(
+          ctx,
+          cx + (e.x - playerPosition.x) * WORLD_TO_SCREEN_SCALE,
+          cy + (e.y - playerPosition.z) * WORLD_TO_SCREEN_SCALE,
+          e.size * 1.2
+        );
+      }
 
-        const y =
-          centerY +
-          (orb.position.z - playerPosition.z) * WORLD_TO_SCREEN_SCALE;
+      // 4. XP orbs (small soft glow)
+      for (let i = 0; i < xpOrbs.length; i++) {
+        const o = xpOrbs[i];
 
-        drawThreeStepLight(ctx, x, y, 32);
-      });
+        drawLight(
+          ctx,
+          cx + (o.position.x - playerPosition.x) * WORLD_TO_SCREEN_SCALE,
+          cy + (o.position.z - playerPosition.z) * WORLD_TO_SCREEN_SCALE,
+          28
+        );
+      }
+
       ctx.globalCompositeOperation = "source-over";
-      
-      animationFrameRef.current = requestAnimationFrame(render);
+
+      frameRef.current = requestAnimationFrame(render);
     };
 
-    animationFrameRef.current = requestAnimationFrame(render);
+    frameRef.current = requestAnimationFrame(render);
+
     return () => {
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      if (frameRef.current) cancelAnimationFrame(frameRef.current);
     };
   }, [playerPosition, xpOrbs, impactEffects, muzzleFlashPosition, screenCenter]);
 

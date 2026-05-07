@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import { useGame } from "../lib/stores/useGame";
+import { usePlayer } from "../lib/stores/usePlayer";
 
 export const BASE_SPRITE_SIZE = 32; // native sprite resolution
 export const BASE_SCALE = 2;        // global pixel upscaling factor
@@ -107,24 +109,11 @@ type CursorSpriteProps = {
   y: number;
 };
 
-export function CursorSprite({ x, y }: CursorSpriteProps) {
-  const size = 32;
-  const half = size / 2;
-
-  return (
-    <img
-      src="/sprites/crosshair.png"
-      draggable={false}
-      className="cursor-sprite image-rendering-pixelated"
-      style={{
-        width: size,
-        height: size,
-        left: Math.floor(x - half),
-        top: Math.floor(y - half),
-      }}
-    />
-  );
-}
+export const cursorSprite = (() => {
+  const img = new Image();
+  img.src = "/sprites/crosshair.png";
+  return img;
+})();
 
 let projectileImage: HTMLImageElement | null = null;
 
@@ -169,38 +158,58 @@ export function drawNineSlice(
   y: number,
   width: number,
   height: number,
-  slice: { left: number; right: number; top: number; bottom: number }
+  scale: number,
 ) {
-  const { left, right, top, bottom } = slice;
+  const c = 10;     // source corner size
+  const sc = c * scale; // destination corner size = 50
 
   const iw = image.width;
   const ih = image.height;
 
-  ctx.imageSmoothingEnabled = false;
+  const midW = iw - c * 2;
+  const midH = ih - c * 2;
 
-  // corners
-  ctx.drawImage(image, 0, 0, left, top, x, y, left, top); // TL
-  ctx.drawImage(image, iw - right, 0, right, top, x + width - right, y, right, top); // TR
-  ctx.drawImage(image, 0, ih - bottom, left, bottom, x, y + height - bottom, left, bottom); // BL
-  ctx.drawImage(image, iw - right, ih - bottom, right, bottom, x + width - right, y + height - bottom, right, bottom); // BR
+  const destMidW = width - sc * 2;
+  const destMidH = height - sc * 2;
 
-  // edges
-  ctx.drawImage(image, left, 0, iw - left - right, top, x + left, y, width - left - right, top); // top
-  ctx.drawImage(image, left, ih - bottom, iw - left - right, bottom, x + left, y + height - bottom, width - left - right, bottom); // bottom
-  ctx.drawImage(image, 0, top, left, ih - top - bottom, x, y + top, left, height - top - bottom); // left
-  ctx.drawImage(image, iw - right, top, right, ih - top - bottom, x + width - right, y + top, right, height - top - bottom); // right
+  // safety clamp
+  if (destMidW < 0 || destMidH < 0) return;
 
-  // center
+  // ───────── CORNERS (scaled up) ─────────
+
+  // TL
+  ctx.drawImage(image, 0, 0, c, c, x, y, sc, sc);
+
+  // TR
+  ctx.drawImage(image, iw - c, 0, c, c, x + width - sc, y, sc, sc);
+
+  // BL
+  ctx.drawImage(image, 0, ih - c, c, c, x, y + height - sc, sc, sc);
+
+  // BR
+  ctx.drawImage(image, iw - c, ih - c, c, c, x + width - sc, y + height - sc, sc, sc);
+
+  // ───────── EDGES ─────────
+
+  // top
+  ctx.drawImage(image, c, 0, midW, c, x + sc, y, destMidW, sc);
+
+  // bottom
+  ctx.drawImage(image, c, ih - c, midW, c, x + sc, y + height - sc, destMidW, sc);
+
+  // left
+  ctx.drawImage(image, 0, c, c, midH, x, y + sc, sc, destMidH);
+
+  // right
+  ctx.drawImage(image, iw - c, c, c, midH, x + width - sc, y + sc, sc, destMidH);
+
+  // ───────── CENTER ─────────
+
   ctx.drawImage(
     image,
-    left,
-    top,
-    iw - left - right,
-    ih - top - bottom,
-    x + left,
-    y + top,
-    width - left - right,
-    height - top - bottom
+    c, c, midW, midH,
+    x + sc, y + sc,
+    destMidW, destMidH
   );
 }
 

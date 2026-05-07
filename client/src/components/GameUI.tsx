@@ -15,8 +15,11 @@ import fontJson from "./Lantern.json";
 import { buildFont, drawBitmapText, drawWrappedText } from "../lib/font";
 const font = buildFont(fontJson);
 
-const fontImage = new Image();
-fontImage.src = "/sprites/font-atlas.png";
+const fontWhiteImage = new Image();
+fontWhiteImage.src = "/sprites/font-atlas-white.png";
+
+const fontRedImage = new Image();
+fontRedImage.src = "/sprites/font-atlas-red.png";
 
 const LEVEL_UP_BEAM_SPRITESHEET = "/sprites/upgrades/level-up-spritesheet.png";
 const CONTAINER_SPRITESHEET = "/sprites/upgrades/containers-spritesheet.png";
@@ -36,6 +39,7 @@ export function LevelUpScreen() {
   const { level, availableUpgrades, showLevelUpScreen, xp, selectUpgrade } = usePlayer();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [isChooseHovered, setIsChooseHovered] = useState(false);
   const [animationPhase, setAnimationPhase] = useState<"beam" | "dropdown" | "ready">("beam");
   const [beamProgress, setBeamProgress] = useState(0);
   const [beamFrame, setBeamFrame] = useState(0);
@@ -105,18 +109,10 @@ export function LevelUpScreen() {
 
     const cx = canvas.width / 2;
 
-  drawBitmapText(ctx, "CHOOSE AN UPGRADE", cx, 30, font, fontImage, {
+  drawBitmapText(ctx, "CHOOSE AN UPGRADE", cx, 50, font, fontRedImage, {
     align: "center",
-    scale: 2,
-    color: "#fd5161",
+    scale: 3,
   });
-
-  drawBitmapText(ctx, `LEVEL: ${level}`, cx, 70, font, fontImage, {
-    align: "center",
-    scale: 1,
-    color: "#F5D6C1",
-  });
-
   }, [animationPhase]);
 
 // description text
@@ -133,26 +129,23 @@ useEffect(() => {
 
   const cx = canvas.width / 2;
 
+ctx.imageSmoothingEnabled = false;
+
 drawNineSlice(
   ctx,
-  frameSprite,        // your sprite
+  frameSprite,
   0,
   0,
   canvas.width,
   canvas.height,
-  {
-    left: 16,
-    right: 16,
-    top: 16,
-    bottom: 16,
-  }
+  3,
 );
 
   // --- NAME ---
-  drawBitmapText(ctx, displayedUpgrade.name, cx, 10, font, fontImage, {
+  drawBitmapText(ctx, displayedUpgrade.name, cx, 20, font, fontRedImage, {
     align: "center",
-    scale: 3,
-    color: "#fd5161",
+    scale: 4,
+    
   });
 
   // --- DESCRIPTION ---
@@ -160,14 +153,13 @@ drawNineSlice(
     ctx,
     displayedUpgrade.description,
     cx,
-    80,
+    100,
     canvas.width - 40,
     font,
-    fontImage,
+    fontWhiteImage,
     {
       align: "center",
       scale: 2,
-      color: "#F5D6C1",
     }
   );
 
@@ -184,14 +176,32 @@ useEffect(() => {
     if (!ctx) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.imageSmoothingEnabled = false;
 
-    drawBitmapText(ctx, "CHOOSE", 50, 20, font, fontImage, {
+    
+    drawNineSlice(
+  ctx,
+  frameSprite,
+  0,
+  0,
+  canvas.width,
+  canvas.height,
+  2,
+);
+
+
+    drawBitmapText(ctx, 
+      "CHOOSE", 
+      canvas.width / 2, 
+      canvas.height / 2, 
+      font, isChooseHovered ? fontWhiteImage : fontRedImage,
+       {
     align: "center",
     baseline: "middle",
-    scale: 1.5,
-    color: "#fd5161",
+    scale: 2,
   });
-  }, [animationPhase]);
+
+  }, [animationPhase, isChooseHovered]);
 
 if (!showLevelUpScreen || availableUpgrades.length === 0) return null;
 
@@ -268,12 +278,12 @@ if (!showLevelUpScreen || availableUpgrades.length === 0) return null;
                   onClick={() => isReady && setSelectedIndex(i)}
                   onMouseEnter={() => setHoveredIndex(i)}
                   onMouseLeave={() => setHoveredIndex(null)}
-                  className="relative cursor-pointer"
+                  className="relative"
                   style={{
                     width: "96px",
                     height: "96px",
                     pointerEvents: isReady ? "auto" : "none",
-                    transform: `scale(${isHovered ? 1.2 : 1})`,
+                    transform: `scale(${isHovered ? 1 : 1})`,
                     opacity: isReady ? 1 : 0,
                     transition: "transform 140ms ease",
                   }}
@@ -307,75 +317,65 @@ if (!showLevelUpScreen || availableUpgrades.length === 0) return null;
 
           {/* Upgrade description */}
           <div
-            className="text-center mb-3"
-            style={{
-              width: "600px",
-              margin: "0 auto",
-              height: "200px",
-              overflow: "hidden",
-              padding: "1.25rem 1.5rem",
-              backgroundImage: `url(${frameSprite})`,
-              backgroundRepeat: "no-repeat",
-              backgroundSize: "100% 100%",
-              transform:
-                animationPhase === "ready"
-                  ? "translateY(0) scale(1)"
-                  : "translateY(30px) scale(0.95)",
-              opacity: animationPhase === "ready" ? 1 : 0,
-              transition:
-                "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.5s",
-            }}
+            className="flex justify-center"
           >
 
             <canvas
   ref={descCanvasRef}
-  width={600}
-  height={200}
+  width={800}
+  height={300}
   style={{
-    width: "600px", height: "200px"
-  }}
+    display: "block",
+    overflow: "hidden",
+    backgroundRepeat: "no-repeat",
+    backgroundSize: "100% 100%",
+    transform:
+    animationPhase === "ready"
+      ? "translateY(0) scale(1)"
+      : "translateY(30px) scale(0.95)",
+    transition:
+      "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.5s",
+            }}
 />
           </div>
 
           {/* Choose button */}
-          <div className="flex justify-center">
-            <button
-              onClick={() =>
-                animationPhase === "ready" &&
-                selectUpgrade(displayedUpgrade)
-              }
-              disabled={animationPhase !== "ready"}
-              className="bg-gray-800 hover:bg-gray-700 disabled:bg-gray-900 border-2 border-red-500 text-white font-bold text-lg py-2 px-6 rounded-lg pointer-events-auto"
-              style={{
-                transform:
-                  animationPhase === "ready"
-                    ? "translateY(0) scale(1)"
-                    : "translateY(20px) scale(0.9)",
-                opacity: animationPhase === "ready" ? 1 : 0,
-                transition: `
-                  opacity 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.6s,
-                  transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
-                  box-shadow 0.2s ease-out
-                `,
-                boxShadow:
-                  animationPhase === "ready"
-                    ? "0 0 20px rgba(239, 68, 68, 0.4)"
-                    : "none",
-              }}
-            >
-              <canvas
-                ref={chooseCanvasRef}
-                width={100}
-                height={40}
-                style={{
-                  display: "block",
-                  margin: "0 auto",
-                  opacity: animationPhase === "ready" ? 1 : 0,
-                  transition: "opacity 0.3s ease",
-                  }}
-              />
-            </button>
-          </div>
+          <div className="flex justify-center mt-6">
+  <div
+  onClick={() => {
+    if (animationPhase === "ready") {
+      selectUpgrade(displayedUpgrade);
+      setIsChooseHovered(false);
+    }
+  }}
+    onMouseEnter={() => setIsChooseHovered(true)}
+    onMouseLeave={() => setIsChooseHovered(false)}
+    style={{
+      width: "200px",
+      height: "60px",
+      overflow: "hidden",
+      alignItems: "center",
+      justifyContent: "center",
+      transform:
+    animationPhase === "ready"
+      ? "translateY(0) scale(1)"
+      : "translateY(30px) scale(0.95)",
+    transition:
+      "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.5s",
+    }}
+  >
+    <canvas
+      ref={chooseCanvasRef}
+      width={200}
+      height={60}
+      style={{ display: "block",
+      overflow: "hidden",
+      alignItems: "center",
+      justifyContent: "center",
+       }}
+    />
+  </div>
+</div>
         </div>
       )}
 
@@ -431,8 +431,11 @@ export default function GameUI() {
   const progress = showLevelUpScreen ? 1 : Math.min(xp / xpToNextLevel, 1);
   const elapsedMinutes = Math.floor(elapsedTime / 60);
   const elapsedSeconds = Math.floor(elapsedTime % 60);
+  const timerCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const timerText = `${elapsedMinutes.toString().padStart(2, "0")}:${elapsedSeconds.toString().padStart(2, "0")}`;
-
+  const levelCanvasRef = useRef<HTMLCanvasElement | null>(null);
+	const instructionsCanvasRef = useRef<HTMLCanvasElement | null>(null);
+	const showInstructions = showInGameInstructions && elapsedTime < 30;
   const handleStart = () => {
     resetPlayer();
     resetEnemies();
@@ -440,21 +443,101 @@ export default function GameUI() {
     generateDungeon();
     start();
   };
-  const [xpFlash, setXpFlash] = useState(false);
+  const [xpFlashIndex, setXpFlashIndex] = useState(0);
 
+  //level up screen xp bar flash
   useEffect(() => {
     if (!showLevelUpScreen) {
-      setXpFlash(false);
+      setXpFlashIndex(0);
       return;
     }
 
     const interval = setInterval(() => {
-      setXpFlash((prev) => !prev);
-    }, 300); // flash speed (adjust to taste)
+    setXpFlashIndex(prev => (prev + 1) % 3);
+  }, 180);
 
     return () => clearInterval(interval);
   }, [showLevelUpScreen]);
 
+  // timer text
+  useEffect(() => {
+  const canvas = timerCanvasRef.current;
+  if (!canvas) return;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  drawBitmapText(
+    ctx,
+    timerText,
+    canvas.width / 2,
+    canvas.height / 2,
+    font,
+    fontWhiteImage,
+    {
+      align: "center",
+      baseline: "middle",
+      scale: 2,
+    }
+  );
+}, [timerText]);
+
+ useEffect(() => {
+  const canvas = levelCanvasRef.current;
+  if (!canvas) return;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  drawBitmapText(
+    ctx,
+    "Level:   " + level.toString(),
+    canvas.width / 2,
+    canvas.height / 1.8,
+    font,
+    fontWhiteImage,
+    {
+      align: "center",
+      baseline: "middle",
+      scale: 1.5,
+    }
+  );
+}, [level]);
+
+useEffect(() => {
+  if (!showInstructions) return;
+
+  const canvas = instructionsCanvasRef.current;
+  if (!canvas) return;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.imageSmoothingEnabled = false;
+
+  const cx = canvas.width / 2;
+
+  drawBitmapText(ctx, "MOVE: WASD", canvas.width / 4, 30, font, fontWhiteImage, {
+
+    scale: 2,
+  });
+
+  drawBitmapText(ctx, "AIM: MOUSE", canvas.width / 3, 60, font, fontWhiteImage, {
+
+    scale: 2,
+  });
+
+  drawBitmapText(ctx, "SHOOT: CLICK", canvas.width / 2, 90, font, fontWhiteImage, {
+
+    scale: 2,
+  });
+
+}, [showInstructions]);
 
   if (phase === "ready") {
     return (
@@ -600,43 +683,39 @@ export default function GameUI() {
           <div
             className="xp-bar"
             style={{
-              position: "absolute",
+              position: "fixed",
+              backgroundColor: "#293448",
                 top: 6,
-                left: 700,
+                left: "50%",
                 transform: "translateX(-50%)",
-                width: 720,
-                height: 20,
-                backgroundColor: "rgba(0,0,0,0.6)",
-                border: "2px solid #1f2933",
-                borderRadius: 6,
-                zIndex: 100,
+                width: CANVAS_WIDTH-40,
+                height: 30,
+                zIndex: 10,
             }}
           >
+            <canvas
+          ref={levelCanvasRef}
+          width={CANVAS_WIDTH-40}
+          height={30}
+          style={{
+  position: "absolute",
+  top: 0,
+  left: 0,
+  pointerEvents: "none",
+  }}
+/>
             <div
               style={{
                 width: `${progress * 100}%`,
                 height: "100%",
                 backgroundColor: showLevelUpScreen
-                  ? xpFlash
-                    ? "#22c55e"   // bright green
-                    : "#166534"   // dark green
-                  : "#60ff87",   // normal XP color
-                borderRadius: 4,
+                ? ["#3d5555", "#293448", "#58705f"][xpFlashIndex]
+                : "#58705f",
+                borderRadius: 0,
                 transition: "width 120ms linear",
               }}
             />
-            <span
-              style={{
-                position: "absolute",
-                right: -36,
-                top: -4,
-                fontSize: 11,
-                color: "#e5e7eb",
-                fontFamily: "monospace",
-              }}
-            >
-              Lv {level}
-            </span>
+
           </div>
 
           <CardContent className="p-0">
@@ -671,27 +750,28 @@ export default function GameUI() {
 
       
 
-      <div className="fixed top-4 right-4 z-40">
-        <Card className="bg-black bg-opacity-80 text-white border-gray-600">
-          <CardContent className="px-4 py-2">
-            <p className="text-lg font-mono">{timerText}</p>
-          </CardContent>
-        </Card>
+      <div className="fixed top-11 right-4 z-40">
+        <canvas
+          ref={timerCanvasRef}
+          width={120}
+          height={40}
+          style={{
+          display: "block",
+  }}
+/>
       </div>
 
       {/* Instructions */}
-      {showInGameInstructions && (
-        <div className="fixed bottom-4 left-4 z-40">
-          <Card className="bg-black bg-opacity-80 text-white border-gray-600">
-            <CardContent className="p-3">
-              <div className="text-xs space-y-1">
-                <p>
-                  <span className="font-semibold">WASD:</span> Move
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+      {showInstructions && (
+          <div className="fixed bottom-4 z-40">
+            <canvas
+              ref={instructionsCanvasRef}
+              width={1500}
+              height={100}
+              style={{ display: "block",
+							 }}
+              />
+          </div>
       )}
 
       <style>{`
@@ -700,7 +780,7 @@ export default function GameUI() {
           .heart-hud {
             display: flex;
             gap: 0px;
-            margin-top: 20px;
+            margin-top: 35px;
             
           }
 
@@ -743,6 +823,7 @@ export default function GameUI() {
             pointer-events: none;
             image-rendering: pixelated;
             z-index: 9999;
+            
           }
         
 

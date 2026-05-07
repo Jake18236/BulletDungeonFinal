@@ -3,8 +3,6 @@ import { useFrame } from "@react-three/fiber";
 import { useKeyboardControls } from "@react-three/drei";
 import * as THREE from "three";
 
-import Player from "./Player";
-import Dungeon from "./Dungeon";
 import Enemy from "./Enemy";
 
 import { usePlayer } from "../lib/stores/usePlayer";

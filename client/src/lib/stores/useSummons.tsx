@@ -14,6 +14,7 @@ export interface Summon {
   type: "ghost" | "scythe" | "spear" | "dagger" | "electrobug";
   position: THREE.Vector3;
   rotation: number;
+  facing?: number; 
 
   // Ghost-specific
   driftOffset?: THREE.Vector3;
@@ -295,7 +296,7 @@ export const useSummons = create<SummonState>((set, get) => ({
                             closest.position.x - updated.position.x
                         );
                         const angle = baseAngle + (i - (state.ghostProjectiles - 1) / 2) * spreadAngle;
-
+                        updated.facing = Math.cos(baseAngle) < 0 ? -1 : 1;
                         const dir = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
 
                         addProjectile({
@@ -341,7 +342,7 @@ export const useSummons = create<SummonState>((set, get) => ({
 
           enemies.forEach(enemy => {
             const dist = updated.position.distanceTo(enemy.position);
-            const HIT_RADIUS = 2.2; 
+            const HIT_RADIUS = 2.8; 
 
             const lastHit = updated.damagedEnemies![enemy.id] ?? 0;
             

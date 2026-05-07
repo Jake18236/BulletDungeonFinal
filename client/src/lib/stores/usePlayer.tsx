@@ -725,7 +725,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
 
   // XP & Leveling
   xp: 20,
-  level: 1,
+  level: 0,
   xpToNextLevel: calculateXPForLevel(1),
   showLevelUpScreen: false,
   availableUpgrades: [],
