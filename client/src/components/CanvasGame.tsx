@@ -267,6 +267,68 @@ function getEnemyCollisionRadius(enemy: { type?: string }) {
   return ENEMY_TYPE_CONFIG[getEnemyType(enemy)].collisionRadius;
 }
 
+
+const ENEMY_COLLISION_CELL_SIZE = 4;
+const ENEMY_COLLISION_NEIGHBOR_OFFSETS = [-1, 0, 1] as const;
+
+function getEnemyCollisionCellKey(x: number, z: number) {
+  return `${Math.floor(x / ENEMY_COLLISION_CELL_SIZE)},${Math.floor(z / ENEMY_COLLISION_CELL_SIZE)}`;
+}
+
+function resolveEnemyCrowding(enemies: Enemy[]) {
+  const buckets = new Map<string, Enemy[]>();
+
+  for (const enemy of enemies) {
+    const key = getEnemyCollisionCellKey(enemy.position.x, enemy.position.z);
+    const bucket = buckets.get(key);
+    if (bucket) {
+      bucket.push(enemy);
+    } else {
+      buckets.set(key, [enemy]);
+    }
+  }
+
+  const resolvedPairs = new Set<string>();
+
+  for (const [key, bucket] of buckets) {
+    const [cellX, cellZ] = key.split(",").map(Number);
+
+    for (const offsetX of ENEMY_COLLISION_NEIGHBOR_OFFSETS) {
+      for (const offsetZ of ENEMY_COLLISION_NEIGHBOR_OFFSETS) {
+        const neighbor = buckets.get(`${cellX + offsetX},${cellZ + offsetZ}`);
+        if (!neighbor) continue;
+
+        for (const e1 of bucket) {
+          for (const e2 of neighbor) {
+            if (e1 === e2) continue;
+
+            const pairKey = e1.id < e2.id ? `${e1.id}:${e2.id}` : `${e2.id}:${e1.id}`;
+            if (resolvedPairs.has(pairKey)) continue;
+            resolvedPairs.add(pairKey);
+
+            const dx = e1.position.x - e2.position.x;
+            const dz = e1.position.z - e2.position.z;
+            const distSq = dx * dx + dz * dz;
+            const minDist = getEnemyCollisionRadius(e1) + getEnemyCollisionRadius(e2);
+            const minDistSq = minDist * minDist;
+
+            if (distSq <= 0 || distSq >= minDistSq) continue;
+
+            const dist = Math.sqrt(distSq);
+            const push = (minDist - dist) / 2;
+            const nx = dx / dist;
+            const nz = dz / dist;
+            e1.position.x += nx * push;
+            e1.position.z += nz * push;
+            e2.position.x -= nx * push;
+            e2.position.z -= nz * push;
+          }
+        }
+      }
+    }
+  }
+}
+
 function distancePointToSegment(point: THREE.Vector2, a: THREE.Vector2, b: THREE.Vector2) {
   const ab = b.clone().sub(a);
   const ap = point.clone().sub(a);
@@ -1145,26 +1207,7 @@ const handleMouseMove = (e: MouseEvent) => {
       });
           
 
-        for (let i = 0; i < updatedEnemies.length; i++) {
-          for (let j = i + 1; j < updatedEnemies.length; j++) {
-            const e1 = updatedEnemies[i];
-            const e2 = updatedEnemies[j];
-            const dx = e1.position.x - e2.position.x;
-            const dz = e1.position.z - e2.position.z;
-            const dist = Math.hypot(dx, dz);
-            const minDist = getEnemyCollisionRadius(e1) + getEnemyCollisionRadius(e2);
-
-            if (dist > 0 && dist < minDist) {
-              const push = (minDist - dist) / 2;
-              const nx = dx / dist;
-              const nz = dz / dist;
-              e1.position.x += nx * push;
-              e1.position.z += nz * push;
-              e2.position.x -= nx * push;
-              e2.position.z -= nz * push;
-            }
-          }
-        }
+        resolveEnemyCrowding(updatedEnemies);
 
         const PLAYER_RADIUS = 0.8;
         const DAMPING = 1.5;
@@ -1241,9 +1284,14 @@ const handleMouseMove = (e: MouseEvent) => {
         updateEnemies(aliveEnemies);
         
         useEnemies.getState().updateAutoSpawn(delta, player.position);
-        footstepMarksRef.current = footstepMarksRef.current
-          .map((mark) => ({ ...mark, life: mark.life + delta }))
-          .filter((mark) => mark.life < mark.maxLife);
+        let aliveFootstepCount = 0;
+        for (const mark of footstepMarksRef.current) {
+          mark.life += delta;
+          if (mark.life < mark.maxLife) {
+            footstepMarksRef.current[aliveFootstepCount++] = mark;
+          }
+        }
+        footstepMarksRef.current.length = aliveFootstepCount;
         if (hearts <= 0) end();
       }
       
