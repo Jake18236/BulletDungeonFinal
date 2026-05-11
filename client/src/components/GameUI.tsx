@@ -57,6 +57,7 @@ export function LevelUpScreen() {
       setHoveredIndex(null);
     }
   }, [showLevelUpScreen]);
+  
   // Beam animation
   useEffect(() => {
     if (animationPhase === "beam" && showLevelUpScreen) {
@@ -435,7 +436,8 @@ export default function GameUI() {
   const timerText = `${elapsedMinutes.toString().padStart(2, "0")}:${elapsedSeconds.toString().padStart(2, "0")}`;
   const levelCanvasRef = useRef<HTMLCanvasElement | null>(null);
 	const instructionsCanvasRef = useRef<HTMLCanvasElement | null>(null);
-	const showInstructions = showInGameInstructions && elapsedTime < 30;
+	const showInstructions = elapsedSeconds < 30;
+  
   const handleStart = () => {
     resetPlayer();
     resetEnemies();
@@ -522,22 +524,25 @@ useEffect(() => {
 
   const cx = canvas.width / 2;
 
-  drawBitmapText(ctx, "MOVE: WASD", canvas.width / 4, 30, font, fontWhiteImage, {
+  const w = canvas.width;
+const h = canvas.height;
 
-    scale: 2,
-  });
+drawBitmapText(ctx, "WASD - Move", w * 0.25, h * 0.90, font, fontWhiteImage, {
+  align: "center",
+  scale: 1,
+});
 
-  drawBitmapText(ctx, "AIM: MOUSE", canvas.width / 3, 60, font, fontWhiteImage, {
+drawBitmapText(ctx, "Left Click (Hold) - Shoot", w * 0.50, h * 0.90, font, fontWhiteImage, {
+  align: "center",
+  scale: 1,
+});
 
-    scale: 2,
-  });
+drawBitmapText(ctx, "R - Reload", w * 0.75, h * 0.90, font, fontWhiteImage, {
+  align: "center",
+  scale: 1,
+});
 
-  drawBitmapText(ctx, "SHOOT: CLICK", canvas.width / 2, 90, font, fontWhiteImage, {
-
-    scale: 2,
-  });
-
-}, [showInstructions]);
+}, [showInstructions, elapsedSeconds]);
 
   if (phase === "ready") {
     return (
@@ -761,18 +766,21 @@ useEffect(() => {
 />
       </div>
 
-      {/* Instructions */}
       {showInstructions && (
-          <div className="fixed bottom-4 z-40">
-            <canvas
-              ref={instructionsCanvasRef}
-              width={1500}
-              height={100}
-              style={{ display: "block",
-							 }}
-              />
-          </div>
-      )}
+  <canvas
+    ref={instructionsCanvasRef}
+    width={CANVAS_WIDTH}
+    height={CANVAS_HEIGHT}
+    style={{
+      position: "fixed",
+      left: "50%",
+      top: "50%",
+      transform: "translate(-50%, -50%)",
+      pointerEvents: "none",
+      zIndex: 50,
+    }}
+  />
+)}
 
       <style>{`
           

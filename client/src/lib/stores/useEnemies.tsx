@@ -164,7 +164,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
   };
 
   const spawnSessions: SpawnSession[] = [
-    createSession("basic_1", "basic", "0:00", "0:30", 24, 20, 4, 3),
+    createSession("basic_1", "basic", "0:00", "0:30", 24, 20, 4, 30),
     createSession("basic_2", "basic", "0:30", "1:00", 24, 50, 10, 4),
     createSession("basic_3", "basic", "1:00", "3:00", 30, 200, 7, 4),
     createSession("basic_4", "basic", "3:00", "30:00", 80, 400, 8, 1),

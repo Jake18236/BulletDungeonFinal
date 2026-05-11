@@ -19,13 +19,13 @@ function drawLight(
   const r = Math.max(1, radius);
 
   const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-
+  
   // Smooth 20MTD-style falloff (single curve, no banding)
-  g.addColorStop(0.0, "rgba(255,255,255,0.95)");
-  g.addColorStop(0.4, "rgba(255,255,255,0.35)");
-  g.addColorStop(0.7, "rgba(255,255,255,0.12)");
-  g.addColorStop(1.0, "rgba(255,255,255,0)");
 
+  g.addColorStop(0.2, "rgba(255,255,255,0.95)");
+  g.addColorStop(0.3, "rgba(255,255,255,0.35)");
+  g.addColorStop(0.5, "rgba(255,255,255,0.15)");
+  g.addColorStop(0.9, "rgba(255,255,255,0.01)");
   ctx.fillStyle = g;
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -56,7 +56,7 @@ export default function Darkness() {
       // BASE DARKNESS (cheap full-screen fill)
       // =========================================
       ctx.globalCompositeOperation = "source-over";
-      ctx.fillStyle = "rgba(0,0,0,0.82)";
+      ctx.fillStyle = "#272030";
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
       // =========================================
@@ -65,7 +65,7 @@ export default function Darkness() {
       ctx.globalCompositeOperation = "destination-out";
 
       // 1. Player light (main)
-      drawLight(ctx, cx, cy, 820);
+      drawLight(ctx, cx, cy, 720);
 
       // 2. Muzzle flash (temporary)
       if (muzzleFlashPosition) {
@@ -77,7 +77,7 @@ export default function Darkness() {
           cy +
             (muzzleFlashPosition.z - playerPosition.z) *
               WORLD_TO_SCREEN_SCALE,
-          180
+          800
         );
       }
 
@@ -101,7 +101,7 @@ export default function Darkness() {
           ctx,
           cx + (o.position.x - playerPosition.x) * WORLD_TO_SCREEN_SCALE,
           cy + (o.position.z - playerPosition.z) * WORLD_TO_SCREEN_SCALE,
-          28
+          88
         );
       }
 

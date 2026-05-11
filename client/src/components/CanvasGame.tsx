@@ -1352,22 +1352,35 @@ const handleMouseMove = (e: MouseEvent) => {
 
   const offsetX = (-position.x * TILE_SIZE) / 2;
   const offsetZ = (-position.z * TILE_SIZE) / 2;
-  ctx.save();
-
 
   // Camera offset in pixels
   const pixelOffsetX = (-position.x * TILE_SIZE) / 2;
   const pixelOffsetZ = (-position.z * TILE_SIZE) / 2;
+  const cameraOffset = cameraRef.current.getRenderOffset();
 
-  ctx.translate(pixelOffsetX, pixelOffsetZ);
+  // full world offset INCLUDING camera pull
+  const worldOffsetX =
+    (-position.x * TILE_SIZE) / 2 + cameraOffset.x;
+
+  const worldOffsetY =
+    (-position.z * TILE_SIZE) / 2 + cameraOffset.y;
+
+  ctx.save();
+
+  ctx.fillStyle = grassPattern;
+
+  // move pattern with world
+  ctx.translate(worldOffsetX, worldOffsetY);
+
+  // draw oversized so edges never appear
   ctx.fillRect(
-    -pixelOffsetX,
-    -pixelOffsetZ,
-    CANVAS_WIDTH,
-    CANVAS_HEIGHT
+    -worldOffsetX - CANVAS_WIDTH,
+    -worldOffsetY - CANVAS_HEIGHT,
+    CANVAS_WIDTH * 3,
+    CANVAS_HEIGHT * 3
   );
   
-  ctx.fillStyle = grassPattern;
+  
 
   ctx.restore();
 
