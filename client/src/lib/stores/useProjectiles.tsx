@@ -52,6 +52,55 @@ export interface Projectile {
 }
 
 
+interface ProjectileEnemy {
+  id: string;
+  position: THREE.Vector3;
+  health: number;
+  velocity?: THREE.Vector3;
+  type?: "basic" | "tank" | "eyeball" | "tree" | "boss";
+}
+
+const PROJECTILE_ENEMY_CELL_SIZE = 16;
+const PROJECTILE_ENEMY_NEIGHBOR_OFFSETS = [-1, 0, 1] as const;
+
+function getProjectileEnemyCellKey(x: number, z: number) {
+  return `${Math.floor(x / PROJECTILE_ENEMY_CELL_SIZE)},${Math.floor(z / PROJECTILE_ENEMY_CELL_SIZE)}`;
+}
+
+function buildEnemyBuckets(enemies: ProjectileEnemy[]) {
+  const buckets = new Map<string, ProjectileEnemy[]>();
+
+  for (const enemy of enemies) {
+    const key = getProjectileEnemyCellKey(enemy.position.x, enemy.position.z);
+    const bucket = buckets.get(key);
+    if (bucket) {
+      bucket.push(enemy);
+    } else {
+      buckets.set(key, [enemy]);
+    }
+  }
+
+  return buckets;
+}
+
+function getNearbyEnemies(
+  buckets: Map<string, ProjectileEnemy[]>,
+  position: THREE.Vector3,
+) {
+  const cellX = Math.floor(position.x / PROJECTILE_ENEMY_CELL_SIZE);
+  const cellZ = Math.floor(position.z / PROJECTILE_ENEMY_CELL_SIZE);
+  const nearby: ProjectileEnemy[] = [];
+
+  for (const offsetX of PROJECTILE_ENEMY_NEIGHBOR_OFFSETS) {
+    for (const offsetZ of PROJECTILE_ENEMY_NEIGHBOR_OFFSETS) {
+      const bucket = buckets.get(`${cellX + offsetX},${cellZ + offsetZ}`);
+      if (bucket) nearby.push(...bucket);
+    }
+  }
+
+  return nearby;
+}
+
 interface ProjectilesState {
   projectiles: Projectile[];
 
@@ -75,13 +124,7 @@ interface ProjectilesState {
 
   updateProjectiles: (
     delta: number,
-    enemies: Array<{
-      id: string;
-      position: THREE.Vector3;
-      health: number;
-      velocity?: THREE.Vector3;
-      type?: "basic" | "tank" | "eyeball" | "tree" | "boss";
-    }>,
+    enemies: ProjectileEnemy[],
     playerPos: THREE.Vector3,
     roomBounds: number,
     onHit: (
@@ -183,6 +226,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
     }
 
     const updated: Projectile[] = [];
+    const enemyBuckets = buildEnemyBuckets(enemies);
 
     for (const proj of get().projectiles) {
       // --- Move projectile ---
@@ -192,9 +236,11 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       const drag = proj.drag;
       proj.velocity.multiplyScalar(Math.pow(drag, delta * 60));
       // --- Move projectile ---
-      const move = proj.velocity.clone().multiplyScalar(delta);
-      proj.position.add(move);
-      proj.distanceTraveled += move.length();
+      const moveX = proj.velocity.x * delta;
+      const moveZ = proj.velocity.z * delta;
+      proj.position.x += moveX;
+      proj.position.z += moveZ;
+      proj.distanceTraveled += Math.hypot(moveX, moveZ);
 
       const velocityFactor = 50 / proj.speed;
       const effectiveTrailLength = Math.max(
@@ -205,34 +251,44 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       // --- Update trail history ---
       if (!proj.trailHistory) proj.trailHistory = [];
 
-      const lastPos = proj.trailHistory[0] ?? proj.position.clone();
-      const dist = Math.ceil(proj.position.distanceTo(lastPos));
+      const lastPos = proj.trailHistory[0] ?? proj.position;
+      const trailDx = proj.position.x - lastPos.x;
+      const trailDz = proj.position.z - lastPos.z;
+      const dist = Math.ceil(Math.hypot(trailDx, trailDz));
       if (dist > 0.20) {
         const steps = Math.ceil(dist / 0.20);
         for (let s = 1; s <= steps; s++) {
-          const interpolated = lastPos.clone().lerp(proj.position, s / steps);
-          proj.trailHistory.unshift(interpolated);
+          const t = s / steps;
+          proj.trailHistory.unshift(new THREE.Vector3(
+            lastPos.x + trailDx * t,
+            0,
+            lastPos.z + trailDz * t,
+          ));
         }
       } else {
         proj.trailHistory.unshift(proj.position.clone());
       }
         
       if (proj.trailHistory.length > effectiveTrailLength) {
-        proj.trailHistory = proj.trailHistory.slice(0, effectiveTrailLength);
+        proj.trailHistory.length = effectiveTrailLength;
       }
 
       // --- Homing ---
       if (proj.homing && enemies.length > 0) {
-        const nearest = enemies.reduce(
-          (acc, e) => {
-            if (proj.piercedEnemies.has(e.id)) return acc;
-            const d = proj.position.distanceTo(e.position);
-            return d < acc.dist ? { enemy: e, dist: d } : acc;
-          },
-          { enemy: null as any, dist: Infinity }
-        );
-        if (nearest.enemy && nearest.dist < 15) {
-          const dir = nearest.enemy.position.clone().sub(proj.position).normalize();
+        let nearestEnemy: ProjectileEnemy | null = null;
+        let nearestDistSq = Infinity;
+        for (const enemy of getNearbyEnemies(enemyBuckets, proj.position)) {
+          if (proj.piercedEnemies.has(enemy.id)) continue;
+          const dx = enemy.position.x - proj.position.x;
+          const dz = enemy.position.z - proj.position.z;
+          const distSq = dx * dx + dz * dz;
+          if (distSq < nearestDistSq) {
+            nearestEnemy = enemy;
+            nearestDistSq = distSq;
+          }
+        }
+        if (nearestEnemy && nearestDistSq < 15 * 15) {
+          const dir = nearestEnemy.position.clone().sub(proj.position).normalize();
           proj.velocity.lerp(dir.multiplyScalar(proj.speed), 5 * delta);
           proj.velocity.normalize().multiplyScalar(proj.speed);
           proj.rotationY = Math.atan2(proj.velocity.x, proj.velocity.z);
@@ -282,27 +338,29 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       
       let hitEnemy = false;
 
-      // Loop over enemies
-      for (const enemy of enemies) {
+      // Loop over nearby enemies
+      for (const enemy of getNearbyEnemies(enemyBuckets, proj.position)) {
         // Skip enemies we've already pierced
         if (proj.piercedEnemies.has(enemy.id)) continue;
 
-        // Vector from projectile to enemy
-        const toEnemy = enemy.position.clone().sub(proj.position);
-        toEnemy.y = 0; // ignore vertical for 2D plane
+        const toEnemyX = enemy.position.x - proj.position.x;
+        const toEnemyZ = enemy.position.z - proj.position.z;
 
         const enemyRadius = enemy.type === "boss"
           ? SHOGGOTH_CONFIG.bodyHitRadius
           : ENEMY_TYPE_CONFIG[enemy.type === "tank" || enemy.type === "eyeball" ? enemy.type : "basic"].bodyHitRadius;
-        const distance = toEnemy.length();
+        const distanceSq = toEnemyX * toEnemyX + toEnemyZ * toEnemyZ;
 
         
-        if (distance <= enemyRadius) {
+        if (distanceSq <= enemyRadius * enemyRadius) {
+          const distance = Math.max(Math.sqrt(distanceSq), 0.0001);
           hitEnemy = true;
 
           // Compute exact impact point on enemy surface
-          const impactPos = proj.position.clone().add(
-            toEnemy.clone().normalize().multiplyScalar(distance - enemyRadius)
+          const impactPos = new THREE.Vector3(
+            proj.position.x + (toEnemyX / distance) * (distance - enemyRadius),
+            0,
+            proj.position.z + (toEnemyZ / distance) * (distance - enemyRadius),
           );
 
           // Deal damage & trigger effects
@@ -323,11 +381,12 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
 
 if (proj.bouncesLeft > 0) {
       
-  const normal = proj.position.clone().sub(enemy.position);
-  normal.y = 0;
-
-const outward = proj.position.clone().sub(enemy.position).normalize();
-proj.velocity.copy(outward.multiplyScalar(proj.speed));
+  const outward = new THREE.Vector3(
+    proj.position.x - enemy.position.x,
+    0,
+    proj.position.z - enemy.position.z,
+  ).normalize();
+  proj.velocity.copy(outward.multiplyScalar(proj.speed));
 
 
   proj.rotationY = Math.atan2(proj.velocity.x, proj.velocity.z);
