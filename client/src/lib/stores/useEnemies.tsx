@@ -67,6 +67,10 @@ export interface Enemy {
   type?: "basic" | "tank" | "eyeball" | "tree" | "boss";
   velocity: THREE.Vector3;
   hitFlash: number;
+  
+  // Knockback system
+  knockbackAcceleration?: THREE.Vector3;
+  knockbackDuration?: number;
 
   // BOSSS PROPERTIES:
   isBoss?: boolean;
@@ -164,7 +168,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
   };
 
   const spawnSessions: SpawnSession[] = [
-    createSession("basic_1", "basic", "0:00", "0:30", 24, 20, 4, 30),
+    createSession("basic_1", "basic", "0:00", "0:30", 24, 20, 4, 3),
     createSession("basic_2", "basic", "0:30", "1:00", 24, 50, 10, 4),
     createSession("basic_3", "basic", "1:00", "3:00", 30, 200, 7, 4),
     createSession("basic_4", "basic", "3:00", "30:00", 80, 400, 8, 1),
@@ -194,113 +198,118 @@ export const useEnemies = create<EnemiesState>((set, get) => {
     elapsedTime: 0,
 
     registerHit: (id, dmg) => {
-      const { enemies, damagePopups } = get();
-      const enemy = enemies.find((e) => e.id === id);
-      if (!enemy) return;
+  const state = get();
 
-      set({
-        enemies: enemies.map((e) =>
-          e.id === id ? { ...e, hitFlash: 0.92, health: e.health - dmg } : e
-        ),
-        damagePopups: [
-          ...damagePopups,
-          {
-            id: crypto.randomUUID(),
-            x: enemy.position.x,
-            y: enemy.position.z,
-            value: dmg,
-            life: 0,
-          },
-        ],
-      });
-    },
+  const enemy = state.enemies.find((e) => e.id === id);
+  if (!enemy) return;
 
-    addXPOrb: (position, value) => {
-      const orb: XPOrb = {
-        id: Math.random().toString(36).substring(2, 11),
-        position: position.clone(),
-        value,
-        velocity: new THREE.Vector3(
-          (Math.random() - 0.5) * 4,
-          0,
-          (Math.random() - 0.5) * 4,
-        ),
-      };
-      set((state) => ({ xpOrbs: [...state.xpOrbs, orb] }));
-    },
+  enemy.hitFlash = 0.92;
+  enemy.health -= dmg;
 
+  const newPopup = {
+    id: crypto.randomUUID(),
+    x: enemy.position.x,
+    y: enemy.position.z,
+    value: dmg,
+    life: 0,
+  };
+
+  // Batch update: modify in place instead of spreading
+  state.damagePopups.push(newPopup);
+
+  set({
+    enemies: state.enemies,
+    damagePopups: state.damagePopups,
+  });
+},
+
+addXPOrb: (position, value) => {
+  const state = get();
+
+  state.xpOrbs.push({
+    id: Math.random().toString(36).substring(2, 11),
+    position: position.clone(),
+    value,
+    velocity: new THREE.Vector3(
+      (Math.random() - 0.5) * 4,
+      0,
+      (Math.random() - 0.5) * 4,
+    ),
+  });
+
+  set({ xpOrbs: state.xpOrbs });
+},
     updateXPOrbs: (delta, playerPos) => {
-      const MAGNET_RANGE = 5;
+      const baseRange = 5;
+      const playerMagnetBonus = usePlayer.getState().magnetRange;
+      const MAGNET_RANGE = baseRange * (1 + playerMagnetBonus);
       const COLLECT_RANGE = 1.5;
       const MAGNET_SPEED = 15;
+      const MAGNET_RANGE_SQ = MAGNET_RANGE * MAGNET_RANGE;
+      const COLLECT_RANGE_SQ = COLLECT_RANGE * COLLECT_RANGE;
 
       const addXP = usePlayer.getState().addXP;
 
       set((state) => {
-        const remainingOrbs: XPOrb[] = [];
+        const orbs = state.xpOrbs;
+        let writeIdx = 0;
 
-        for (const orb of state.xpOrbs) {
+        for (let i = 0; i < orbs.length; i++) {
+          const orb = orbs[i];
           const dx = playerPos.x - orb.position.x;
           const dz = playerPos.z - orb.position.z;
-          const distance = Math.sqrt(dx * dx + dz * dz);
+          const distSq = dx * dx + dz * dz;
 
-          if (distance < COLLECT_RANGE) {
+          if (distSq < COLLECT_RANGE_SQ) {
             addXP(orb.value);
-
-            for (let i = 0; i < 8; i++) {
-              const angle = (i / 8) * Math.PI * 2;
-              const speed = 20;
-
-              
-              const { particles } = useVisualEffects.getState();
-              useVisualEffects.setState({
-                particles: [...particles, {
-                  id: `xp_collect_${Date.now()}_${i}`,
-                  position: orb.position.clone(),
-                  velocity: new THREE.Vector3(
-                    Math.cos(angle) * speed,
-                    0,
-                    Math.sin(angle) * speed
-                  ),
-                  life: 0,
-                  maxLife: 0.4,
-                  size: 3,
-                  color: "#2bcf8e",
-                  alpha: 1,
-                  type: "spark" as const,
-                }]
-              });
-            }
-
             continue;
           }
 
-          if (distance < MAGNET_RANGE) {
-            const dirX = dx / distance;
-            const dirZ = dz / distance;
-            orb.velocity.x = dirX * MAGNET_SPEED;
-            orb.velocity.z = dirZ * MAGNET_SPEED;
+          if (distSq < MAGNET_RANGE_SQ) {
+            const mag = Math.sqrt(distSq);
+            orb.velocity.x = (dx / mag) * MAGNET_SPEED;
+            orb.velocity.z = (dz / mag) * MAGNET_SPEED;
           } else {
-            orb.velocity.multiplyScalar(Math.max(0, 1 - 3 * delta));
+            // Simple velocity decay without creating new objects
+            orb.velocity.x *= Math.max(0, 1 - 3 * delta);
+            orb.velocity.z *= Math.max(0, 1 - 3 * delta);
           }
 
           orb.position.x += orb.velocity.x * delta;
           orb.position.z += orb.velocity.z * delta;
 
-          remainingOrbs.push(orb);
+          if (writeIdx !== i) {
+            orbs[writeIdx] = orb;
+          }
+          writeIdx++;
         }
 
-        return { xpOrbs: remainingOrbs };
+        orbs.length = writeIdx;
+        return { xpOrbs: orbs };
       });
     },
 
-    updateDamagePopups: (delta) => {
-      set((state) => ({
-        damagePopups: state.damagePopups
-          .map((dp) => ({ ...dp, life: dp.life + delta * 0.5, y: dp.y + delta * 1.5 }))
-          .filter((dp) => dp.life < 1),
-      }));
-    },
+updateDamagePopups: (delta) => {
+  const state = get();
+  const popups = state.damagePopups;
+  let writeIdx = 0;
+
+  for (let i = 0; i < popups.length; i++) {
+    const dp = popups[i];
+    dp.life += delta * 0.5;
+    dp.y += delta * 1.5;
+
+    if (dp.life < 1) {
+      if (writeIdx !== i) {
+        popups[writeIdx] = dp;
+      }
+      writeIdx++;
+    }
+  }
+
+  popups.length = writeIdx;
+  set({ damagePopups: popups });
+},
 
     addEnemy: (enemyData) => {
       const enemyTypePool: Array<"basic" | "tank" | "eyeball"> = ["basic", "tank", "eyeball"];
@@ -312,7 +321,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
         basic: {
           health: 22, // these health values are all technically meaningless
           maxHealth: 22, // but I wanted bosses summoning enemies to be possible
-          speed: 3.8,
+          speed: 3.0,
           hitFlash: 0,
         },
         tank: {
@@ -324,7 +333,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
         eyeball: {
           health: 16,
           maxHealth: 16,
-          speed: 4.6,
+          speed: 2,
           hitFlash: 0,
         },
       };
@@ -391,12 +400,19 @@ export const useEnemies = create<EnemiesState>((set, get) => {
 
     updateAutoSpawn: (delta, playerPos) => {
       const elapsedTime = get().elapsedTime + delta;
-      const activeSessions = spawnSessions.filter(
-        (session) => elapsedTime >= session.start && elapsedTime <= session.end,
-      );
+      const currentEnemies = get().enemies;
+      
+      // Create a map for counting enemies per session (more efficient than filtering)
+      const enemyCountBySession: Record<string, number> = {};
+      for (const enemy of currentEnemies) {
+        if (enemy.spawnSessionId) {
+          enemyCountBySession[enemy.spawnSessionId] = (enemyCountBySession[enemy.spawnSessionId] || 0) + 1;
+        }
+      }
 
       for (const session of spawnSessions) {
-        if (!activeSessions.some((active) => active.id === session.id)) {
+        // Check if session is active
+        if (elapsedTime < session.start || elapsedTime > session.end) {
           spawnSessionTimers[session.id] = 0;
           continue;
         }
@@ -406,7 +422,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
 
         spawnSessionTimers[session.id] = 0;
 
-        const aliveFromSession = get().enemies.filter((enemy) => enemy.spawnSessionId === session.id).length;
+        const aliveFromSession = enemyCountBySession[session.id] || 0;
         if (aliveFromSession >= session.max) continue;
 
         const availableSlots = session.max - aliveFromSession;
@@ -427,18 +443,11 @@ export const useEnemies = create<EnemiesState>((set, get) => {
             const spawnedBoss = currentEnemies[currentEnemies.length - 1];
             if (!spawnedBoss) continue;
 
-            set({
-              enemies: currentEnemies.map((enemy) =>
-                enemy.id === spawnedBoss.id
-                  ? {
-                      ...enemy,
-                      health: session.hp,
-                      maxHealth: session.hp,
-                      spawnSessionId: session.id,
-                    }
-                  : enemy,
-              ),
-            });
+            spawnedBoss.health = session.hp;
+            spawnedBoss.maxHealth = session.hp;
+            spawnedBoss.spawnSessionId = session.id;
+            
+            set({ enemies: currentEnemies });
             continue;
           }
 

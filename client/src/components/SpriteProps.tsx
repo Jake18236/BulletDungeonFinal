@@ -2,6 +2,11 @@ import { useEffect, useState, useRef } from "react";
 import { useGame } from "../lib/stores/useGame";
 import { usePlayer } from "../lib/stores/usePlayer";
 
+export type SpriteIcon = {
+  normal: string;
+  selected: string;
+};
+
 export const BASE_SPRITE_SIZE = 32; // native sprite resolution
 export const BASE_SCALE = 2;        // global pixel upscaling factor
 
@@ -120,7 +125,7 @@ let projectileImage: HTMLImageElement | null = null;
 export function getProjectileImage() {
   if (!projectileImage) {
     projectileImage = new Image();
-    projectileImage.src = "/sprites/bulletF.png";
+    projectileImage.src = "/sprites/bulletB.png";
   }
   return projectileImage;
 }
@@ -296,6 +301,11 @@ export const VisualSprites = {
   muzzleFlash: (() => {
     const img = new Image();
     img.src = "/sprites/muzzle-flash.png";
+    return img;
+  })(),
+  bigExplosion: (() => {
+    const img = new Image();
+    img.src = "/sprites/big-explosion.png";
     return img;
   })(),
 };

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import * as THREE from "three";
 import { ENEMY_TYPE_CONFIG, SHOGGOTH_CONFIG } from "./useEnemies";
-import { useVisualEffects } from "./useVisualEffects";
+
 
 export type DamageSource = {
   type: "player" | "summon" | "enemy";
@@ -15,6 +15,7 @@ export type DamageSource = {
 export interface Projectile {
   id: string;
   position: THREE.Vector3;
+  previousPosition: THREE.Vector3;
   velocity: THREE.Vector3;
   drag: number;
   damage: number;
@@ -35,7 +36,9 @@ export interface Projectile {
   trailColor: string;
   trailColorSecondary: string;
   trailLength: number;
+  trailDistanceAccumulator: number;
   trailHistory: THREE.Vector3[];
+  emissionAccumulator: number;
 
   // Special effects
   homing: boolean;
@@ -71,7 +74,10 @@ interface ProjectilesState {
 
     explosive?: { radius: number; damage: number };
     chainLightning?: { chains: number; range: number };
+    burn?: { damage: number; duration: number };
   }) => void;
+
+  trimTrailHistory: () => void;
 
   updateProjectiles: (
     delta: number,
@@ -131,6 +137,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
     const projectile: Projectile = {
       id: Math.random().toString(36).substring(2, 11),
       position: config.position.clone(),
+      previousPosition: config.position.clone(),
       velocity: config.direction.clone().normalize().multiplyScalar(config.speed),
       damage: config.damage,
       speed: config.speed,
@@ -149,6 +156,8 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       trailColorSecondary: getTrailColor(config),
       trailLength: config.trailLength,
       trailHistory: [],
+      trailDistanceAccumulator: 0,
+      emissionAccumulator: 0,
 
       homing: config.homing,
       piercing: config.piercing,
@@ -177,6 +186,16 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
     }));
   },
 
+  // Helper to trim old trail history to prevent unbounded growth
+  trimTrailHistory: () => {
+    const MAX_TRAIL_PER_PROJ = 50; // Cap trail points
+    for (const proj of get().projectiles) {
+      if (proj.trailHistory.length > MAX_TRAIL_PER_PROJ) {
+        proj.trailHistory = proj.trailHistory.slice(-MAX_TRAIL_PER_PROJ);
+      }
+    }
+  },
+
   updateProjectiles: (delta, enemies, playerPos, roomBounds, onHit, isPaused) => {
     if (isPaused) {
       return;
@@ -186,40 +205,24 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
 
     for (const proj of get().projectiles) {
       // --- Move projectile ---
-
       
+      // Store previous position for continuous collision detection
+      proj.previousPosition.copy(proj.position);
       
       const drag = proj.drag;
       proj.velocity.multiplyScalar(Math.pow(drag, delta * 60));
       // --- Move projectile ---
+
       const move = proj.velocity.clone().multiplyScalar(delta);
       proj.position.add(move);
       proj.distanceTraveled += move.length();
 
-      const velocityFactor = 50 / proj.speed;
-      const effectiveTrailLength = Math.max(
-        2,
-        Math.floor(proj.trailLength * velocityFactor)
-      );
+      const traveled = move.length();
 
-      // --- Update trail history ---
-      if (!proj.trailHistory) proj.trailHistory = [];
-
-      const lastPos = proj.trailHistory[0] ?? proj.position.clone();
-      const dist = Math.ceil(proj.position.distanceTo(lastPos));
-      if (dist > 0.20) {
-        const steps = Math.ceil(dist / 0.20);
-        for (let s = 1; s <= steps; s++) {
-          const interpolated = lastPos.clone().lerp(proj.position, s / steps);
-          proj.trailHistory.unshift(interpolated);
-        }
-      } else {
-        proj.trailHistory.unshift(proj.position.clone());
-      }
-        
-      if (proj.trailHistory.length > effectiveTrailLength) {
-        proj.trailHistory = proj.trailHistory.slice(0, effectiveTrailLength);
-      }
+      proj.trailDistanceAccumulator += traveled;
+      const emissionRate = 1; 
+      proj.emissionAccumulator += delta * emissionRate;
+      
 
       // --- Homing ---
       if (proj.homing && enemies.length > 0) {
@@ -231,9 +234,9 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
           },
           { enemy: null as any, dist: Infinity }
         );
-        if (nearest.enemy && nearest.dist < 15) {
+        if (nearest.enemy && nearest.dist < 150) {
           const dir = nearest.enemy.position.clone().sub(proj.position).normalize();
-          proj.velocity.lerp(dir.multiplyScalar(proj.speed), 5 * delta);
+          proj.velocity.lerp(dir.multiplyScalar(proj.speed), 10 * delta);
           proj.velocity.normalize().multiplyScalar(proj.speed);
           proj.rotationY = Math.atan2(proj.velocity.x, proj.velocity.z);
         }
@@ -248,68 +251,71 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
         continue;
       }
 
-      // ========================================
-      // WALL BOUNCING FIRST
-      // ========================================
-      const hitWallX = Math.abs(proj.position.x) > roomBounds;
-      const hitWallZ = Math.abs(proj.position.z) > roomBounds;
-
-      if (hitWallX || hitWallZ) {
-        if (proj.bouncesLeft <= 0) {
-          continue;
-        }
-
-        if (hitWallX) {
-          proj.position.x = Math.sign(proj.position.x) * roomBounds;
-          proj.velocity.x = -proj.velocity.x;
-        }
-        if (hitWallZ) {
-          proj.position.z = Math.sign(proj.position.z) * roomBounds;
-          proj.velocity.z = -proj.velocity.z;
-        }
-
-        const retainedSpeed = Math.max(proj.speed * 0.65, proj.velocity.length() * 0.95);
-        proj.velocity.normalize().multiplyScalar(retainedSpeed);
-        proj.rotationY = Math.atan2(proj.velocity.x, proj.velocity.z);
-        proj.bouncesLeft--;
-
-        useVisualEffects.getState().addImpact(
-          new THREE.Vector3(proj.position.x, 0, proj.position.z),
-          Math.max(20, proj.size * 0.3),
-        );
-      }
-
       
       let hitEnemy = false;
 
-      // Loop over enemies
+      // Loop over enemies - use continuous collision detection
       for (const enemy of enemies) {
         // Skip enemies we've already pierced
         if (proj.piercedEnemies.has(enemy.id)) continue;
 
-        // Vector from projectile to enemy
-        const toEnemy = enemy.position.clone().sub(proj.position);
-        toEnemy.y = 0; // ignore vertical for 2D plane
-
         const enemyRadius = enemy.type === "boss"
           ? SHOGGOTH_CONFIG.bodyHitRadius
           : ENEMY_TYPE_CONFIG[enemy.type === "tank" || enemy.type === "eyeball" ? enemy.type : "basic"].bodyHitRadius;
-        const distance = toEnemy.length();
 
+        // Early distance check: quick AABB check before detailed collision
+        const dx = proj.position.x - enemy.position.x;
+        const dz = proj.position.z - enemy.position.z;
+        const distSq = dx * dx + dz * dz;
+        const maxDist = enemyRadius + 2; // Conservative bounds
+        if (distSq > maxDist * maxDist) continue;
+
+        // Continuous collision detection: check if line segment from previousPosition to position 
+        // intersects with enemy sphere
+        const segmentStart = proj.previousPosition;
+        const segmentEnd = proj.position;
+        const enemyPos = enemy.position;
+
+        // Vector along the segment
+        const segment = segmentEnd.clone().sub(segmentStart);
+        const segmentLengthSq = segment.x * segment.x + segment.z * segment.z;
         
-        if (distance <= enemyRadius) {
+        // Early exit if segment is too far
+        if (segmentLengthSq < 0.0001) {
+          // Projectile didn't move much, use simpler check
+          if (distSq <= enemyRadius * enemyRadius) {
+            // Direct hit
+          } else {
+            continue;
+          }
+        } else {
+          const toEnemy = enemyPos.clone().sub(segmentStart);
+          const t = Math.max(0, Math.min(1, (toEnemy.x * segment.x + toEnemy.z * segment.z) / segmentLengthSq));
+          const closestX = segmentStart.x + segment.x * t;
+          const closestZ = segmentStart.z + segment.z * t;
+          const distToClosestX = closestX - enemyPos.x;
+          const distToClosestZ = closestZ - enemyPos.z;
+          const distance = Math.sqrt(distToClosestX * distToClosestX + distToClosestZ * distToClosestZ);
+          
+          if (distance > enemyRadius) continue;
+        }
+
+        // Hit detected
+        {
           hitEnemy = true;
 
           // Compute exact impact point on enemy surface
-          const impactPos = proj.position.clone().add(
-            toEnemy.clone().normalize().multiplyScalar(distance - enemyRadius)
-          );
+          const impactPos = proj.position.clone();
 
           // Deal damage & trigger effects
+          const knockbackBase = 1;
+          const knockbackFromSpeed = proj.speed / 20;
+          const knockbackMagnitude = knockbackBase + knockbackFromSpeed;
+          
           onHit(
             enemy.id,
             proj.damage,
-            proj.velocity.clone().normalize().multiplyScalar(8),
+            proj.velocity.clone().normalize().multiplyScalar(knockbackMagnitude),
             {
               color: proj.color,
               explosive: proj.explosive,
@@ -320,25 +326,15 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
           );
 
           // ===================== BOUNCE LOGIC =====================
-
-if (proj.bouncesLeft > 0) {
-      
-  const normal = proj.position.clone().sub(enemy.position);
-  normal.y = 0;
-
-const outward = proj.position.clone().sub(enemy.position).normalize();
-proj.velocity.copy(outward.multiplyScalar(proj.speed));
-
-
-  proj.rotationY = Math.atan2(proj.velocity.x, proj.velocity.z);
-
-  proj.bouncesLeft--;
-
-  // Important: do NOT mark as pierced during bounce phase
-  // or piercing logic will get corrupted
-
-  continue;
-}
+          if (proj.bouncesLeft > 0) {
+            const normal = proj.position.clone().sub(enemy.position);
+            normal.y = 0;
+            const outward = normal.normalize();
+            proj.velocity.copy(outward.multiplyScalar(proj.speed));
+            proj.rotationY = Math.atan2(proj.velocity.x, proj.velocity.z);
+            proj.bouncesLeft--;
+            continue;
+          }
 
           // ===================== PIERCE LOGIC =====================
           proj.piercedEnemies.add(enemy.id);

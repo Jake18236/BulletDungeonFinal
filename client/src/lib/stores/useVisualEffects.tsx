@@ -39,6 +39,17 @@ export interface ImpactEffect {
   totalFrames: number; // total frames in spritesheet
 }
 
+export interface ExplosionEffect {
+  id: string;
+  x: number;
+  y: number;
+  life: number;
+  maxLife: number;
+  size: number;
+  radius: number;
+  frameIndex: number;
+  totalFrames: number;
+}
 
 
 // ---------------- Store ----------------
@@ -46,9 +57,10 @@ interface VisualEffectsState {
   particles: Particle[];
   damageNumbers: DamageNumber[];
   impactEffects: ImpactEffect[];
+  explosionEffects: ExplosionEffect[];
 
   addImpact: (position: THREE.Vector3, size?: number) => void;
-  addExplosion: (position: THREE.Vector3, count?: number) => void;
+  addExplosion: (position: THREE.Vector3, count?: number, radius?: number) => void;
   addDamageNumber: (x: number, y: number, damage: number) => void;
   updateEffects: (delta: number) => void;
   reset: () => void;
@@ -58,9 +70,10 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
   particles: [],
   damageNumbers: [],
   impactEffects: [],
+  explosionEffects: [],
 
   // ---------------- Impact Effects ----------------
-  addImpact: (position: THREE.Vector3, size = 48) => {
+  addImpact: (position: THREE.Vector3, size = 32) => {
     const impactEffect: ImpactEffect = {
       id: `impact_${Date.now()}`,
       x: position.x,
@@ -77,7 +90,7 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
     }));
   },
   // ---------------- Explosion ----------------
-  addExplosion: (position, count = 5) => {
+  addExplosion: (position, count = 5, radius = 0) => {
     const particles: Particle[] = [];
 
     // Explosion particles
@@ -127,8 +140,22 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
       });
     }
 
+    const pixelDiameter = radius > 0 ? Math.max(radius * 50, 64) : 110;
+    const explosionEffect: ExplosionEffect = {
+      id: `big_explosion_${Date.now()}`,
+      x: position.x,
+      y: position.z,
+      life: 0,
+      maxLife: 0.33,
+      size: pixelDiameter,
+      radius,
+      frameIndex: 0,
+      totalFrames: 6,
+    };
+
     set(state => ({
       particles: [...state.particles, ...particles],
+      explosionEffects: [...state.explosionEffects, explosionEffect],
     }));
   },
 
@@ -191,10 +218,21 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
     })
     .filter(i => i.life < i.maxLife);
 
+    const updatedExplosions = state.explosionEffects
+    .map(e => {
+      const updated = { ...e };
+      updated.life += delta;
+      const lifePercent = Math.min(1, updated.life / updated.maxLife);
+      updated.frameIndex = Math.min(updated.totalFrames - 1, Math.floor(lifePercent * updated.totalFrames));
+      return updated;
+    })
+    .filter(e => e.life < e.maxLife);
+
     set({
       particles: updatedParticles,
       damageNumbers: updatedDamageNumbers,
       impactEffects: updatedImpacts,
+      explosionEffects: updatedExplosions,
     });
   },
 
@@ -203,5 +241,6 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
     particles: [],
     damageNumbers: [],
     impactEffects: [],
+    explosionEffects: [],
   }),
 }));

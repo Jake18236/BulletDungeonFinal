@@ -172,12 +172,17 @@ export const useSummons = create<SummonState>((set, get) => ({
       set(state => ({ summons: [...state.summons, summon] }));
     }
     else if (type === "scythe") {
+      const state = get();
+      // Check if there's already a scythe - if so, position new one opposite
+      const existingScythe = state.summons.find(s => s.type === "scythe");
+      const orbitAngle = existingScythe ? Math.PI : 0;
+
       const summon: Summon = {
         id: `scythe_${Date.now()}`,
         type: "scythe",
         position: playerPos.clone().add(new THREE.Vector3(50, 0, 0)),
         rotation: 0,
-        orbitAngle: 0,
+        orbitAngle: orbitAngle,
         orbitRadius: 5,
         orbitSpeed: 2,
         lastDamageTime: 0,

@@ -6,7 +6,7 @@ import { useVisualEffects } from "./useVisualEffects";
 import { useAudio } from "./useAudio";
 import { usePlayer } from "./usePlayer";
 import { useSummons } from "./useSummons";
-import { Enemy } from "./useEnemies";
+import { Enemy, useEnemies } from "./useEnemies";
 import { useCamera } from "./useCamera";
 import { GameCamera2D, getPixelPerfectScale } from "../camera";
 
@@ -80,9 +80,21 @@ export const useHit = create<HitState>((set, get) => ({
       dir.y = 0;
       if (dir.lengthSq() > 0.1) {
         const ps = usePlayer.getState();
-        const finalKnockback = knockbackStrength * (ps.knockbackMultiplier || 1);
-        dir.normalize().multiplyScalar(finalKnockback);
-        enemy.velocity.add(dir);
+        let finalKnockback = knockbackStrength * (ps.knockbackMultiplier);
+        
+        if (enemy.type === "tank") {
+          finalKnockback *= 0.4;
+        }
+        
+        dir.normalize();
+        
+        // Apply knockback gradually over time (0.15 seconds) for smoother acceleration
+        const knockbackDurationMs = 0.15;
+        if (!enemy.knockbackAcceleration) {
+          enemy.knockbackAcceleration = new THREE.Vector3();
+        }
+        enemy.knockbackAcceleration = dir.multiplyScalar(finalKnockback / knockbackDurationMs);
+        enemy.knockbackDuration = knockbackDurationMs;
       }
     }
 
@@ -99,19 +111,19 @@ export const useHit = create<HitState>((set, get) => ({
       applyStatusEffect(enemy.id, "curse", curseDamage, 1);
     }
 
+    if (params.explosive && params.impactPos && allEnemies.length > 0) {
+      get().applyExplosiveDamage(
+        params.impactPos.clone(),
+        params.explosive.radius,
+        params.explosive.damage,
+        allEnemies,
+        params.color
+      );
+    }
+
     const died = get().checkDeath(enemy);
 
     if (died) {
-      if (params.explosive && allEnemies.length > 0) {
-        get().applyExplosiveDamage(
-          enemy.position.clone(),
-          params.explosive.radius,
-          params.explosive.damage,
-          allEnemies,
-          "#ff6600"
-        );
-      }
-
       if (params.isSummonDamage) {
         useSummons.getState().handleEnemyKilledBySummon();
       }
@@ -146,7 +158,7 @@ export const useHit = create<HitState>((set, get) => ({
     const { addExplosion, addDamageNumber } = useVisualEffects.getState();
     const { playHit } = useAudio.getState();
 
-    addExplosion(center, 25);
+    addExplosion(center, 1, radius);
 
     allEnemies.forEach(enemy => {
       const distance = enemy.position.distanceTo(center);
@@ -162,7 +174,7 @@ export const useHit = create<HitState>((set, get) => ({
 
         if (!enemy.velocity) enemy.velocity = new THREE.Vector3();
         const knockbackDir = enemy.position.clone().sub(center).normalize();
-        enemy.velocity.add(knockbackDir.multiplyScalar(12 * falloff));
+        enemy.velocity.add(knockbackDir.multiplyScalar(24 * falloff));
       }
     });
 

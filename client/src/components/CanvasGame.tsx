@@ -1,5 +1,4 @@
-
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, memo } from "react";
 import * as THREE from "three";
 import { usePlayer } from "../lib/stores/usePlayer";
 import { ENEMY_TYPE_CONFIG, SHOGGOTH_CONFIG, useEnemies, type Enemy } from "../lib/stores/useEnemies";
@@ -45,6 +44,7 @@ fontWhiteImage.src = "/sprites/font-atlas-white.png";
 const fontRedImage = new Image();
 fontRedImage.src = "/sprites/font-atlas-red.png";
 
+usePlayer.setState({ lastAmmoExplosive: true });
 
 const TILE_SIZE = 50;
 export const CANVAS_WIDTH = window.innerWidth;
@@ -129,6 +129,15 @@ interface TreeLightningAttack {
   releasedTrees: boolean;
 }
 
+interface TrailParticle {
+  id: string;
+  position: THREE.Vector3;
+  initialSize: number;
+  size: number;
+  life: number;
+  maxLife: number;
+}
+
 const { addSummon } = useSummons.getState();
 
 
@@ -142,10 +151,10 @@ function generateRoomTerrain(): TerrainObstacle[] {
   };
 
   const radialBands = [
-    { radius: 30, count: 6 },
-    { radius: 58, count: 18 },
-    { radius: 88, count: 20 },
-    { radius: 130, count: 30 },
+    { radius: 30, count: 0 },
+    { radius: 58, count: 0 },
+    { radius: 88, count: 0 },
+    { radius: 130, count: 0 },
   ];
 
   radialBands.forEach((band, bandIndex) => {
@@ -186,6 +195,7 @@ function checkTerrainCollision(
 
     if (distSq < combinedRadius * combinedRadius) {
       const dist = Math.max(Math.sqrt(distSq), 0.0001);
+      // Only create Vector2 if collision is detected (late allocation)
       const normal = new THREE.Vector2(distX / dist, distZ / dist);
       return { collision: true, normal };
     }
@@ -200,18 +210,22 @@ function resolveTerrainPenetration(
   radius: number,
 ): THREE.Vector3 {
   const resolved = pos.clone();
+  const combined = radius; // Pre-compute to avoid repeated addition
+  
   for (let i = 0; i < 2; i++) {
     for (const obs of obstacles) {
       const dx = resolved.x - obs.x;
       const dz = resolved.z - obs.z;
-      const combined = radius + obs.radius;
       const distSq = dx * dx + dz * dz;
-      if (distSq >= combined * combined) continue;
+      const combinedRadius = combined + obs.radius;
+      const threshold = combinedRadius * combinedRadius;
+      
+      if (distSq >= threshold) continue;
 
       const dist = Math.max(Math.sqrt(distSq), 0.0001);
-      const pushOut = combined - dist + 0.01;
-      resolved.x += (dx / dist) * pushOut;
-      resolved.z += (dz / dist) * pushOut;
+      const pushOut = ((combined + obs.radius) - dist + 0.01) / dist;
+      resolved.x += dx * pushOut;
+      resolved.z += dz * pushOut;
     }
   }
   return resolved;
@@ -223,35 +237,69 @@ function moveWithTerrainSlide(
   obstacles: TerrainObstacle[],
   radius: number,
 ): THREE.Vector3 {
-  const targetPos = currentPos.clone().add(move);
-  if (!checkTerrainCollision(targetPos, obstacles, radius).collision) {
-    return resolveTerrainPenetration(targetPos, obstacles, radius);
+  // Optimized: reuse vector math, early exit
+  const targetX = currentPos.x + move.x;
+  const targetZ = currentPos.z + move.z;
+  
+  // Quick check without creating new vector
+  let collision = false;
+  const combinedRadius = radius;
+  for (const obs of obstacles) {
+    const dx = targetX - obs.x;
+    const dz = targetZ - obs.z;
+    const combined = combinedRadius + obs.radius;
+    if (dx * dx + dz * dz < combined * combined) {
+      collision = true;
+      break;
+    }
+  }
+  
+  if (!collision) {
+    const resolved = currentPos.clone().add(move);
+    return resolveTerrainPenetration(resolved, obstacles, radius);
   }
 
-  const move2 = new THREE.Vector2(move.x, move.z);
-  const length = move2.length();
-  if (length <= 0.00001) {
+  // Try slide options without creating intermediate vectors
+  const moveLen = Math.sqrt(move.x * move.x + move.z * move.z);
+  if (moveLen <= 0.00001) {
     return resolveTerrainPenetration(currentPos, obstacles, radius);
   }
 
-  const options = [
-    new THREE.Vector3(move.x, 0, 0),
-    new THREE.Vector3(0, 0, move.z),
-    new THREE.Vector3(move.z * 0.7, 0, -move.x * 0.7),
-    new THREE.Vector3(-move.z * 0.7, 0, move.x * 0.7),
+  // Try horizontal, vertical, then diagonal slides
+  const slides = [
+    { x: move.x, z: 0 },
+    { x: 0, z: move.z },
+    { x: move.z * 0.7, z: -move.x * 0.7 },
+    { x: -move.z * 0.7, z: move.x * 0.7 },
   ];
 
-  for (const option of options) {
-    const attempt = currentPos.clone().add(option);
-    if (!checkTerrainCollision(attempt, obstacles, radius).collision) {
-      return resolveTerrainPenetration(attempt, obstacles, radius);
+  for (const slide of slides) {
+    const attemptX = currentPos.x + slide.x;
+    const attemptZ = currentPos.z + slide.z;
+    let slideCollision = false;
+    
+    for (const obs of obstacles) {
+      const dx = attemptX - obs.x;
+      const dz = attemptZ - obs.z;
+      const combined = radius + obs.radius;
+      if (dx * dx + dz * dz < combined * combined) {
+        slideCollision = true;
+        break;
+      }
+    }
+    
+    if (!slideCollision) {
+      const result = currentPos.clone();
+      result.x = attemptX;
+      result.z = attemptZ;
+      return resolveTerrainPenetration(result, obstacles, radius);
     }
   }
 
   return resolveTerrainPenetration(currentPos, obstacles, radius);
 }
 
-function getEnemyType(enemy: { type?: string }): EnemySpriteType {
+function getEnemyType(enemy: { type?: string }): "basic" | "tank" | "eyeball" {
   if (enemy.type === "tank" || enemy.type === "eyeball") return enemy.type;
   return "basic";
 }
@@ -268,32 +316,70 @@ function getEnemyCollisionRadius(enemy: { type?: string }) {
 }
 
 function distancePointToSegment(point: THREE.Vector2, a: THREE.Vector2, b: THREE.Vector2) {
-  const ab = b.clone().sub(a);
-  const ap = point.clone().sub(a);
-  const abLenSq = ab.lengthSq();
-  if (abLenSq === 0) return ap.length();
-  const t = THREE.MathUtils.clamp(ap.dot(ab) / abLenSq, 0, 1);
-  const closest = a.clone().add(ab.multiplyScalar(t));
-  return point.distanceTo(closest);
+  // Optimized: avoid cloning vectors, use direct math
+  const abx = b.x - a.x;
+  const aby = b.y - a.y;
+  const abLenSq = abx * abx + aby * aby;
+  
+  if (abLenSq === 0) {
+    const apx = point.x - a.x;
+    const apy = point.y - a.y;
+    return Math.sqrt(apx * apx + apy * apy);
+  }
+  
+  const apx = point.x - a.x;
+  const apy = point.y - a.y;
+  const t = THREE.MathUtils.clamp((apx * abx + apy * aby) / abLenSq, 0, 1);
+  
+  const closestX = a.x + abx * t;
+  const closestY = a.y + aby * t;
+  const dx = point.x - closestX;
+  const dy = point.y - closestY;
+  return Math.sqrt(dx * dx + dy * dy);
 }
 
 
 function pickTreeLightningAttack(nowMs: number, trees: TerrainObstacle[]): TreeLightningAttack | null {
   if (trees.length < 2) return null;
 
-  const eligibleTrees = trees.filter((tree) => nowMs >= tree.cooldownUntil && !tree.lockedByLightning);
+  // Single pass to find eligible trees
+  const eligibleTrees: TerrainObstacle[] = [];
+  for (const tree of trees) {
+    if (nowMs >= tree.cooldownUntil && !tree.lockedByLightning) {
+      eligibleTrees.push(tree);
+    }
+  }
+
   if (eligibleTrees.length < 2) return null;
 
   const source = eligibleTrees[Math.floor(Math.random() * eligibleTrees.length)];
-  const nearbyTrees = trees
-    .filter((tree) => tree !== source && nowMs >= tree.cooldownUntil && !tree.lockedByLightning)
-    .map((tree) => ({ tree, dist: Math.hypot(tree.x - source.x, tree.z - source.z) }))
-    .sort((a, b) => a.dist - b.dist)
-    .slice(0, 6);
+  
+  // Single pass to find nearby trees with distance - avoid map/sort
+  const nearbyTrees: { tree: TerrainObstacle; dist: number }[] = [];
+  for (const tree of trees) {
+    if (tree !== source && nowMs >= tree.cooldownUntil && !tree.lockedByLightning) {
+      const dx = tree.x - source.x;
+      const dz = tree.z - source.z;
+      const dist = dx * dx + dz * dz; // Use squared distance to avoid sqrt
+      nearbyTrees.push({ tree, dist });
+      
+      // Keep only best 6 to avoid full sort
+      if (nearbyTrees.length > 12) {
+        let maxIdx = 0;
+        for (let i = 1; i < nearbyTrees.length; i++) {
+          if (nearbyTrees[i].dist > nearbyTrees[maxIdx].dist) maxIdx = i;
+        }
+        nearbyTrees.splice(maxIdx, 1);
+      }
+    }
+  }
 
   if (nearbyTrees.length === 0) return null;
 
-  const target = nearbyTrees[Math.floor(Math.random() * nearbyTrees.length)].tree;
+  // Quick sort of small array
+  nearbyTrees.sort((a, b) => a.dist - b.dist);
+  const target = nearbyTrees[Math.floor(Math.random() * Math.min(6, nearbyTrees.length))].tree;
+  
   return {
     source,
     target,
@@ -318,7 +404,10 @@ function releaseLightningTree(tree: TerrainObstacle, nowMs: number) {
   queueTreeFrames(tree, [1, 0]);
 }
 
-export default function CanvasGame() {
+// Snap coordinates to 2-pixel grid for consistent pixelation
+const snapToGrid = (value: number) => Math.round(value / 1) * 1;
+
+export default memo(function CanvasGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const eyeCanvasRef = useRef<HTMLCanvasElement>(null);
   const cursorCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -340,53 +429,56 @@ export default function CanvasGame() {
   const footstepSpawnTimerRef = useRef<number>(0);
   const footstepSideRef = useRef<1 | -1>(1);
   const playerFacingRef = useRef<1 | -1>(1);
-  const { particles, damageNumbers, impactEffects, addImpact, addExplosion, addDamageNumber, updateEffects } = useVisualEffects();
-  const { phase, end } = useGame();
-  const {
-    position,
-    xp,
-    xpToNextLevel,
-    level,
-    availableUpgrades,
-    takenUpgrades,
-    showLevelUpScreen,
-    hearts,
-    maxHearts,
-    maxAmmo,
-    invincibilityTimer,
-    isMoving,
-    speed,
-    firerate,
-    reloadTime,
-    ammo,
-    isReloading,
-    reloadProgress, 
-    isFiring,
-    setFiring,
-    fireShot,
-    startReload,
-    updateReload,
-    loseHeart,
-    updateInvincibility,
-    muzzleFlashTimer,
-    muzzleFlashPosition,
-    updateMuzzleFlash,
-      updateFanFire,
-      startFanFire,
-      fireMuzzleFlash,
-  } = usePlayer();
-  
-  const { projectiles, addProjectile, updateProjectiles } = useProjectiles();
+  const trailParticlesRef = useRef<TrailParticle[]>([]);
+  const projectileTrailLastPosRef = useRef<Map<string, THREE.Vector3>>(new Map());
+  const addImpact = useVisualEffects((state) => state.addImpact);
+  const addExplosion = useVisualEffects((state) => state.addExplosion);
+  const addDamageNumber = useVisualEffects((state) => state.addDamageNumber);
+  const updateEffects = useVisualEffects((state) => state.updateEffects);
 
-  
-  
-  const { xpOrbs, addXPOrb, updateXPOrbs } = useEnemies();
-  const movePlayer = usePlayer((s) => s.move);
-  const player = usePlayer.getState();
+  const phase = useGame((state) => state.phase);
+  const end = useGame((state) => state.end);
+
+  const showLevelUpScreen = usePlayer((state) => state.showLevelUpScreen);
+  const isMoving = usePlayer((state) => state.isMoving);
+
+  const fireShot = usePlayer((state) => state.fireShot);
+  const setFiring = usePlayer((state) => state.setFiring);
+  const startReload = usePlayer((state) => state.startReload);
+  const isReloading = usePlayer((state) => state.isReloading);
+  const reloadProgress = usePlayer((state) => state.reloadProgress);
+  const reloadTime = usePlayer((state) => state.reloadTime);
+  const updateReload = usePlayer((state) => state.updateReload);
+  const updateInvincibility = usePlayer((state) => state.updateInvincibility);
+  const updateMuzzleFlash = usePlayer((state) => state.updateMuzzleFlash);
+  const muzzleFlashTimer = usePlayer((state) => state.muzzleFlashTimer);
+  const muzzleFlashPosition = usePlayer((state) => state.muzzleFlashPosition);
+  const ammo = usePlayer((state) => state.ammo);
+  const updateFanFire = usePlayer((state) => state.updateFanFire);
+  const movePlayer = usePlayer((state) => state.move);
+  const maxAmmo = usePlayer((state) => state.maxAmmo);
+  const firerate = usePlayer((state) => state.firerate);
+  const playerLevel = usePlayer((state) => state.level);
+  const playerXP = usePlayer((state) => state.xp);
+  const xpToNextLevel = usePlayer((state) => state.xpToNextLevel);
+
+  const addProjectile = useProjectiles((state) => state.addProjectile);
+  const updateProjectiles = useProjectiles((state) => state.updateProjectiles);
+
+  const addXPOrb = useEnemies((state) => state.addXPOrb);
+  const updateXPOrbs = useEnemies((state) => state.updateXPOrbs);
+  const updateEnemies = useEnemies((state) => state.updateEnemies);
+  const removeEnemy = useEnemies((state) => state.removeEnemy);
+  const updateAutoSpawn = useEnemies((state) => state.updateAutoSpawn);
+
+  const updateSummons = useSummons((state) => state.updateSummons);
+  const updateStatusEffects = useSummons((state) => state.updateStatusEffects);
+  const handleEnemyKilledBySummon = useSummons((state) => state.handleEnemyKilledBySummon);
+  const playHit = useAudio((state) => state.playHit);
+  const playSuccess = useAudio((state) => state.playSuccess);
+  const screenCenter = useCamera((state) => state.screenCenter);
+
   const mouseRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  const { enemies, updateEnemies, removeEnemy } = useEnemies();
-  const { playHit, playSuccess } = useAudio();
-  const { summons, updateSummons, updateStatusEffects, electroMage, electroShotCounter, handleEnemyKilledBySummon } = useSummons();
   const fireTimer = useRef(0);
   const canFire = useRef(true);
   const isMouseDown = useRef(false);
@@ -394,6 +486,10 @@ export default function CanvasGame() {
   const canvasRectRef = useRef<DOMRect | null>(null);
   const cameraRef = useRef(new GameCamera2D());
   const weaponAngleRef = useRef(0);
+  const playerPositionRef = useRef(new THREE.Vector3());
+  const enemiesRef = useRef<Enemy[]>([]);
+  const position = playerPositionRef.current;
+  const enemies = enemiesRef.current;
   const [canvasDisplay, setCanvasDisplay] = useState({
     width: CANVAS_WIDTH,
     height: CANVAS_HEIGHT,
@@ -438,6 +534,8 @@ export default function CanvasGame() {
     treeLightningSpawnTimerRef.current = 0;
     footstepMarksRef.current = [];
     footstepSpawnTimerRef.current = 0;
+    trailParticlesRef.current = [];
+    projectileTrailLastPosRef.current.clear();
   }, []);
 
   useEffect(() => {
@@ -455,6 +553,8 @@ export default function CanvasGame() {
       treeLightningSpawnTimerRef.current = 0;
       footstepMarksRef.current = [];
       footstepSpawnTimerRef.current = 0;
+      trailParticlesRef.current = [];
+      projectileTrailLastPosRef.current.clear();
       cameraRef.current.resetShake();
     }
   }, [phase]);
@@ -470,14 +570,15 @@ export default function CanvasGame() {
       keysPressed.current.add(e.code);
       if (!canInteract) return;
 
-      if (e.code === "KeyR" && !isReloading && ammo < 6) {
+      const playerState = usePlayer.getState();
+      if (e.code === "KeyR" && !playerState.isReloading && playerState.ammo < maxAmmo) {
         startReload();
       }
     
-    if (e.code === "KeyB") {
-      const spawnPos = position.clone().add(new THREE.Vector3(20, 0, 0));
-      useEnemies.getState().spawnLazarusBoss(spawnPos);
-    }
+      if (e.code === "KeyB") {
+        const spawnPos = position.clone().add(new THREE.Vector3(20, 0, 0));
+        useEnemies.getState().spawnLazarusBoss(spawnPos);
+      }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       keysPressed.current.delete(e.code);
@@ -490,7 +591,7 @@ export default function CanvasGame() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [canInteract, isReloading, ammo, startReload]);
+  }, [canInteract, startReload]);
 
 useEffect(() => {
   const handleMouseDown = (e: MouseEvent) => {
@@ -562,6 +663,17 @@ const handleMouseMove = (e: MouseEvent) => {
       if (!ctx) return;
 
       const animationNowMs = phase === "playing" ? currentTime : pausedAnimationTimeRef.current;
+      const playerState = usePlayer.getState();
+      const position = playerState.position;
+      playerPositionRef.current.copy(position);
+      const ammo = playerState.ammo;
+      const isReloading = playerState.isReloading;
+      const isFiring = playerState.isFiring;
+      const invincibilityTimer = playerState.invincibilityTimer;
+      const hearts = playerState.hearts;
+      const speed = playerState.speed;
+      const enemies = useEnemies.getState().enemies;
+      enemiesRef.current = enemies;
 
       cameraRef.current.update({
         deltaSeconds: delta,
@@ -610,7 +722,7 @@ const handleMouseMove = (e: MouseEvent) => {
           
           const stats = usePlayer.getState().getProjectileStats();
 
-          addProjectile({
+          useProjectiles.getState().addProjectile({
             position: gunPosition,
             direction,
             size: stats.projectileSize,
@@ -646,13 +758,13 @@ const handleMouseMove = (e: MouseEvent) => {
                   addProjectile({
                     position: enemy.position.clone(),
                     direction,
-                    size: 32,
-                    damage: stats.damage * 0.1,
+                    size: 16,
+                    damage: stats.damage * 0.2,
                     speed: stats.speed * 1.5,
                     life: stats.life,
                     range: stats.range * 0.5,
-                    trailLength: 10,
-                    piercing: 2,
+                    trailLength: 3,
+                    piercing: 0,
                     bouncing: 0,
                     homing: false,
                   });
@@ -773,6 +885,14 @@ const handleMouseMove = (e: MouseEvent) => {
                   ),
                 );
 
+                const projectileExplosive = ps.lastAmmoExplosive && ammo === 1
+                  ? { radius: 6, damage: 50 }
+                  : stats.explosive;
+
+                const projectileBurn = ps.incendiary
+                  ? { damage: 4, duration: 3 }
+                  : undefined;
+
                 addProjectile({
                   position: barrelPosition,
                   direction,
@@ -784,9 +904,10 @@ const handleMouseMove = (e: MouseEvent) => {
                   homing: stats.homing,
                   piercing: stats.piercing,
                   bouncing: stats.bouncing,
-                  explosive: stats.explosive,
+                  explosive: projectileExplosive,
                   chainLightning: stats.chainLightning,
-                  trailLength: stats.trailLength, // Add a default trail length
+                  trailLength: stats.trailLength,
+                  burn: projectileBurn,
                 });
                 
               };
@@ -877,7 +998,13 @@ const handleMouseMove = (e: MouseEvent) => {
           if (moveX !== 0 || moveZ !== 0) { 
             usePlayer.getState().setMoving(true);
           const len = Math.sqrt(moveX ** 2 + moveZ ** 2);
-          const speedModifier = isFiring && !isReloading ? 0.4 : 1;
+          const playerState = usePlayer.getState();
+          let speedModifier = isFiring && !isReloading ? 0.4 : 1;
+          
+          // Apply speed when firing bonus
+          if (isFiring && !isReloading && playerState.speedWhenFiring > 0) {
+            speedModifier += playerState.speedWhenFiring;
+          }
 
           let dx = (moveX / len) * speed * delta * speedModifier;
           let dz = (moveZ / len) * speed * delta * speedModifier;
@@ -934,6 +1061,87 @@ const handleMouseMove = (e: MouseEvent) => {
           },
           phase !== "playing",
         );
+
+        const { projectiles } = useProjectiles.getState();
+        const spacingPixels = 2;
+        const worldToScreen = (pos: THREE.Vector3) =>
+          cameraRef.current.worldToScreen(
+            { x: pos.x, y: pos.z },
+            { x: position.x, y: position.z },
+            CANVAS_WIDTH,
+            CANVAS_HEIGHT,
+            TILE_SIZE / 2,
+          );
+
+        const activeProjectileIds = new Set<string>();
+        projectiles.forEach(proj => {
+          activeProjectileIds.add(proj.id);
+          const currentPos = proj.position.clone();
+          const lastPos = projectileTrailLastPosRef.current.get(proj.id);
+          
+          // Trail lifetime scales inversely with speed: faster projectiles have shorter trails
+          // Base lifetime: 10ms, adjusted by speed multiplier (speed range 5-20)
+          const speedFactor = Math.max(100, (proj.velocity.length())); // ranges from ~0.5 to 1
+          const initialTrailLife = speedFactor;
+          const followupTrailLife = speedFactor;
+
+          if (!lastPos) {
+            projectileTrailLastPosRef.current.set(proj.id, currentPos.clone());
+            trailParticlesRef.current.push({
+              id: crypto.randomUUID(),
+              position: currentPos.clone(),
+              initialSize: proj.size * 0.8,
+              size: proj.size * 0.8,
+              life: initialTrailLife,
+              maxLife: initialTrailLife,
+            });
+            return;
+          }
+
+          const lastScreen = worldToScreen(lastPos);
+          const currentScreen = worldToScreen(currentPos);
+          const dx = currentScreen.x - lastScreen.x;
+          const dy = currentScreen.y - lastScreen.y;
+          const screenDist = Math.hypot(dx, dy);
+          const steps = Math.floor(screenDist / spacingPixels);
+
+          if (steps > 0) {
+            for (let i = 1; i <= steps; i++) {
+              const t = i / (steps);
+              trailParticlesRef.current.push({
+                id: crypto.randomUUID(),
+                position: lastPos.clone().lerp(currentPos, t),
+                initialSize: proj.size * 0.8,
+                size: proj.size * 0.8,
+                life: followupTrailLife,
+                maxLife: followupTrailLife,
+              });
+            }
+          }
+
+          projectileTrailLastPosRef.current.set(proj.id, currentPos.clone());
+        });
+
+        projectileTrailLastPosRef.current.forEach((_, id) => {
+          if (!activeProjectileIds.has(id)) {
+            projectileTrailLastPosRef.current.delete(id);
+          }
+        });
+
+        // Update trail particles with in-place compaction instead of filter
+        let writeIdx = 0;
+        for (let i = 0; i < trailParticlesRef.current.length; i++) {
+          const p = trailParticlesRef.current[i];
+          p.life -= delta * 1000;
+          p.size = p.initialSize * (p.life / p.maxLife);
+          if (p.life > 0) {
+            if (writeIdx !== i) {
+              trailParticlesRef.current[writeIdx] = p;
+            }
+            writeIdx++;
+          }
+        }
+        trailParticlesRef.current.length = writeIdx;
 
       const updatedEnemies = enemies.map((enemy) => {
       // BOSS LOGIC
@@ -1117,6 +1325,17 @@ const handleMouseMove = (e: MouseEvent) => {
 
         if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
 
+        // Apply gradual knockback acceleration if active
+        if (enemy.knockbackAcceleration && enemy.knockbackDuration && enemy.knockbackDuration > 0) {
+          const accelToApply = enemy.knockbackAcceleration.clone().multiplyScalar(delta);
+          enemy.velocity.add(accelToApply);
+          enemy.knockbackDuration -= delta;
+          if (enemy.knockbackDuration <= 0) {
+            enemy.knockbackAcceleration = undefined;
+            enemy.knockbackDuration = undefined;
+          }
+        }
+
         const velMovedPos = moveWithTerrainSlide(
           enemy.position,
           enemy.velocity.clone().multiplyScalar(delta),
@@ -1127,20 +1346,15 @@ const handleMouseMove = (e: MouseEvent) => {
         enemy.position.x = velMovedPos.x;
         enemy.position.z = velMovedPos.z;
         if (!movedByVelocity) {
-          enemy.velocity.multiplyScalar(-0.35);
+          // Gentler bounce-back to feel more physical
+          enemy.velocity.multiplyScalar(-0.5);
         }
 
-        enemy.velocity.multiplyScalar(Math.max(0, 1 - 6 * delta));
-
-        const bouncedEnemy = bounceAgainstBounds(
-          enemy.position,
-          enemy.velocity,
-          ROOM_SIZE,
-          0.6,
+        // Reduced and more realistic velocity dampening
+        // This allows enemies to feel more grounded while still losing momentum
+        enemy.velocity.multiplyScalar(
+        Math.pow(0.95, delta * 60)
         );
-        enemy.position.copy(bouncedEnemy.position);
-        enemy.velocity.copy(bouncedEnemy.velocity);
-
         return enemy;
       });
           
@@ -1155,7 +1369,7 @@ const handleMouseMove = (e: MouseEvent) => {
             const minDist = getEnemyCollisionRadius(e1) + getEnemyCollisionRadius(e2);
 
             if (dist > 0 && dist < minDist) {
-              const push = (minDist - dist) / 2;
+              const push = (minDist - dist) / 8;
               const nx = dx / dist;
               const nz = dz / dist;
               e1.position.x += nx * push;
@@ -1167,7 +1381,7 @@ const handleMouseMove = (e: MouseEvent) => {
         }
 
         const PLAYER_RADIUS = 0.8;
-        const DAMPING = 1.5;
+        const DAMPING = 1;
 
         const aliveEnemies: typeof updatedEnemies = [];
 
@@ -1186,15 +1400,6 @@ const handleMouseMove = (e: MouseEvent) => {
 
           if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
           enemy.velocity.multiplyScalar(Math.max(0, 1 - DAMPING * delta));
-
-          const bounced = bounceAgainstBounds(
-            enemy.position,
-            enemy.velocity,
-            ROOM_SIZE,
-            0.6,
-          );
-          enemy.position.copy(bounced.position);
-          enemy.velocity.copy(bounced.velocity);
 
           if (enemy.health <= 0) {
             if (!(enemy as any).deathHandled) {
@@ -1240,7 +1445,7 @@ const handleMouseMove = (e: MouseEvent) => {
         updateXPOrbs(delta, position);
         updateEnemies(aliveEnemies);
         
-        useEnemies.getState().updateAutoSpawn(delta, player.position);
+        useEnemies.getState().updateAutoSpawn(delta, position);
         footstepMarksRef.current = footstepMarksRef.current
           .map((mark) => ({ ...mark, life: mark.life + delta }))
           .filter((mark) => mark.life < mark.maxLife);
@@ -1275,6 +1480,7 @@ const handleMouseMove = (e: MouseEvent) => {
       drawPlayer(ctx, animationNowMs);
       
       drawStatusEffects(ctx, animationNowMs);
+      drawExplosionEffects(ctx);
       drawImpactEffects(ctx); // ADD - behind projectiles
       
       drawEnemyDeaths(ctx, gameplayElapsedMsRef.current);
@@ -1295,10 +1501,25 @@ const handleMouseMove = (e: MouseEvent) => {
     };
   }, [
     position,
-    speed,
     enemies,
     updateEnemies,
     phase,
+    updateReload,
+    updateInvincibility,
+    updateMuzzleFlash,
+    updateSummons,
+    updateFanFire,
+    addProjectile,
+    playHit,
+    updateStatusEffects,
+    handleEnemyKilledBySummon,
+    applyPlayerDamage,
+    addXPOrb,
+    updateXPOrbs,
+    updateEnemies,
+    updateAutoSpawn,
+    end,
+    updateProjectiles,
   ]);
 
   function handleEnemyDeath(enemy: Enemy) {
@@ -1323,13 +1544,13 @@ const handleMouseMove = (e: MouseEvent) => {
 
         addProjectile({
           position: enemy.position.clone().add(direction.clone().multiplyScalar(0.6)),
-          size: 25,
+          size: 10,
           direction,
-          damage: stats.damage * 0.1,
+          damage: stats.damage * 0.2,
           speed: stats.speed * 1.35,
           life: 1.2,
           range: Math.max(12, stats.range * 0.4),
-          trailLength: 30,
+          trailLength: 1,
           piercing: 0,
           bouncing: 0,
           homing: false,
@@ -1371,8 +1592,8 @@ const handleMouseMove = (e: MouseEvent) => {
 
   // move pattern with world
   ctx.translate(worldOffsetX, worldOffsetY);
+ctx.imageSmoothingEnabled = false;
 
-  // draw oversized so edges never appear
   ctx.fillRect(
     -worldOffsetX - CANVAS_WIDTH,
     -worldOffsetY - CANVAS_HEIGHT,
@@ -1390,8 +1611,8 @@ const handleMouseMove = (e: MouseEvent) => {
     // ============================================
 
     terrainRef.current.forEach((obstacle) => {
-      const screenX = centerX + ((obstacle.x - position.x) * TILE_SIZE) / 2;
-      const screenY = centerY + ((obstacle.z - position.z) * TILE_SIZE) / 2;
+      const screenX = snapToGrid(centerX + ((obstacle.x - position.x) * TILE_SIZE) / 2);
+      const screenY = snapToGrid(centerY + ((obstacle.z - position.z) * TILE_SIZE) / 2);
       const radiusPx = obstacle.radius * (TILE_SIZE / 2);
       ctx.imageSmoothingEnabled = false;
 
@@ -1438,26 +1659,26 @@ const handleMouseMove = (e: MouseEvent) => {
     const wallThickness = 20;
 
     ctx.fillRect(
-      centerX - floorSize / 2 + offsetX,
-      centerY - floorSize / 2 - wallThickness + offsetZ,
+      snapToGrid(centerX - floorSize / 2 + offsetX),
+      snapToGrid(centerY - floorSize / 2 - wallThickness + offsetZ),
       floorSize,
       wallThickness,
     );
     ctx.fillRect(
-      centerX - floorSize / 2 + offsetX,
-      centerY + floorSize / 2 + offsetZ,
+      snapToGrid(centerX - floorSize / 2 + offsetX),
+      snapToGrid(centerY + floorSize / 2 + offsetZ),
       floorSize,
       wallThickness,
     );
     ctx.fillRect(
-      centerX + floorSize / 2 + offsetX,
-      centerY - floorSize / 2 + offsetZ,
+      snapToGrid(centerX + floorSize / 2 + offsetX),
+      snapToGrid(centerY - floorSize / 2 + offsetZ),
       wallThickness,
       floorSize,
     );
     ctx.fillRect(
-      centerX - floorSize / 2 - wallThickness + offsetX,
-      centerY - floorSize / 2 + offsetZ,
+      snapToGrid(centerX - floorSize / 2 - wallThickness + offsetX),
+      snapToGrid(centerY - floorSize / 2 + offsetZ),
       wallThickness,
       floorSize,
     );
@@ -1467,10 +1688,11 @@ const handleMouseMove = (e: MouseEvent) => {
 
   const drawXPOrbs = (ctx: CanvasRenderingContext2D) => {
     const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+    const xpOrbs = useEnemies.getState().xpOrbs;
 
     xpOrbs.forEach((orb) => {
-      const screenX = centerX + ((orb.position.x - position.x) * TILE_SIZE) / 2;
-      const screenY = centerY + ((orb.position.z - position.z) * TILE_SIZE) / 2;
+      const screenX = snapToGrid(centerX + ((orb.position.x - position.x) * TILE_SIZE) / 2);
+      const screenY = snapToGrid(centerY + ((orb.position.z - position.z) * TILE_SIZE) / 2);
 
       const sprite = xpSprite; // assume you imported or loaded xp.png as xpImage
 
@@ -1494,40 +1716,35 @@ const handleMouseMove = (e: MouseEvent) => {
     if (isReloading) {
       const radius = 40;
       const barHeight = 8;
-      const barY = centerY - 60;
+      const barY = snapToGrid(centerY - 60);
+      const snappedCenterX = snapToGrid(centerX);
 
       // Background bar
       ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
-      ctx.fillRect(centerX - radius, barY, radius * 2, barHeight);
+      ctx.fillRect(snapToGrid(snappedCenterX - radius), barY, radius * 2, barHeight);
 
-      // Progress bar with color gradient
+      // Progress bar - use solid color instead of gradient
       const progress = reloadProgress / reloadTime;
-      const barWidth = radius * 2 * progress;
+      const barWidth = snapToGrid(radius * 2 * progress);
 
-      const gradient = ctx.createLinearGradient(
-        centerX - radius, barY,
-        centerX + radius, barY
-      );
-      gradient.addColorStop(0, "#ff8800");
-      gradient.addColorStop(0.5, "#ffaa00");
-      gradient.addColorStop(1, "#ffcc00");
-
-      ctx.fillStyle = gradient;
-      ctx.fillRect(centerX - radius, barY, barWidth, barHeight);
+      // Simple color based on progress instead of gradient
+      const hue = 30 + (progress * 10); // Goes from orange to yellow
+      ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
+      ctx.fillRect(snapToGrid(snappedCenterX - radius), barY, barWidth, barHeight);
 
       // Border with glow
       ctx.strokeStyle = "#ffaa00";
       ctx.lineWidth = 2;
-      ctx.strokeRect(centerX - radius, barY, radius * 2, barHeight);
+      ctx.strokeRect(snapToGrid(snappedCenterX - radius), barY, radius * 2, barHeight);
 
       // Outer glow
       ctx.strokeStyle = "rgba(255, 170, 0, 0.3)";
       ctx.lineWidth = 4;
-      ctx.strokeRect(centerX - radius - 1, barY - 1, radius * 2 + 2, barHeight + 2);
+      ctx.strokeRect(snapToGrid(snappedCenterX - radius - 1), snapToGrid(barY - 1), radius * 2 + 2, barHeight + 2);
 
       
       ctx.save();
-      ctx.translate(centerX, barY-20);
+      ctx.translate(snapToGrid(centerX), snapToGrid(barY - 20));
   
       
       drawBitmapText(
@@ -1548,13 +1765,13 @@ const handleMouseMove = (e: MouseEvent) => {
       // Spinning chamber indicator
       const spinAngle = progress * Math.PI * 4;
       ctx.save();
-      ctx.translate(centerX, barY + barHeight + 15);
+      ctx.translate(snapToGrid(centerX), snapToGrid(barY + barHeight + 15));
       ctx.rotate(spinAngle);
 
       for (let i = 0; i < 6; i++) {
         const angle = (i / 6) * Math.PI * 2;
-        const x = Math.cos(angle) * 8;
-        const y = Math.sin(angle) * 8;
+        const x = Math.round(Math.cos(angle) * 8);
+        const y = Math.round(Math.sin(angle) * 8);
 
         ctx.fillStyle = i < Math.floor(progress * 6) ? "#00ff00" : "#333333";
         ctx.beginPath();
@@ -1674,37 +1891,53 @@ const handleMouseMove = (e: MouseEvent) => {
 
     ctx.save();
     const img = getProjectileImage();
-    const drawRotatedProjectile = (x: number, y: number, size: number, angle: number) => {
+    const drawProjectile = (x: number, y: number, size: number) => {
       ctx.save();
       ctx.translate(x, y);
-      ctx.rotate(angle);
       ctx.drawImage(img, Math.floor(-size / 2), Math.floor(-size / 2), Math.floor(size), Math.floor(size));
       ctx.restore();
     };
+    // Draw trail particles
+    ctx.imageSmoothingEnabled = false;
+ctx.fillStyle = '#f5d6c1';
+
+const PIXEL_SIZE = 1;
+
+trailParticlesRef.current.forEach(p => {
+  const screenPos = worldToScreen(p.position);
+  
+  // Cull particles outside camera view with padding
+  if (screenPos.x < -50 || screenPos.x > CANVAS_WIDTH + 50 ||
+      screenPos.y < -50 || screenPos.y > CANVAS_HEIGHT + 50) {
+    return; // Skip rendering
+  }
+
+  const x = snapToGrid(screenPos.x);
+
+  const y = snapToGrid(screenPos.y);
+
+  const size = Math.max(
+    PIXEL_SIZE,
+    Math.round(p.size / PIXEL_SIZE) * PIXEL_SIZE
+  );
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillRect(
+    snapToGrid(x - (size / 2)),
+    snapToGrid(y - (size / 2)),
+    snapToGrid(size),
+    snapToGrid(size)
+  );
+    });
     projectiles.forEach((proj) => {
       const angle = Math.atan2(proj.velocity.z, proj.velocity.x) + Math.PI / 2;
-      const trail = proj.trailHistory;
-        for (let i = 0; i < trail.length; i++) {
-          const t = i / trail.length; // 0 = head, 1 = tail
-
-          const maxSize = Math.ceil(proj.size);
-          const step = 1.5; //shrink
-
-          const size = Math.max(
-            1,
-            Math.floor(maxSize - i * step)
-          );
-          const p = worldToScreen(trail[i]);
-          
-          drawRotatedProjectile(p.x, p.y, size, angle);
-        }
-      
 
       // --- MAIN BULLET---
       const screen = worldToScreen(proj.position);
+      const snappedX = snapToGrid(screen.x);
+      const snappedY = snapToGrid(screen.y);
       const mainSize = Math.floor(proj.size);
-      ctx.globalAlpha = 1.5;
-      drawRotatedProjectile(screen.x, screen.y, mainSize, angle);
+      ctx.globalAlpha = 1;
+      drawProjectile(snappedX, snappedY, mainSize);
     });
     ctx.globalAlpha = 1;
     ctx.restore();
@@ -1720,33 +1953,65 @@ const handleMouseMove = (e: MouseEvent) => {
 
     impactEffects.forEach(impact => {
       const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
-      const screenX = centerX + ((impact.x - position.x) * TILE_SIZE)/2;
-      const screenY = centerY + ((impact.y - position.z) * TILE_SIZE)/2;
+      const screenX = snapToGrid(centerX + ((impact.x - position.x) * TILE_SIZE)/2);
+      const screenY = snapToGrid(centerY + ((impact.y - position.z) * TILE_SIZE)/2);
 
       ctx.save();
       ctx.imageSmoothingEnabled = false;
-      ctx.globalAlpha = 1 - (impact.frameIndex / impact.totalFrames); // optional fade
+      
       ctx.drawImage(
         sprite,
         frameWidth * impact.frameIndex, 0,  // source x, y
         frameWidth, frameHeight,            // source width, height
-        screenX - impact.size/2, screenY - impact.size/2,  // dest x, y
+        snapToGrid(screenX - impact.size/2), snapToGrid(screenY - impact.size/2),  // dest x, y
         impact.size, impact.size            // dest width, height
       );
       ctx.restore();
     });
   };
 
+  const drawExplosionEffects = (ctx: CanvasRenderingContext2D) => {
+    const explosionEffects = useVisualEffects.getState().explosionEffects;
+    const sprite = VisualSprites.bigExplosion;
+    if (!sprite.complete || sprite.naturalWidth === 0) return;
+
+    const frameWidth = sprite.width / 6;
+    const frameHeight = sprite.height;
+
+    explosionEffects.forEach(explosion => {
+      const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+      const screenX = snapToGrid(centerX + ((explosion.x - position.x) * TILE_SIZE) / 2);
+      const screenY = snapToGrid(centerY + ((explosion.y - position.z) * TILE_SIZE) / 2);
+      const size = explosion.size;
+
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(
+        sprite,
+        frameWidth * explosion.frameIndex,
+        0,
+        frameWidth,
+        frameHeight,
+        snapToGrid(screenX - size / 2),
+        snapToGrid(screenY - size / 2),
+        size,
+        size,
+      );
+      ctx.restore();
+    });
+  };
+
   const drawDamageNumbers = (ctx: CanvasRenderingContext2D) => {
+    const damageNumbers = useVisualEffects.getState().damageNumbers;
     const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
 
     ctx.save();
     damageNumbers.forEach(dmg => {
-      const screenX = centerX + ((dmg.x - position.x) * TILE_SIZE) / 2;
-      const screenY = centerY + ((dmg.y - position.z) * TILE_SIZE) / 2;
+      const screenX = snapToGrid(centerX + ((dmg.x - position.x) * TILE_SIZE) / 2);
+      const screenY = snapToGrid(centerY + ((dmg.y - position.z) * TILE_SIZE) / 2);
 
       const lifePercent = dmg.life / dmg.maxLife;
-      const alpha = lifePercent < 0.7 ? 1 : (1 - (lifePercent - 0.7) / 0.3);
+      const alpha = Math.max(0, Math.min(1, lifePercent < 0.7 ? 1 : (1 - (lifePercent - 0.7) / 0.3)));
 
       ctx.globalAlpha = alpha;
 
@@ -1773,22 +2038,22 @@ const handleMouseMove = (e: MouseEvent) => {
     const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
 
     for (const attack of treeLightningRef.current) {
-      const x1 = centerX + ((attack.source.x - position.x) * TILE_SIZE) / 2;
-      const y1 = centerY + ((attack.source.z - position.z) * TILE_SIZE) / 2;
-      const x2 = centerX + ((attack.target.x - position.x) * TILE_SIZE) / 2;
-      const y2 = centerY + ((attack.target.z - position.z) * TILE_SIZE) / 2;
+      const x1 = snapToGrid(centerX + ((attack.source.x - position.x) * TILE_SIZE) / 2);
+      const y1 = snapToGrid(centerY + ((attack.source.z - position.z) * TILE_SIZE) / 2);
+      const x2 = snapToGrid(centerX + ((attack.target.x - position.x) * TILE_SIZE) / 2);
+      const y2 = snapToGrid(centerY + ((attack.target.z - position.z) * TILE_SIZE) / 2);
 
       if (nowMs < attack.connectAt) {
         const steps = 22;
         for (let i = 0; i <= steps; i++) {
           const t = i / steps;
-          const px = THREE.MathUtils.lerp(x1, x2, t);
-          const py = THREE.MathUtils.lerp(y1, y2, t);
-          const jitterX = (Math.random() - 0.5) * 8;
-          const jitterY = (Math.random() - 0.5) * 8;
+          const px = Math.round(THREE.MathUtils.lerp(x1, x2, t));
+          const py = Math.round(THREE.MathUtils.lerp(y1, y2, t));
+          const jitterX = Math.round((Math.random() - 0.5) * 8);
+          const jitterY = Math.round((Math.random() - 0.5) * 8);
           ctx.fillStyle = "rgba(120,220,255,0.9)";
           ctx.beginPath();
-          ctx.arc(px + jitterX, py + jitterY, 2.2, 0, Math.PI * 2);
+          ctx.arc(snapToGrid(px + jitterX), snapToGrid(py + jitterY), 2, 0, Math.PI * 2);
           ctx.fill();
         }
         continue;
@@ -1829,8 +2094,8 @@ const handleMouseMove = (e: MouseEvent) => {
         ctx.strokeStyle = nowMs >= attack.dissipateAt ? "rgba(130,130,255,0.35)" : "rgba(130,220,255,0.9)";
         ctx.lineWidth = 8;
         ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
+        ctx.moveTo(snapToGrid(x1), snapToGrid(y1));
+        ctx.lineTo(snapToGrid(x2), snapToGrid(y2));
         ctx.stroke();
       }
     }
@@ -1840,28 +2105,31 @@ const handleMouseMove = (e: MouseEvent) => {
     const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
     for (const mark of footstepMarksRef.current) {
       const alpha = 1 - mark.life / mark.maxLife;
-      const screenX = centerX + ((mark.position.x - position.x) * TILE_SIZE) / 2;
-      const screenY = centerY + ((mark.position.z - position.z) * TILE_SIZE) / 2;
+      const screenX = snapToGrid(centerX + ((mark.position.x - position.x) * TILE_SIZE) / 2);
+      const screenY = snapToGrid(centerY + ((mark.position.z - position.z) * TILE_SIZE) / 2);
 
       ctx.save();
-      ctx.fillStyle = `rgba(61, 85, 85, ${1.35 * alpha})`;
+      ctx.fillStyle = `rgba(61, 85, 85, ${Math.max(0, Math.min(1, 1.35 * alpha))})`;
       ctx.beginPath();
-      ctx.ellipse(screenX, screenY, mark.radius * alpha, (mark.radius * 0.6) * alpha, 0, 0, Math.PI * 2);
+      const radiusX = Math.max(1, Math.round(mark.radius * alpha));
+      const radiusY = Math.max(1, Math.round((mark.radius * 0.6) * alpha));
+      ctx.ellipse(screenX, screenY, radiusX, radiusY, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
   };
 
 const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
+    const playerState = usePlayer.getState();
     const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
 
     ctx.save();
     ctx.translate(centerX, centerY);
 
     // Flashing effect during invincibility
-    if (invincibilityTimer > 0) {
+    if (playerState.invincibilityTimer > 0) {
       const flashFrequency = 0.15; // Flash every 150ms
-      const flash = Math.sin((invincibilityTimer / flashFrequency) * Math.PI * 4) > 0;
+      const flash = Math.sin((playerState.invincibilityTimer / flashFrequency) * Math.PI * 4) > 0;
       if (!flash) {
         ctx.restore();
         return; // Skip drawing to create flash effect
@@ -1869,8 +2137,8 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     }
 
     if (playerSpriteSheet.complete && playerSpriteSheet.naturalWidth > 0) {
-      const animState = isMoving
-        ? (isFiring ? PLAYER_SPRITE_ANIMATIONS.walking : PLAYER_SPRITE_ANIMATIONS.running)
+      const animState = playerState.isMoving
+        ? (playerState.isFiring ? PLAYER_SPRITE_ANIMATIONS.walking : PLAYER_SPRITE_ANIMATIONS.running)
         : PLAYER_SPRITE_ANIMATIONS.idle;
       const frame = Math.floor((animationNowMs / 1000) * animState.fps) % animState.frames;
       const sourceX = frame * PLAYER_SPRITE_FRAME_SIZE;
@@ -1903,8 +2171,8 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
 
     const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    const screenX = centerX + ((enemy.position.x - position.x) * TILE_SIZE) / 2;
-    const screenY = centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2;
+    const screenX = snapToGrid(centerX + ((enemy.position.x - position.x) * TILE_SIZE) / 2);
+    const screenY = snapToGrid(centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2);
 
     const enemyType: EnemySpriteType = getEnemyType(enemy);
     const bodySprite = enemySpritesByType[enemyType];
@@ -1935,8 +2203,8 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
       if (enemy.spriteFrame === 0) return;
 
       const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
-      const screenX = centerX + ((enemy.x - position.x) * TILE_SIZE) / 2;
-      const screenY = centerY + ((enemy.z - position.z) * TILE_SIZE) / 2;
+      const screenX = snapToGrid(centerX + ((enemy.x - position.x) * TILE_SIZE) / 2);
+      const screenY = snapToGrid(centerY + ((enemy.z - position.z) * TILE_SIZE) / 2);
 
       if (treeEnemyEyesSprite.complete && treeEnemyEyesSprite.naturalWidth > 0 && treeEnemyEyesSprite.naturalHeight > 0) {
         const frameW = treeEnemyEyesSprite.naturalWidth / 2;
@@ -1969,8 +2237,8 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
 
     if (enemy.isBoss && enemy.bossType === "lazarus") {
       const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
-      const screenX = centerX + ((enemy.position.x - position.x) * TILE_SIZE) / 2;
-      const screenY = centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2;
+      const screenX = snapToGrid(centerX + ((enemy.position.x - position.x) * TILE_SIZE) / 2);
+      const screenY = snapToGrid(centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2);
       const bossSheet = lazarusBossSpriteSheet;
       const windupSheet = bossLaserWindupSprite;
       const laserSheet = bossLaserSpriteSheet;
@@ -2070,7 +2338,7 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
           const startY = screenY + Math.sin(beamAngle) * beamOriginOffsetPx;
 
           ctx.save();
-          ctx.globalAlpha = Math.max(0.55, Math.min(0.95, pulse));
+          ctx.globalAlpha = Math.max(0.55, Math.min(1, pulse));
           drawTiledBeam(
             windupSheet,
             0,
@@ -2122,23 +2390,23 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
 
       const barW = 110;
       const barH = 9;
-      const barY = screenY - drawSize / 2 - 24;
+      const barY = snapToGrid(screenY - drawSize / 2 - 24);
       const hpPct = Math.max(0, enemy.health / enemy.maxHealth);
 
       ctx.fillStyle = "rgba(0,0,0,0.72)";
-      ctx.fillRect(screenX - barW / 2 - 2, barY - 2, barW + 4, barH + 4);
+      ctx.fillRect(snapToGrid(screenX - barW / 2 - 2), snapToGrid(barY - 2), barW + 4, barH + 4);
       ctx.fillStyle = "#400";
-      ctx.fillRect(screenX - barW / 2, barY, barW, barH);
+      ctx.fillRect(snapToGrid(screenX - barW / 2), barY, barW, barH);
       ctx.fillStyle = hpPct > 0.45 ? "#5DFF63" : "#ffc642";
-      ctx.fillRect(screenX - barW / 2, barY, barW * hpPct, barH);
+      ctx.fillRect(snapToGrid(screenX - barW / 2), barY, snapToGrid(barW * hpPct), barH);
       ctx.strokeStyle = "#fff";
       ctx.lineWidth = 2;
-      ctx.strokeRect(screenX - barW / 2, barY, barW, barH);
+      ctx.strokeRect(snapToGrid(screenX - barW / 2), barY, barW, barH);
       drawBitmapText(
       ctx,
       "BOSS",
-      screenX,
-      barY-10,
+      snapToGrid(screenX),
+      snapToGrid(barY - 10),
       font,
       fontRedImage,
      {
@@ -2154,8 +2422,8 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     const size = eyeSprite.size * eyeSprite.scale;
 
     const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
-    const screenX = centerX + ((enemy.position.x - position.x) * TILE_SIZE) / 2;
-    const screenY = centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2;
+    const screenX = snapToGrid(centerX + ((enemy.position.x - position.x) * TILE_SIZE) / 2);
+    const screenY = snapToGrid(centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2);
     const facingRight = enemy.position.x <= position.x;
 
     ctx.save();
@@ -2175,8 +2443,8 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     const hasProjectileSprite = projectileSprite.complete && projectileSprite.naturalWidth > 0 && projectileSprite.naturalHeight > 0;
 
     for (const projectile of enemyProjectilesRef.current) {
-      const screenX = centerX + ((projectile.position.x - position.x) * TILE_SIZE) / 2;
-      const screenY = centerY + ((projectile.position.z - position.z) * TILE_SIZE) / 2;
+      const screenX = snapToGrid(centerX + ((projectile.position.x - position.x) * TILE_SIZE) / 2);
+      const screenY = snapToGrid(centerY + ((projectile.position.z - position.z) * TILE_SIZE) / 2);
       const pixelSize = Math.max(8, projectile.size * TILE_SIZE * 1.1);
 
       ctx.save();
@@ -2211,8 +2479,8 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
 
       nextAnimations.push(animation);
 
-      const screenX = centerX + ((animation.position.x - position.x) * TILE_SIZE) / 2;
-      const screenY = centerY + ((animation.position.z - position.z) * TILE_SIZE) / 2;
+      const screenX = snapToGrid(centerX + ((animation.position.x - position.x) * TILE_SIZE) / 2);
+      const screenY = snapToGrid(centerY + ((animation.position.z - position.z) * TILE_SIZE) / 2);
       const drawScale = 2;
       const drawWidth = frameWidth * drawScale;
       const drawHeight = frameHeight * drawScale;
@@ -2240,11 +2508,12 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
   };
 
   const drawSummons = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
+    const summons = useSummons.getState().summons;
     const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
 
     summons.forEach((summon) => {
-      const screenX = centerX + ((summon.position.x - position.x) * TILE_SIZE) / 2;
-      const screenY = centerY + ((summon.position.z - position.z) * TILE_SIZE) / 2;
+      const screenX = snapToGrid(centerX + ((summon.position.x - position.x) * TILE_SIZE) / 2);
+      const screenY = snapToGrid(centerY + ((summon.position.z - position.z) * TILE_SIZE) / 2);
 
       if (summon.type === "ghost") {
         const sprite = SummonSprites.ghostSheet;
@@ -2380,7 +2649,7 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
 
         ctx.globalAlpha = 1;
         ctx.strokeStyle = "#00ffff";
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(-3, -6);
         ctx.lineTo(-5, -10);
@@ -2534,4 +2803,4 @@ const { ammo } = usePlayer.getState();
     </>
   );
 
-}
+});

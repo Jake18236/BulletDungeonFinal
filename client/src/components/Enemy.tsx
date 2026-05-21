@@ -1,8 +1,7 @@
-import { useRef, useMemo } from "react";
+import { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useTexture } from "@react-three/drei";
 import * as THREE from "three";
-import { bounceAgainstBounds, ROOM_LIMIT } from "../lib/collision";
 
 interface EnemyProps {
   enemy: {
@@ -10,73 +9,16 @@ interface EnemyProps {
     position: THREE.Vector3;
     health: number;
     maxHealth: number;
-    state: string;
-    speed: number;
-    patrolTarget?: THREE.Vector3;
-    patrolPoints?: THREE.Vector3[];
-    currentPatrolIndex?: number;
-    type?: string;
     velocity: THREE.Vector3;
   };
 }
 
 export default function Enemy({ enemy }: EnemyProps) {
   const meshRef = useRef<THREE.Mesh>(null);
-  const woodTexture = useTexture("/textures/wood.jpg");
 
-  woodTexture.magFilter = THREE.NearestFilter;
-  woodTexture.minFilter = THREE.NearestFilter;
-
-
-
-  useFrame((_state, delta) => {
+  useFrame(() => {
     if (!meshRef.current) return;
-
-    // Apply velocity
-    enemy.position.add(enemy.velocity.clone().multiplyScalar(delta));
-    enemy.velocity.multiplyScalar(0.8); // friction
-
     
-    if (enemy.state === "patrolling") {
-      if (enemy.type === "sentry") {
-        
-      } else if (enemy.type === "patroller" && enemy.patrolPoints && enemy.patrolPoints.length > 0) {
-        
-        const target = enemy.patrolPoints[enemy.currentPatrolIndex ?? 0];
-        const dir = target.clone().sub(enemy.position);
-        const dist = dir.length();
-        if (dist > 0.2) {
-          dir.normalize().multiplyScalar(enemy.speed * 0.5 * delta);
-          enemy.position.add(dir);
-        } else {
-          // advance patrol index
-          enemy.currentPatrolIndex = ((enemy.currentPatrolIndex ?? 0) + 1) % enemy.patrolPoints.length;
-        }
-      }
-    }
-
-    const bounced = bounceAgainstBounds(enemy.position, enemy.velocity, ROOM_LIMIT, 0.6);
-    enemy.position.copy(bounced.position);
-    enemy.velocity.copy(bounced.velocity);
-
     meshRef.current.position.copy(enemy.position).add(new THREE.Vector3(0, 0.5, 0));
   });
-
-  return (
-    <mesh ref={meshRef} castShadow receiveShadow>
-      <boxGeometry args={[0.8, 1, 0.8]} />
-      <meshLambertMaterial map={woodTexture} color="#ff4444" />
-
-      
-      
-      <mesh
-        position={[0, 1.21, 0]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        scale={[enemy.health / enemy.maxHealth, 1, 1]}
-      >
-        <planeGeometry args={[1, 0.1]} />
-        <meshBasicMaterial color="#00ff00" />
-      </mesh>
-    </mesh>
-  );
 }

@@ -436,7 +436,7 @@ export default function GameUI() {
   const timerText = `${elapsedMinutes.toString().padStart(2, "0")}:${elapsedSeconds.toString().padStart(2, "0")}`;
   const levelCanvasRef = useRef<HTMLCanvasElement | null>(null);
 	const instructionsCanvasRef = useRef<HTMLCanvasElement | null>(null);
-	const showInstructions = elapsedSeconds < 30;
+	const showInstructions = elapsedTime < 30;
   
   const handleStart = () => {
     resetPlayer();

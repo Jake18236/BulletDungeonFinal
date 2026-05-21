@@ -59,13 +59,17 @@ interface PlayerState {
   projectileCount: number;
   life: number,
   homing: boolean;
+  incendiary: boolean;
   piercing: number;
   bouncing: number;
   accuracy: number;
   trailLength: number;
   explosive?: { radius: number; damage: number };
   chainLightning?: { chains: number; range: number };
-  
+  lastAmmoExplosive: boolean;
+  magnetRange: number;
+  speedWhenFiring: number;
+  healPerLevelUp: number;
 
   // Special Upgrades
   knockbackMultiplier: number;
@@ -80,6 +84,7 @@ interface PlayerState {
   freshClipTimer: number;
   killClip: boolean;
   killClipStacks: number;
+  speedFiringBonus: number;
 
   muzzleFlashTimer: number;
   muzzleFlashPosition: THREE.Vector3 | null;
@@ -282,6 +287,33 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     },
   },
 
+  // BULLET ENHANCEMENT UPGRADES
+  homing_rounds: {
+    id: "homing_rounds",
+    name: "Homing Rounds",
+    description: "Projectiles home in on enemies",
+    icon: "🎯",
+    category: "damage",
+    tier: 2,
+    requires: ["power_shot"],
+    apply: () => {
+      usePlayer.setState({ homing: true });
+    },
+  },
+
+  inciendiary_rounds: {
+    id: "incendiary_rounds",
+    name: "Incendiary Rounds",
+    description: "Projectiles inflict Burn: 4 damage/s for 3s",
+    icon: "🔥",
+    category: "damage",
+    tier: 2,
+    requires: ["power_shot"],
+    apply: () => {
+      usePlayer.setState({ incendiary: true });
+    },
+  },
+
   // FIRE RATE TREE
   rapid_fire: {
     id: "rapid_fire",
@@ -338,7 +370,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
   siege: {
     id: "siege",
     name: "Siege",
-    description: "While standing still: 40% chance to not consume ammo",
+    description: "Bullet Damage increases when standing still. Damage bonus resets when you move.",
     icon: "🛡️",
     category: "firerate",
     tier: 3,
@@ -395,7 +427,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
   fusillade: {
     id: "fusillade",
     name: "Fusillade",
-    description: "Projectiles +1, Spread +15%, Damage -25%, doubles base projectiles",
+    description: "Projectiles +1, Spread +15%, Fire Rate -50%, doubles base projectiles",
     icon: "💫",
     category: "multishot",
     tier: 3,
@@ -405,7 +437,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
       usePlayer.setState({
         projectileCount: (player.projectileCount + 1) * 2,
         accuracy: player.accuracy * 0.85,
-        baseDamage: player.baseDamage * 0.75,
+        firerate: player.firerate * 0.5,
       });
     },
   },
@@ -461,6 +493,19 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     },
   },
 
+explosive_last_round: {
+    id: "explosive_last_round",
+    name: "Last Round Blast",
+    description: "Last bullet explodes on impact",
+    icon: "💥",
+    category: "reload",
+    tier: 3,
+    requires: [],
+    apply: () => {
+      usePlayer.setState({ lastAmmoExplosive: true });
+    },
+  },
+
   kill_clip: {
     id: "kill_clip",
     name: "Kill Clip",
@@ -471,6 +516,60 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     requires: ["armed_ready", "fresh_clip"],
     apply: () => {
       usePlayer.setState({ killClip: true });
+    },
+  },
+
+  // VITALITY & BUFF TREE
+  fleet_footed: {
+    id: "fleet_footed",
+    name: "Fleet Footed",
+    description: "Movement Speed +20%",
+    icon: "👟",
+    category: "vitality",
+    tier: 1,
+    apply: () => {
+      const player = usePlayer.getState();
+      usePlayer.setState({ speed: player.speed * 1.2 });
+    },
+  },
+
+  vitality: {
+    id: "vitality",
+    name: "Vitality",
+    description: "Gain 1 HP every level up",
+    icon: "❤️",
+    category: "vitality",
+    tier: 2,
+    requires: ["fleet_footed"],
+    apply: () => {
+      usePlayer.setState({ healPerLevelUp: 1 });
+    },
+  },
+
+  rapid_stride: {
+    id: "rapid_stride",
+    name: "Rapid Stride",
+    description: "Movement Speed +30% while firing",
+    icon: "💨",
+    category: "vitality",
+    tier: 2,
+    requires: ["fleet_footed"],
+    apply: () => {
+      usePlayer.setState({ speedWhenFiring: 0.3 });
+    },
+  },
+
+  magnetic_field: {
+    id: "magnetic_field",
+    name: "Magnetic Field",
+    description: "Magnet Range +50%",
+    icon: "🧲",
+    category: "vitality",
+    tier: 2,
+    requires: ["fleet_footed"],
+    apply: () => {
+      const player = usePlayer.getState();
+      usePlayer.setState({ magnetRange: player.magnetRange * 1.5 });
     },
   },
 
@@ -574,7 +673,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
   windcutter: {
     id: "windcutter",
     name: "Windcutter",
-    description: "Move Speed +10%. Scythe damage scales with Move Speed",
+    description: "Move Speed +10%. Dual scythes orbit at opposite angles, scales with Move Speed",
     icon: "💨",
     category: "summon",
     tier: 3,
@@ -583,6 +682,8 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
       const player = usePlayer.getState();
       usePlayer.setState({ speed: player.speed * 1.1 });
       useSummons.setState({ scytheSpeedBonus: true });
+      const { addSummon } = useSummons.getState();
+      addSummon("scythe");
     },
   },
 
@@ -692,14 +793,18 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   baseProjectileRange: 50,
   projectileCount: 1,
   life: 3.0,
-  projectileSize: 32.0,
+  projectileSize: 12.0,
   homing: false,
+  incendiary: false,
   piercing: 0,
   bouncing: 0,
   accuracy: 1.0,
-  trailLength: 30,
+  trailLength: 5,
   explosive: undefined,
   chainLightning: undefined,
+  magnetRange: 0,
+  speedWhenFiring: 0,
+  healPerLevelUp: 0,
   
   
 
@@ -714,8 +819,10 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   freshClip: false,
   freshClipActive: false,
   freshClipTimer: 0,
+  lastAmmoExplosive: false,
   killClip: false,
   killClipStacks: 0,
+  speedFiringBonus: 0,
 
   muzzleFlashTimer: 0,
   muzzleFlashPosition: null,
@@ -749,13 +856,26 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     const newLevel = state.level + 1;
     const newXPRequired = calculateXPForLevel(newLevel);
 
-    set({
-      level: newLevel,
-      xp: 0,
-      xpToNextLevel: newXPRequired,
-      showLevelUpScreen: true,
-      availableUpgrades: generateRandomUpgrades(state.takenUpgrades),
-    });
+    // Apply healing from lifesteal upgrades
+    if (state.healPerLevelUp > 0) {
+      const newHearts = Math.min(state.hearts + state.healPerLevelUp, state.maxHearts);
+      set({
+        level: newLevel,
+        xp: 0,
+        xpToNextLevel: newXPRequired,
+        showLevelUpScreen: true,
+        availableUpgrades: generateRandomUpgrades(state.takenUpgrades),
+        hearts: newHearts,
+      });
+    } else {
+      set({
+        level: newLevel,
+        xp: 0,
+        xpToNextLevel: newXPRequired,
+        showLevelUpScreen: true,
+        availableUpgrades: generateRandomUpgrades(state.takenUpgrades),
+      });
+    }
 
     useGame.getState().pause();
   },
@@ -970,12 +1090,12 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     homing: false,
     piercing: 0,
     bouncing: 0,
-    trailLength: 30,
+    trailLength: 1,
     explosive: undefined,
     chainLightning: undefined,
     accuracy: 1.0,
-    knockbackMultiplier: 1.0,
-    projectileSize: 32.0,
+    knockbackMultiplier: 2.0,
+    projectileSize: 12.0,
     instantKillThreshold: 0,
     splinterBullets: false,
     pierceKilledEnemies: false,

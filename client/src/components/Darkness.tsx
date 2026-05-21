@@ -3,6 +3,7 @@ import { usePlayer } from "../lib/stores/usePlayer";
 import { useEnemies } from "../lib/stores/useEnemies";
 import { useVisualEffects } from "../lib/stores/useVisualEffects";
 import { useCamera } from "../lib/stores/useCamera";
+import { useGame } from "../lib/stores/useGame";
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from "../components/CanvasGame";
 
 const WORLD_TO_SCREEN_SCALE = 25; // simplified (your TILE_SIZE/2)
@@ -36,11 +37,6 @@ export default function Darkness() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<number>();
 
-  const { position: playerPosition, muzzleFlashPosition } = usePlayer();
-  const { xpOrbs } = useEnemies();
-  const { impactEffects } = useVisualEffects();
-  const { screenCenter } = useCamera();
-
   useEffect(() => {
     const render = () => {
       const canvas = canvasRef.current;
@@ -48,6 +44,20 @@ export default function Darkness() {
 
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
+
+      // Skip rendering if game is paused (e.g., during level-up)
+      const gameState = useGame.getState();
+      if (gameState.phase === "paused") {
+        frameRef.current = requestAnimationFrame(render);
+        return;
+      }
+
+      const playerState = usePlayer.getState();
+      const muzzleFlashPosition = playerState.muzzleFlashPosition;
+      const playerPosition = playerState.position;
+      const xpOrbs = useEnemies.getState().xpOrbs;
+      const impactEffects = useVisualEffects.getState().impactEffects;
+      const screenCenter = useCamera.getState().screenCenter;
 
       const cx = screenCenter.x;
       const cy = screenCenter.y;
@@ -115,7 +125,7 @@ export default function Darkness() {
     return () => {
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
     };
-  }, [playerPosition, xpOrbs, impactEffects, muzzleFlashPosition, screenCenter]);
+  }, []);
 
   return (
     <canvas
