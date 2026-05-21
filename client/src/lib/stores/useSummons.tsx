@@ -426,7 +426,7 @@ export const useSummons = create<SummonState>((set, get) => ({
           if (!updated.trail) updated.trail = [];
           updated.trail.unshift(updated.position.clone());
 
-          if (updated.trail.length > 20) {
+          if (updated.trail.length > 10) {
             updated.trail.pop();
           }
 

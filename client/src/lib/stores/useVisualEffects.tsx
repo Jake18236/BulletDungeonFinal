@@ -90,7 +90,7 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
     }));
   },
   // ---------------- Explosion ----------------
-  addExplosion: (position, count = 5, radius = 0) => {
+  addExplosion: (position, count = 1, radius = 0) => {
     const particles: Particle[] = [];
 
     // Explosion particles
@@ -99,45 +99,6 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
       const speed = 1 + Math.random() * 10;
       const colors = ["#ff4444", "#ff6666", "#ff8888", "#ffaa44"];
       const color = colors[Math.floor(Math.random() * colors.length)];
-
-      particles.push({
-        id: `explosion_${Date.now()}_${i}`,
-        position: position.clone(),
-        velocity: new THREE.Vector3(
-          Math.cos(angle) * speed,
-          0,
-          Math.sin(angle) * speed
-        ),
-        life: 0,
-        maxLife: 0.3 + Math.random() * 0.3,
-        size: 6 + Math.random() * 8,
-        color,
-        alpha: 1,
-        gravity: true,
-        type: "explosion",
-      });
-    }
-
-    // Sparks
-    for (let i = 0; i < 10; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 40 + Math.random() * 20;
-
-      particles.push({
-        id: `spark_${Date.now()}_${i}`,
-        position: position.clone(),
-        velocity: new THREE.Vector3(
-          Math.cos(angle) * speed,
-          0,
-          Math.sin(angle) * speed
-        ),
-        life: 0,
-        maxLife: 0.2 + Math.random() * 0.2,
-        size: 1 + Math.random() * 2,
-        color: "#ffff88",
-        alpha: 1,
-        type: "spark",
-      });
     }
 
     const pixelDiameter = radius > 0 ? Math.max(radius * 50, 64) : 110;
@@ -146,7 +107,7 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
       x: position.x,
       y: position.z,
       life: 0,
-      maxLife: 0.33,
+      maxLife: 0.4,
       size: pixelDiameter,
       radius,
       frameIndex: 0,

@@ -305,7 +305,7 @@ export const VisualSprites = {
   })(),
   bigExplosion: (() => {
     const img = new Image();
-    img.src = "/sprites/big-explosion.png";
+    img.src = "/sprites/other-explosion.png";
     return img;
   })(),
 };
