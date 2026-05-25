@@ -7,7 +7,7 @@ import { useGame } from "../lib/stores/useGame";
 import { useAudio } from "../lib/stores/useAudio";
 
 
-import { useProjectiles } from "../lib/stores/useProjectiles";
+import { useProjectiles, TrailParticle } from "../lib/stores/useProjectiles";
 import { useHit } from "../lib/stores/useHit";
 import { useSummons } from "../lib/stores/useSummons";
 import { useCamera } from "../lib/stores/useCamera";
@@ -44,7 +44,7 @@ fontWhiteImage.src = "/sprites/font-atlas-white.png";
 const fontRedImage = new Image();
 fontRedImage.src = "/sprites/font-atlas-red.png";
 
-usePlayer.setState({ lastAmmoExplosive: true });
+usePlayer.setState({ splinterBullets: true });
 
 const TILE_SIZE = 50;
 export const CANVAS_WIDTH = window.innerWidth;
@@ -127,15 +127,6 @@ interface TreeLightningAttack {
   animTimer: number;
   damageTimer: number;
   releasedTrees: boolean;
-}
-
-interface TrailParticle {
-  id: string;
-  position: THREE.Vector3;
-  initialSize: number;
-  size: number;
-  life: number;
-  maxLife: number;
 }
 
 const { addSummon } = useSummons.getState();
@@ -427,9 +418,11 @@ export default memo(function CanvasGame() {
   const treeLightningSpawnTimerRef = useRef<number>(0);
   const footstepMarksRef = useRef<FootstepMark[]>([]);
   const footstepSpawnTimerRef = useRef<number>(0);
+  
   const footstepSideRef = useRef<1 | -1>(1);
   const playerFacingRef = useRef<1 | -1>(1);
-  const trailParticlesRef = useRef<TrailParticle[]>([]);
+
+
   const projectileTrailLastPosRef = useRef<Map<string, THREE.Vector3>>(new Map());
   const addImpact = useVisualEffects((state) => state.addImpact);
   const addExplosion = useVisualEffects((state) => state.addExplosion);
@@ -477,6 +470,26 @@ export default memo(function CanvasGame() {
   const playHit = useAudio((state) => state.playHit);
   const playSuccess = useAudio((state) => state.playSuccess);
   const screenCenter = useCamera((state) => state.screenCenter);
+
+
+
+
+  const poolSize = 20000;
+
+  const poolRef = useRef<TrailParticle[]>([]);
+  const writeIndexRef = useRef(0);
+
+  if (poolRef.current.length === 0) {
+    for (let i = 0; i < poolSize; i++) {
+      poolRef.current.push({
+        x: 0,
+        y: 0,
+        size: 3,
+        life: 0,
+        maxLife: 0,
+      });
+    }
+  }
 
   const mouseRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const fireTimer = useRef(0);
@@ -534,7 +547,6 @@ export default memo(function CanvasGame() {
     treeLightningSpawnTimerRef.current = 0;
     footstepMarksRef.current = [];
     footstepSpawnTimerRef.current = 0;
-    trailParticlesRef.current = [];
     projectileTrailLastPosRef.current.clear();
   }, []);
 
@@ -553,8 +565,6 @@ export default memo(function CanvasGame() {
       treeLightningSpawnTimerRef.current = 0;
       footstepMarksRef.current = [];
       footstepSpawnTimerRef.current = 0;
-      trailParticlesRef.current = [];
-      projectileTrailLastPosRef.current.clear();
       cameraRef.current.resetShake();
     }
   }, [phase]);
@@ -758,13 +768,13 @@ const handleMouseMove = (e: MouseEvent) => {
                   addProjectile({
                     position: enemy.position.clone(),
                     direction,
-                    size: 16,
+                    size: 1,
                     damage: stats.damage * 0.2,
                     speed: stats.speed * 1.5,
                     life: stats.life,
-                    range: stats.range * 0.5,
+                    range: stats.range * 2,
                     trailLength: 3,
-                    piercing: 0,
+                    piercing: 2,
                     bouncing: 0,
                     homing: false,
                   });
@@ -1062,86 +1072,6 @@ const handleMouseMove = (e: MouseEvent) => {
           phase !== "playing",
         );
 
-        const { projectiles } = useProjectiles.getState();
-        const spacingPixels = 2;
-        const worldToScreen = (pos: THREE.Vector3) =>
-          cameraRef.current.worldToScreen(
-            { x: pos.x, y: pos.z },
-            { x: position.x, y: position.z },
-            CANVAS_WIDTH,
-            CANVAS_HEIGHT,
-            TILE_SIZE / 2,
-          );
-
-        const activeProjectileIds = new Set<string>();
-        projectiles.forEach(proj => {
-          activeProjectileIds.add(proj.id);
-          const currentPos = proj.position.clone();
-          const lastPos = projectileTrailLastPosRef.current.get(proj.id);
-          
-          // Trail lifetime scales inversely with speed: faster projectiles have shorter trails
-          // Base lifetime: 10ms, adjusted by speed multiplier (speed range 5-20)
-          const speedFactor = Math.max(100, (proj.velocity.length())); // ranges from ~0.5 to 1
-          const initialTrailLife = speedFactor;
-          const followupTrailLife = speedFactor;
-
-          if (!lastPos) {
-            projectileTrailLastPosRef.current.set(proj.id, currentPos.clone());
-            trailParticlesRef.current.push({
-              id: crypto.randomUUID(),
-              position: currentPos.clone(),
-              initialSize: proj.size * 0.8,
-              size: proj.size * 0.8,
-              life: initialTrailLife,
-              maxLife: initialTrailLife,
-            });
-            return;
-          }
-
-          const lastScreen = worldToScreen(lastPos);
-          const currentScreen = worldToScreen(currentPos);
-          const dx = currentScreen.x - lastScreen.x;
-          const dy = currentScreen.y - lastScreen.y;
-          const screenDist = Math.hypot(dx, dy);
-          const steps = Math.floor(screenDist / spacingPixels);
-
-          if (steps > 0) {
-            for (let i = 1; i <= steps; i++) {
-              const t = i / (steps);
-              trailParticlesRef.current.push({
-                id: crypto.randomUUID(),
-                position: lastPos.clone().lerp(currentPos, t),
-                initialSize: proj.size * 0.8,
-                size: proj.size * 0.8,
-                life: followupTrailLife,
-                maxLife: followupTrailLife,
-              });
-            }
-          }
-
-          projectileTrailLastPosRef.current.set(proj.id, currentPos.clone());
-        });
-
-        projectileTrailLastPosRef.current.forEach((_, id) => {
-          if (!activeProjectileIds.has(id)) {
-            projectileTrailLastPosRef.current.delete(id);
-          }
-        });
-
-        // Update trail particles with in-place compaction instead of filter
-        let writeIdx = 0;
-        for (let i = 0; i < trailParticlesRef.current.length; i++) {
-          const p = trailParticlesRef.current[i];
-          p.life -= delta * 1000;
-          p.size = p.initialSize * (p.life / p.maxLife);
-          if (p.life > 0) {
-            if (writeIdx !== i) {
-              trailParticlesRef.current[writeIdx] = p;
-            }
-            writeIdx++;
-          }
-        }
-        trailParticlesRef.current.length = writeIdx;
 
       const updatedEnemies = enemies.map((enemy) => {
       // BOSS LOGIC
@@ -1544,14 +1474,14 @@ const handleMouseMove = (e: MouseEvent) => {
 
         addProjectile({
           position: enemy.position.clone().add(direction.clone().multiplyScalar(0.6)),
-          size: 10,
+          size: 4,
           direction,
           damage: stats.damage * 0.2,
           speed: stats.speed * 1.35,
           life: 1.2,
           range: Math.max(12, stats.range * 0.4),
           trailLength: 1,
-          piercing: 0,
+          piercing: 2,
           bouncing: 0,
           homing: false,
         });
@@ -1873,75 +1803,151 @@ ctx.imageSmoothingEnabled = false;
     ctx.restore();
   };
 
-  const drawProjectilesAndTrails = (
-    ctx: CanvasRenderingContext2D,
-    isPaused: boolean,
-    playerPos: THREE.Vector3
+
+   // =====================================================
+  // TRAIL EMISSION (DEMO STYLE)
+  // =====================================================
+  const emitSegment = (
+    x0: number,
+    z0: number,
+    x1: number,
+    z1: number,
+    size: number,
+    speed: number,
+    projectileId: string,
   ) => {
-    const { projectiles } = useProjectiles.getState();
+    const dx = x1 - x0;
+    const dz = z1 - z0;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    const step = 0.1; // controls trail density
 
-    const worldToScreen = (pos: THREE.Vector3) =>
-      cameraRef.current.worldToScreen(
-        { x: pos.x, y: pos.z },
-        { x: playerPos.x, y: playerPos.z },
-        CANVAS_WIDTH,
-        CANVAS_HEIGHT,
-        TILE_SIZE / 2,
-      );
+    if (dist === 0) return;
 
-    ctx.save();
-    const img = getProjectileImage();
-    const drawProjectile = (x: number, y: number, size: number) => {
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.drawImage(img, Math.floor(-size / 2), Math.floor(-size / 2), Math.floor(size), Math.floor(size));
-      ctx.restore();
+    const steps = Math.floor(dist / step);
+    const trailSize = Math.max(1.5, size * 0.55);
+    const trailLife = Math.min(0.2, Math.max(0.01, speed * 0.001));
+
+    for (let i = 0; i <= steps; i++) {
+      const t = i / (steps || 1);
+      const x = x0 + dx * t;
+      const z = z0 + dz * t;
+
+      const p = poolRef.current[writeIndexRef.current];
+      p.x = x;
+      p.y = z;
+      p.size = trailSize;
+      p.life = trailLife;
+      p.maxLife = trailLife;
+      p.projectileId = projectileId;
+
+      writeIndexRef.current = (writeIndexRef.current + 1) % poolSize;
+    }
+  };
+
+
+const drawProjectilesAndTrails = (
+  ctx: CanvasRenderingContext2D,
+  isPaused: boolean,
+  playerPos: THREE.Vector3
+) => {
+  const { projectiles } = useProjectiles.getState();
+
+  const worldToScreen = (x: number, z: number) =>
+    cameraRef.current.worldToScreen(
+      { x, y: z },
+      { x: playerPos.x, y: playerPos.z },
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT,
+      TILE_SIZE / 2
+    );
+
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+
+  const img = getProjectileImage();
+
+  const drawProjectile = (
+    x: number,
+    y: number,
+    size: number
+  ) => {
+    ctx.drawImage(
+      img,
+      Math.floor(x - size / 2),
+      Math.floor(y - size / 2),
+      Math.floor(size),
+      Math.floor(size)
+    );
+  };
+
+
+  // =====================================================
+  // PROJECTILES
+  // =====================================================
+  const activeProjectileIds = new Set(projectiles.map((proj) => proj.id));
+
+  for (let proj of projectiles) {
+    const prev = {
+      x: proj.previousPosition.x,
+      z: proj.previousPosition.z,
     };
-    // Draw trail particles
-    ctx.imageSmoothingEnabled = false;
-ctx.fillStyle = '#f5d6c1';
 
-const PIXEL_SIZE = 1;
+    const curr = {
+      x: proj.position.x,
+      z: proj.position.z,
+    };
 
-trailParticlesRef.current.forEach(p => {
-  const screenPos = worldToScreen(p.position);
-  
-  // Cull particles outside camera view with padding
-  if (screenPos.x < -50 || screenPos.x > CANVAS_WIDTH + 50 ||
-      screenPos.y < -50 || screenPos.y > CANVAS_HEIGHT + 50) {
-    return; // Skip rendering
+    if (!isPaused) {
+      emitSegment(prev.x, prev.z, curr.x, curr.z, proj.size, proj.speed, proj.id);
+    }
+
+    const screenPos = worldToScreen(curr.x, curr.z);
+    const snappedX = snapToGrid(screenPos.x);
+    const snappedY = snapToGrid(screenPos.y);
+
+    ctx.globalAlpha = 1;
+
+    drawProjectile(
+      snappedX,
+      snappedY,
+      Math.floor(proj.size)
+    );
   }
 
-  const x = snapToGrid(screenPos.x);
+  ctx.fillStyle = "#f5d6c1";
 
-  const y = snapToGrid(screenPos.y);
+  for (let i = 0; i < poolSize; i++) {
+    const p = poolRef.current[i];
 
-  const size = Math.max(
-    PIXEL_SIZE,
-    Math.round(p.size / PIXEL_SIZE) * PIXEL_SIZE
-  );
-  ctx.imageSmoothingEnabled = false;
-  ctx.fillRect(
-    snapToGrid(x - (size / 2)),
-    snapToGrid(y - (size / 2)),
-    snapToGrid(size),
-    snapToGrid(size)
-  );
-    });
-    projectiles.forEach((proj) => {
-      const angle = Math.atan2(proj.velocity.z, proj.velocity.x) + Math.PI / 2;
+    if (p.life <= 0) continue;
+    if (p.projectileId && !activeProjectileIds.has(p.projectileId)) {
+      p.life = 0;
+      continue;
+    }
 
-      // --- MAIN BULLET---
-      const screen = worldToScreen(proj.position);
-      const snappedX = snapToGrid(screen.x);
-      const snappedY = snapToGrid(screen.y);
-      const mainSize = Math.floor(proj.size);
-      ctx.globalAlpha = 1;
-      drawProjectile(snappedX, snappedY, mainSize);
-    });
-    ctx.globalAlpha = 1;
-    ctx.restore();
-  };
+    if (!isPaused) {
+      p.life -= 0.016;
+    }
+
+    const t = p.life / p.maxLife;
+    const size = p.size * (0.5 + t);
+
+    const screenPos = worldToScreen(p.x, p.y);
+
+    ctx.fillRect(
+      snapToGrid(screenPos.x - size / 2),
+      snapToGrid(screenPos.y - size / 2),
+      snapToGrid(size),
+      snapToGrid(size)
+    );
+  }
+
+  ctx.restore();
+};
+
+
+
+
 
   const drawImpactEffects = (ctx: CanvasRenderingContext2D) => {
     const impactEffects = useVisualEffects.getState().impactEffects;

@@ -2,6 +2,18 @@ import { create } from "zustand";
 import * as THREE from "three";
 import { ENEMY_TYPE_CONFIG, SHOGGOTH_CONFIG } from "./useEnemies";
 
+export type TrailParticle = {
+  x: number;
+  y: number;
+  size: number;
+  life: number;
+  maxLife: number;
+  projectileId?: string;
+};
+
+
+
+
 
 export type DamageSource = {
   type: "player" | "summon" | "enemy";
@@ -25,10 +37,6 @@ export interface Projectile {
   maxRange: number;
   distanceTraveled: number;
   rotationY: number;
-  
-
-  currentLength: number; 
-  jitterOffset: THREE.Vector3;
 
   // Visual
   color: string;
@@ -36,9 +44,7 @@ export interface Projectile {
   trailColor: string;
   trailColorSecondary: string;
   trailLength: number;
-  trailDistanceAccumulator: number;
-  trailHistory: THREE.Vector3[];
-  emissionAccumulator: number;
+
 
   // Special effects
   homing: boolean;
@@ -135,7 +141,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
     triggerOnHit?: boolean;
   }) => {
     const projectile: Projectile = {
-      id: Math.random().toString(36).substring(2, 11),
+      id: crypto.randomUUID(),
       position: config.position.clone(),
       previousPosition: config.position.clone(),
       velocity: config.direction.clone().normalize().multiplyScalar(config.speed),
@@ -148,17 +154,11 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       maxRange: config.range,
       distanceTraveled: 0,
       rotationY: Math.atan2(config.direction.x, config.direction.z),
-      currentLength: 0,
-      jitterOffset: new THREE.Vector3(),
       color: getProjectileColor(config),
       size: config.size,
       trailColor: getTrailColor(config),
       trailColorSecondary: getTrailColor(config),
       trailLength: config.trailLength,
-      trailHistory: [],
-      trailDistanceAccumulator: 0,
-      emissionAccumulator: 0,
-
       homing: config.homing,
       piercing: config.piercing,
       piercedEnemies: new Set(),
@@ -188,12 +188,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
 
   // Helper to trim old trail history to prevent unbounded growth
   trimTrailHistory: () => {
-    const MAX_TRAIL_PER_PROJ = 50; // Cap trail points
-    for (const proj of get().projectiles) {
-      if (proj.trailHistory.length > MAX_TRAIL_PER_PROJ) {
-        proj.trailHistory = proj.trailHistory.slice(-MAX_TRAIL_PER_PROJ);
-      }
-    }
+    
   },
 
   updateProjectiles: (delta, enemies, playerPos, roomBounds, onHit, isPaused) => {
@@ -209,19 +204,29 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       // Store previous position for continuous collision detection
       proj.previousPosition.copy(proj.position);
       
-      const drag = proj.drag;
-      proj.velocity.multiplyScalar(Math.pow(drag, delta * 60));
-      // --- Move projectile ---
-
+      // Slow the projectile with diminishing drag over time.
+      // The projectile starts fast and decelerates, but the slowing amount decreases
+      // the further it travels.
+      const travelFactor = Math.min(1, proj.distanceTraveled / 20);
+      const dragBase = 0.13;
+      const dragFalloff = 0.7;
+      const dragFactor = dragBase / (1 + dragFalloff * travelFactor);
+      const speedDecay = Math.max(0.05, 1 - dragFactor * delta);
+      proj.velocity.multiplyScalar(speedDecay);
+      
       const move = proj.velocity.clone().multiplyScalar(delta);
       proj.position.add(move);
       proj.distanceTraveled += move.length();
 
-      const traveled = move.length();
+      // ===== TRAIL EMISSION (NEW SYSTEM) =====
+const dx = proj.position.x - proj.previousPosition.x;
+const dz = proj.position.z - proj.previousPosition.z;
 
-      proj.trailDistanceAccumulator += traveled;
-      const emissionRate = 1; 
-      proj.emissionAccumulator += delta * emissionRate;
+const dist = Math.sqrt(dx * dx + dz * dz);
+
+    
+
+
       
 
       // --- Homing ---
@@ -244,12 +249,11 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
 
       // --- Check range ---
       proj.life -= delta;
-
+      
       if (proj.life <= 0) {
-        if (proj.trailHistory.length > 1) {
-        }
         continue;
       }
+      
 
       
       let hitEnemy = false;
@@ -374,6 +378,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
 //
 // --------------------------- HELPERS ---------------------------------------
 //
+
 
 function getProjectileColor(config: any): string {
   if (config.explosive) return "#ff6600";
