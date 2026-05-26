@@ -73,7 +73,7 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
   explosionEffects: [],
 
   // ---------------- Impact Effects ----------------
-  addImpact: (position: THREE.Vector3, size = 32) => {
+  addImpact: (position: THREE.Vector3, size = 48) => {
     const impactEffect: ImpactEffect = {
       id: `impact_${Date.now()}`,
       x: position.x,

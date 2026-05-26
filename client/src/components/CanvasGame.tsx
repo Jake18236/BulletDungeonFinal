@@ -398,6 +398,22 @@ function releaseLightningTree(tree: TerrainObstacle, nowMs: number) {
 // Snap coordinates to 2-pixel grid for consistent pixelation
 const snapToGrid = (value: number) => Math.round(value / 1) * 1;
 
+// =====================================================
+// VIEWPORT CULLING HELPERS
+// =====================================================
+const isObjectInViewport = (
+  objectX: number,
+  objectZ: number,
+  playerX: number,
+  playerZ: number,
+  cullRadius: number = 80
+): boolean => {
+  const dx = objectX - playerX;
+  const dz = objectZ - playerZ;
+  const distSq = dx * dx + dz * dz;
+  return distSq <= cullRadius * cullRadius;
+};
+
 export default memo(function CanvasGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const eyeCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -474,17 +490,18 @@ export default memo(function CanvasGame() {
 
 
 
-  const poolSize = 20000;
+  const poolSize = 200000;
 
   const poolRef = useRef<TrailParticle[]>([]);
   const writeIndexRef = useRef(0);
+  const activeParticlesRef = useRef<TrailParticle[]>([]);
 
   if (poolRef.current.length === 0) {
     for (let i = 0; i < poolSize; i++) {
       poolRef.current.push({
         x: 0,
         y: 0,
-        size: 3,
+        size: 8,
         life: 0,
         maxLife: 0,
       });
@@ -873,7 +890,7 @@ const handleMouseMove = (e: MouseEvent) => {
                 playerFacingRef.current = 1;
               }
               const handOffset = 0;
-              const barrelLength = 2;
+              const barrelLength = 5;
               const totalOffsetPixels = handOffset + barrelLength;
               const totalOffset = totalOffsetPixels / (TILE_SIZE / 2);
               const barrelFlashPosition = ps.position.clone().add(
@@ -889,9 +906,9 @@ const handleMouseMove = (e: MouseEvent) => {
                 const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
                 const barrelPosition = ps.position.clone().add(
                   new THREE.Vector3(
-                    Math.cos(angle) * totalOffset,
+                    Math.cos(angle) * totalOffset * 5.5,
                     0,
-                    Math.sin(angle) * totalOffset,
+                    Math.sin(angle) * totalOffset * 5.5,
                   ),
                 );
 
@@ -1383,7 +1400,13 @@ const handleMouseMove = (e: MouseEvent) => {
       }
       
       drawXPOrbs(ctx);
-      enemies.forEach(enemy => drawEnemy(ctx, enemy));
+      
+      // Draw enemies with viewport culling
+      for (const enemy of enemies) {
+        if (isObjectInViewport(enemy.position.x, enemy.position.z, position.x, position.z, 100)) {
+          drawEnemy(ctx, enemy);
+        }
+      }
 
       const cursorCanvas = cursorCanvasRef.current;
       const cursorCtx = cursorCanvas?.getContext("2d");
@@ -1398,8 +1421,21 @@ const handleMouseMove = (e: MouseEvent) => {
       if (eyeCtx) {
         eyeCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         eyeCtx.imageSmoothingEnabled = false;
-        enemies.forEach(enemy => drawEnemyEyes(eyeCtx, enemy, animationNowMs));
-        terrainRef.current.forEach((obstacle) => drawEnemyEyes(eyeCtx, obstacle, animationNowMs));
+        
+        // Draw enemy eyes with viewport culling
+        for (const enemy of enemies) {
+          if (isObjectInViewport(enemy.position.x, enemy.position.z, position.x, position.z, 100)) {
+            drawEnemyEyes(eyeCtx, enemy, animationNowMs);
+          }
+        }
+        
+        // Draw terrain obstacle eyes with viewport culling
+        for (const obstacle of terrainRef.current) {
+          if (isObjectInViewport(obstacle.x, obstacle.z, position.x, position.z, 100)) {
+            drawEnemyEyes(eyeCtx, obstacle, animationNowMs);
+          }
+        }
+        
         drawTreeLightning(eyeCtx, gameplayElapsedMsRef.current);
         drawEnemyProjectiles(eyeCtx);
         drawProjectilesAndTrails(eyeCtx, phase !== "playing", position);
@@ -1813,19 +1849,22 @@ ctx.imageSmoothingEnabled = false;
     x1: number,
     z1: number,
     size: number,
-    speed: number,
+    velocity: THREE.Vector3,
     projectileId: string,
   ) => {
     const dx = x1 - x0;
     const dz = z1 - z0;
     const dist = Math.sqrt(dx * dx + dz * dz);
-    const step = 0.1; // controls trail density
+    const step = 0.1; // increased from 0.1 to reduce trail density by 60%
 
     if (dist === 0) return;
 
     const steps = Math.floor(dist / step);
-    const trailSize = Math.max(1.5, size * 0.55);
-    const trailLife = Math.min(0.2, Math.max(0.01, speed * 0.001));
+    if (steps > 150) return; // skip emission if projectile moved too far (burst fire spike)
+    
+    const trailSize = Math.max(2, size * 0.5);
+    const velocityMagnitude = velocity.length();
+    const trailLife = Math.max(0.1, velocityMagnitude * 0.0005);
 
     for (let i = 0; i <= steps; i++) {
       const t = i / (steps || 1);
@@ -1840,6 +1879,9 @@ ctx.imageSmoothingEnabled = false;
       p.maxLife = trailLife;
       p.projectileId = projectileId;
 
+      // Add to active particles array for efficient rendering
+      activeParticlesRef.current.push(p);
+      
       writeIndexRef.current = (writeIndexRef.current + 1) % poolSize;
     }
   };
@@ -1851,6 +1893,7 @@ const drawProjectilesAndTrails = (
   playerPos: THREE.Vector3
 ) => {
   const { projectiles } = useProjectiles.getState();
+  const CULL_RADIUS = 100; // Cull projectiles beyond this radius
 
   const worldToScreen = (x: number, z: number) =>
     cameraRef.current.worldToScreen(
@@ -1880,13 +1923,19 @@ const drawProjectilesAndTrails = (
     );
   };
 
-
   // =====================================================
-  // PROJECTILES
+  // PROJECTILES with VIEWPORT CULLING
   // =====================================================
-  const activeProjectileIds = new Set(projectiles.map((proj) => proj.id));
+  const activeProjectileIds = new Set<string>();
 
   for (let proj of projectiles) {
+    activeProjectileIds.add(proj.id);
+    
+    // Skip projectiles outside viewport
+    if (!isObjectInViewport(proj.position.x, proj.position.z, playerPos.x, playerPos.z, CULL_RADIUS)) {
+      continue;
+    }
+
     const prev = {
       x: proj.previousPosition.x,
       z: proj.previousPosition.z,
@@ -1898,7 +1947,7 @@ const drawProjectilesAndTrails = (
     };
 
     if (!isPaused) {
-      emitSegment(prev.x, prev.z, curr.x, curr.z, proj.size, proj.speed, proj.id);
+      emitSegment(prev.x, prev.z, curr.x, curr.z, proj.size, proj.velocity, proj.id);
     }
 
     const screenPos = worldToScreen(curr.x, curr.z);
@@ -1914,14 +1963,25 @@ const drawProjectilesAndTrails = (
     );
   }
 
+  // =====================================================
+  // TRAIL PARTICLES - OPTIMIZED WITH ACTIVE TRACKING
+  // =====================================================
   ctx.fillStyle = "#f5d6c1";
+  const activeParticles = activeParticlesRef.current;
+  
+  // Update and prune active particles
+  for (let i = activeParticles.length - 1; i >= 0; i--) {
+    const p = activeParticles[i];
 
-  for (let i = 0; i < poolSize; i++) {
-    const p = poolRef.current[i];
+    if (p.life <= 0) {
+      activeParticles.splice(i, 1);
+      continue;
+    }
 
-    if (p.life <= 0) continue;
+    // Remove particles from inactive projectiles
     if (p.projectileId && !activeProjectileIds.has(p.projectileId)) {
       p.life = 0;
+      activeParticles.splice(i, 1);
       continue;
     }
 
@@ -1944,8 +2004,6 @@ const drawProjectilesAndTrails = (
 
   ctx.restore();
 };
-
-
 
 
 
@@ -2449,6 +2507,11 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     const hasProjectileSprite = projectileSprite.complete && projectileSprite.naturalWidth > 0 && projectileSprite.naturalHeight > 0;
 
     for (const projectile of enemyProjectilesRef.current) {
+      // Skip enemy projectiles outside viewport
+      if (!isObjectInViewport(projectile.position.x, projectile.position.z, position.x, position.z, 120)) {
+        continue;
+      }
+      
       const screenX = snapToGrid(centerX + ((projectile.position.x - position.x) * TILE_SIZE) / 2);
       const screenY = snapToGrid(centerY + ((projectile.position.z - position.z) * TILE_SIZE) / 2);
       const pixelSize = Math.max(8, projectile.size * TILE_SIZE * 1.1);
@@ -2517,14 +2580,19 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     const summons = useSummons.getState().summons;
     const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    summons.forEach((summon) => {
+    for (const summon of summons) {
+      // Skip summons far outside viewport
+      if (!isObjectInViewport(summon.position.x, summon.position.z, position.x, position.z, 150)) {
+        continue;
+      }
+
       const screenX = snapToGrid(centerX + ((summon.position.x - position.x) * TILE_SIZE) / 2);
       const screenY = snapToGrid(centerY + ((summon.position.z - position.z) * TILE_SIZE) / 2);
 
       if (summon.type === "ghost") {
         const sprite = SummonSprites.ghostSheet;
         const isSheetReady = sprite.complete && sprite.naturalWidth > 0 && sprite.naturalHeight > 0;
-        if (!isSheetReady) return;
+        if (!isSheetReady) continue;
 
         const totalCols = 6;
         const totalRows = 2;
@@ -2555,7 +2623,7 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
 
         ctx.drawImage(sprite, sx, sy, frameW, frameH, -drawW / 2, -drawH / 2, drawW, drawH);
         ctx.restore();
-        return;
+        continue;
       }
 
       if (summon.type === "dagger") {
@@ -2579,7 +2647,7 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
           }
         }
 
-        if (!canDrawDagger) return;
+        if (!canDrawDagger) continue;
 
         const scale = 1.5;
         const w = sprite.naturalWidth * scale;
@@ -2591,7 +2659,7 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(sprite, -w / 2, -h / 2, w, h);
         ctx.restore();
-        return;
+        continue;
       }
 
       ctx.save();
@@ -2665,7 +2733,7 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
       }
 
       ctx.restore();
-    });
+    }
   };
 
   const drawStatusEffects = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {

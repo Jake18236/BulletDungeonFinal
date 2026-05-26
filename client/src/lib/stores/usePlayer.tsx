@@ -437,7 +437,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
       usePlayer.setState({
         projectileCount: (player.projectileCount + 1) * 2,
         accuracy: player.accuracy * 0.85,
-        firerate: player.firerate * 0.5,
+        firerate: player.firerate * 2,
       });
     },
   },

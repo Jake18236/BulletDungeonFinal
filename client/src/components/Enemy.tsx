@@ -17,8 +17,7 @@ export default function Enemy({ enemy }: EnemyProps) {
   const meshRef = useRef<THREE.Mesh>(null);
 
   useFrame(() => {
-    if (!meshRef.current) return;
     
-    meshRef.current.position.copy(enemy.position).add(new THREE.Vector3(0, 0.5, 0));
+    
   });
 }

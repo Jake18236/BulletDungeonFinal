@@ -12,7 +12,12 @@ export type TrailParticle = {
 };
 
 
-
+interface SpriteSegment {
+  x: number;
+  z: number;
+  angle: number;
+  age: number;
+}
 
 
 export type DamageSource = {
@@ -44,6 +49,7 @@ export interface Projectile {
   trailColor: string;
   trailColorSecondary: string;
   trailLength: number;
+  trailHistory: SpriteSegment[];
 
 
   // Special effects
@@ -159,6 +165,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       trailColor: getTrailColor(config),
       trailColorSecondary: getTrailColor(config),
       trailLength: config.trailLength,
+      trailHistory: [],
       homing: config.homing,
       piercing: config.piercing,
       piercedEnemies: new Set(),
@@ -208,25 +215,15 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       // The projectile starts fast and decelerates, but the slowing amount decreases
       // the further it travels.
       const travelFactor = Math.min(1, proj.distanceTraveled / 20);
-      const dragBase = 0.13;
+      const dragBase = 0.5;
       const dragFalloff = 0.7;
       const dragFactor = dragBase / (1 + dragFalloff * travelFactor);
-      const speedDecay = Math.max(0.05, 1 - dragFactor * delta);
+      const speedDecay = Math.max(0.45, 1 - dragFactor * delta);
       proj.velocity.multiplyScalar(speedDecay);
       
       const move = proj.velocity.clone().multiplyScalar(delta);
       proj.position.add(move);
       proj.distanceTraveled += move.length();
-
-      // ===== TRAIL EMISSION (NEW SYSTEM) =====
-const dx = proj.position.x - proj.previousPosition.x;
-const dz = proj.position.z - proj.previousPosition.z;
-
-const dist = Math.sqrt(dx * dx + dz * dz);
-
-    
-
-
       
 
       // --- Homing ---
