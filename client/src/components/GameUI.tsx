@@ -4,6 +4,7 @@ import { usePlayer } from "../lib/stores/usePlayer";
 import { useAudio } from "../lib/stores/useAudio";
 import { useDungeon } from "../lib/stores/useDungeon";
 import { useEnemies } from "../lib/stores/useEnemies";
+import { shallow } from "zustand/shallow";
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from "../components/CanvasGame"
 
 import { Button } from "./ui/button";
@@ -425,18 +426,24 @@ export default function GameUI() {
   const { phase, start, restart } = useGame();
   const { hearts, maxHearts, ammo, maxAmmo, xp, xpToNextLevel, level, showLevelUpScreen, reset: resetPlayer } = usePlayer();
   const { generateDungeon, reset: resetDungeon } = useDungeon();
-  const { reset: resetEnemies, elapsedTime } = useEnemies();
+  const { reset: resetEnemies, elapsedTotalSeconds } = useEnemies(
+    (state) => ({
+      reset: state.reset,
+      elapsedTotalSeconds: Math.floor(state.elapsedTime),
+    }),
+    shallow
+  );
   const { isMuted, toggleMute, masterVolume, setVolume } = useAudio();
   const [menuScreen, setMenuScreen] = useState<"main" | "settings" | "controls">("main");
   const [showInGameInstructions, setShowInGameInstructions] = useState(true);
   const progress = showLevelUpScreen ? 1 : Math.min(xp / xpToNextLevel, 1);
-  const elapsedMinutes = Math.floor(elapsedTime / 60);
-  const elapsedSeconds = Math.floor(elapsedTime % 60);
+  const elapsedMinutes = Math.floor(elapsedTotalSeconds / 60);
+  const elapsedSeconds = elapsedTotalSeconds % 60;
   const timerCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const timerText = `${elapsedMinutes.toString().padStart(2, "0")}:${elapsedSeconds.toString().padStart(2, "0")}`;
   const levelCanvasRef = useRef<HTMLCanvasElement | null>(null);
 	const instructionsCanvasRef = useRef<HTMLCanvasElement | null>(null);
-	const showInstructions = elapsedTime < 30;
+	const showInstructions = elapsedTotalSeconds < 30;
   
   const handleStart = () => {
     resetPlayer();
