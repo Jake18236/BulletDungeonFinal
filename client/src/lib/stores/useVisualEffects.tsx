@@ -50,6 +50,16 @@ export interface ExplosionEffect {
   frameIndex: number;
   totalFrames: number;
 }
+export interface LightningEffect {
+  id: string;
+  x: number;
+  y: number;
+  angle: number;
+  life: number;
+  maxLife: number;
+  frameIndex: number;
+  totalFrames: number;
+}
 
 
 // ---------------- Store ----------------
@@ -58,10 +68,12 @@ interface VisualEffectsState {
   damageNumbers: DamageNumber[];
   impactEffects: ImpactEffect[];
   explosionEffects: ExplosionEffect[];
+  lightningEffects: LightningEffect[];
 
   addImpact: (position: THREE.Vector3, size?: number) => void;
   addExplosion: (position: THREE.Vector3, count?: number, radius?: number) => void;
   addDamageNumber: (x: number, y: number, damage: number) => void;
+  addLightning: (x: number, y: number, angle: number) => void;
   updateEffects: (delta: number) => void;
   reset: () => void;
 }
@@ -71,6 +83,7 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
   damageNumbers: [],
   impactEffects: [],
   explosionEffects: [],
+  lightningEffects: [],
 
   // ---------------- Impact Effects ----------------
   addImpact: (position: THREE.Vector3, size = 48) => {
@@ -137,6 +150,14 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
       damageNumbers: [...state.damageNumbers, damageNumber],
     }));
   },
+  addLightning: (x, y, angle) => {
+    set(state => ({
+      lightningEffects: [...state.lightningEffects, {
+        id: `lightning_${Date.now()}_${Math.random()}`,
+        x, y, angle, life: 0, maxLife: 0.36, frameIndex: 0, totalFrames: 6,
+      }],
+    }));
+  },
 
   // ---------------- Update Effects ----------------
   updateEffects: (delta) => {
@@ -188,12 +209,22 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
       return updated;
     })
     .filter(e => e.life < e.maxLife);
+    const updatedLightning = state.lightningEffects
+      .map(l => {
+        const updated = { ...l };
+        updated.life += delta;
+        const lifePercent = Math.min(1, updated.life / updated.maxLife);
+        updated.frameIndex = Math.min(updated.totalFrames - 1, Math.floor(lifePercent * updated.totalFrames));
+        return updated;
+      })
+      .filter(l => l.life < l.maxLife);
 
     set({
       particles: updatedParticles,
       damageNumbers: updatedDamageNumbers,
       impactEffects: updatedImpacts,
       explosionEffects: updatedExplosions,
+      lightningEffects: updatedLightning,
     });
   },
 
@@ -203,5 +234,6 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
     damageNumbers: [],
     impactEffects: [],
     explosionEffects: [],
+    lightningEffects: [],
   }),
 }));

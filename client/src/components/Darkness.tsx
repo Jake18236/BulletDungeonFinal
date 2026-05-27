@@ -4,6 +4,7 @@ import { useEnemies } from "../lib/stores/useEnemies";
 import { useVisualEffects } from "../lib/stores/useVisualEffects";
 import { useCamera } from "../lib/stores/useCamera";
 import { useGame } from "../lib/stores/useGame";
+import { useSummons } from "../lib/stores/useSummons";
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from "../components/CanvasGame";
 
 const WORLD_TO_SCREEN_SCALE = 25; // simplified (your TILE_SIZE/2)
@@ -32,6 +33,17 @@ function drawLight(
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
 }
+function drawSteppedLight(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number) {
+  const steps = [1, 0.72, 0.48, 0.3, 0.16];
+  for (let i = 0; i < steps.length; i++) {
+    const alpha = steps[i] * 0.22;
+    const stepRadius = radius * ((steps.length - i) / steps.length);
+    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+    ctx.beginPath();
+    ctx.arc(x, y, Math.max(1, stepRadius), 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
 
 export default function Darkness() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -59,6 +71,9 @@ export default function Darkness() {
       const impactEffects = useVisualEffects.getState().impactEffects;
       const explosionEffects = useVisualEffects.getState().explosionEffects;
       const screenCenter = useCamera.getState().screenCenter;
+      const statusEffects = useSummons.getState().statusEffects;
+      const enemies = useEnemies.getState().enemies;
+      const lightningEffects = useVisualEffects.getState().lightningEffects;
 
       const cx = screenCenter.x;
       const cy = screenCenter.y;
@@ -106,12 +121,30 @@ export default function Darkness() {
 
       for (let i = 0; i < explosionEffects.length; i++) {
         const e = explosionEffects[i];
-
-        drawLight(
+        drawSteppedLight(
           ctx,
           cx + (e.x - playerPosition.x) * WORLD_TO_SCREEN_SCALE,
           cy + (e.y - playerPosition.z) * WORLD_TO_SCREEN_SCALE,
           e.size * 1.2
+        );
+      }
+      for (const effect of statusEffects) {
+        if (effect.type !== "burn") continue;
+        const enemy = enemies.find(e => e.id === effect.enemyId);
+        if (!enemy) continue;
+        drawSteppedLight(
+          ctx,
+          cx + (enemy.position.x - playerPosition.x) * WORLD_TO_SCREEN_SCALE,
+          cy + (enemy.position.z - playerPosition.z) * WORLD_TO_SCREEN_SCALE,
+          105,
+        );
+      }
+      for (const l of lightningEffects) {
+        drawSteppedLight(
+          ctx,
+          cx + (l.x - playerPosition.x) * WORLD_TO_SCREEN_SCALE,
+          cy + (l.y - playerPosition.z) * WORLD_TO_SCREEN_SCALE,
+          210,
         );
       }
 

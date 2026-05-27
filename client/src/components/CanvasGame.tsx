@@ -442,6 +442,8 @@ export default memo(function CanvasGame() {
   const fireSystem = useRef(new FireParticleSystem(30000));
   const fireSprite = useRef<HTMLImageElement>(new Image());
 const spriteReady = useRef(false);
+const lightningSpriteSheet = useRef<HTMLImageElement>(new Image());
+const lightningReady = useRef(false);
 
 useEffect(() => {
   const img = new Image();
@@ -452,6 +454,14 @@ useEffect(() => {
   };
 
   img.src = "/sprites/fire-effect.png";
+}, []);
+useEffect(() => {
+  const img = new Image();
+  img.onload = () => {
+    lightningSpriteSheet.current = img;
+    lightningReady.current = true;
+  };
+  img.src = "/sprites/lightning.png";
 }, []);
 
   const projectileTrailLastPosRef = useRef<Map<string, THREE.Vector3>>(new Map());
@@ -787,7 +797,13 @@ const handleMouseMove = (e: MouseEvent) => {
         updateStatusEffects(delta, enemies, (enemyId, damage) => {
           const enemy = enemies.find(e => e.id === enemyId);
           if (enemy) {
-            enemy.health -= damage;
+            applyHit({
+              enemy,
+              damage,
+              impactPos: enemy.position.clone(),
+              color: "#ffb347",
+              isSummonDamage: true,
+            }, enemies);
             if (enemy.health <= 0) {
               handleEnemyKilledBySummon();
 
@@ -1434,6 +1450,7 @@ const handleMouseMove = (e: MouseEvent) => {
         drawEnemyProjectiles(eyeCtx);
         drawProjectilesAndTrails(eyeCtx, phase !== "playing", position);
         drawSummons(eyeCtx, animationNowMs);
+        drawSummonLightning(eyeCtx);
         drawDamageNumbers(eyeCtx); 
       }
       drawFootsteps(ctx);
@@ -2156,6 +2173,24 @@ const drawProjectilesAndTrails = (
         ctx.lineTo(snapToGrid(x2), snapToGrid(y2));
         ctx.stroke();
       }
+    }
+  };
+  const drawSummonLightning = (ctx: CanvasRenderingContext2D) => {
+    const lightningEffects = useVisualEffects.getState().lightningEffects;
+    if (!lightningReady.current || lightningEffects.length === 0) return;
+    const sprite = lightningSpriteSheet.current;
+    const frameW = 32;
+    const frameH = 350;
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+    for (const fx of lightningEffects) {
+      const screenX = snapToGrid(centerX + ((fx.x - position.x) * TILE_SIZE) / 2);
+      const screenY = snapToGrid(centerY + ((fx.y - position.z) * TILE_SIZE) / 2);
+      ctx.save();
+      ctx.translate(screenX, screenY);
+      ctx.rotate(-fx.angle);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(sprite, fx.frameIndex * frameW, 0, frameW, frameH, -frameW, -frameH, frameW * 2, frameH);
+      ctx.restore();
     }
   };
 

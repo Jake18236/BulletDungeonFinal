@@ -3,6 +3,7 @@ import { create } from "zustand";
 import * as THREE from "three";
 import { usePlayer } from "./usePlayer";
 import { useHit } from "./useHit";
+import { useVisualEffects } from "./useVisualEffects";
 
 const CANVAS_WIDTH = 1490;
 const CANVAS_HEIGHT = 750;
@@ -243,6 +244,7 @@ export const useSummons = create<SummonState>((set, get) => ({
   updateSummons: (delta, playerPos, enemies, addProjectile, playHit) => {
     const state = get();
     const { applyHit } = useHit.getState();
+    const { addLightning } = useVisualEffects.getState();
     const updatedSummons = state.summons.map(summon => {
       const updated = { ...summon };
 
@@ -410,7 +412,15 @@ export const useSummons = create<SummonState>((set, get) => ({
               damage += state.soulHearts * 15;
             }
 
-            enemy.health -= damage;
+            const angle = THREE.MathUtils.degToRad(45 + Math.random() * 90);
+            addLightning(enemy.position.x, enemy.position.z, angle);
+            applyHit({
+              enemy,
+              damage,
+              impactPos: enemy.position.clone(),
+              color: "#80f6ff",
+              isSummonDamage: true,
+            }, enemies);
           }
         });
       }
