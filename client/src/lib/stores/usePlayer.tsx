@@ -215,7 +215,13 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
   tier: 3,
   requires: ["sniper"],
   apply: () => {
-    // no function yet
+    const player = usePlayer.getState();
+    usePlayer.setState({
+      projectileSize: player.projectileSize * 0.5,
+      firerate: player.firerate * 1.25,
+      baseProjectileSpeed: player.baseProjectileSpeed * 1.5,
+      baseDamage: player.baseDamage * 2.0,
+    });
   },
 },
 
@@ -277,7 +283,15 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
   tier: 3,
   requires: ["big_shot"],
   apply: () => {
-    // no function yet
+    const player = usePlayer.getState();
+    const newMaxAmmo = Math.max(1, Math.floor(player.maxAmmo * 0.25));
+    usePlayer.setState({
+      maxAmmo: newMaxAmmo,
+      ammo: Math.min(player.ammo, newMaxAmmo),
+      baseDamage: player.baseDamage * 3.5,
+      projectileSize: player.projectileSize * 1.5,
+      piercing: player.piercing + 1,
+    });
   },
 },
 
@@ -476,7 +490,11 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
   tier: 3,
   requires: ["fan_fire", "split_fire"],
   apply: () => {
-    // no function yet
+    const player = usePlayer.getState();
+    usePlayer.setState({
+      baseDamage: player.baseDamage * 2.0,
+      life: player.life * 0.5,
+    });
   },
 },
 

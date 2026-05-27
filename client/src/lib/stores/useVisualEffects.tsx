@@ -87,20 +87,29 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
 
   // ---------------- Impact Effects ----------------
   addImpact: (position: THREE.Vector3, size = 48) => {
-    const impactEffect: ImpactEffect = {
-      id: `impact_${Date.now()}`,
-      x: position.x,
-      y: position.z,
-      life: 0,
-      maxLife: 0.15,      // 0.15 sec per frame
-      size,
-      frameIndex: 0,
-      totalFrames: 2,      // number of frames in spritesheet
-    };
+    const MAX_IMPACT_EFFECTS = 50;
 
-    set(state => ({
-      impactEffects: [...state.impactEffects, impactEffect],
-    }));
+    set(state => {
+      const effects = state.impactEffects;
+      if (effects.length >= MAX_IMPACT_EFFECTS) {
+        effects.shift();
+      }
+
+      const impactEffect: ImpactEffect = {
+        id: `impact_${Date.now()}`,
+        x: position.x,
+        y: position.z,
+        life: 0,
+        maxLife: 0.15,
+        size,
+        frameIndex: 0,
+        totalFrames: 2,
+      };
+
+      return {
+        impactEffects: [...effects, impactEffect],
+      };
+    });
   },
   // ---------------- Explosion ----------------
   addExplosion: (position, count = 1, radius = 0) => {
@@ -135,20 +144,29 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
 
   // ---------------- Damage Numbers ----------------
   addDamageNumber: (x, y, damage) => {
-    const damageNumber: DamageNumber = {
-      id: `dmg_${Date.now()}`,
-      x,
-      y,
-      damage: Math.round(damage),
-      life: 0,
-      maxLife: 1,
-      velocity: { x: 0, y: 0 },
-      scale: 0,
-    };
+    const MAX_DAMAGE_NUMBERS = 100;
 
-    set(state => ({
-      damageNumbers: [...state.damageNumbers, damageNumber],
-    }));
+    set(state => {
+      const numbers = state.damageNumbers;
+      if (numbers.length >= MAX_DAMAGE_NUMBERS) {
+        numbers.shift();
+      }
+
+      const damageNumber: DamageNumber = {
+        id: `dmg_${Date.now()}`,
+        x,
+        y,
+        damage: Math.round(damage),
+        life: 0,
+        maxLife: 1,
+        velocity: { x: 0, y: 0 },
+        scale: 0,
+      };
+
+      return {
+        damageNumbers: [...numbers, damageNumber],
+      };
+    });
   },
   addLightning: (x, y, angle) => {
     set(state => ({

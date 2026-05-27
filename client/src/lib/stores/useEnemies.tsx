@@ -224,20 +224,27 @@ export const useEnemies = create<EnemiesState>((set, get) => {
 },
 
 addXPOrb: (position, value) => {
-  const state = get();
+  const MAX_XP_ORBS = 500;
 
-  state.xpOrbs.push({
-    id: Math.random().toString(36).substring(2, 11),
-    position: position.clone(),
-    value,
-    velocity: new THREE.Vector3(
-      (Math.random() - 0.5) * 4,
-      0,
-      (Math.random() - 0.5) * 4,
-    ),
+  set(state => {
+    const orbs = state.xpOrbs;
+    if (orbs.length >= MAX_XP_ORBS) {
+      orbs.shift();
+    }
+
+    orbs.push({
+      id: Math.random().toString(36).substring(2, 11),
+      position: position.clone(),
+      value,
+      velocity: new THREE.Vector3(
+        (Math.random() - 0.5) * 4,
+        0,
+        (Math.random() - 0.5) * 4,
+      ),
+    });
+
+    return { xpOrbs: orbs };
   });
-
-  set({ xpOrbs: state.xpOrbs });
 },
     updateXPOrbs: (delta, playerPos) => {
       const baseRange = 5;
@@ -312,51 +319,59 @@ updateDamagePopups: (delta) => {
 },
 
     addEnemy: (enemyData) => {
-      const enemyTypePool: Array<"basic" | "tank" | "eyeball"> = ["basic", "tank", "eyeball"];
-      const chosenType =
-        (enemyData.type as "basic" | "tank" | "eyeball" | undefined) ||
-        enemyTypePool[Math.floor(Math.random() * enemyTypePool.length)];
+      const MAX_ENEMIES = 1000;
 
-      const baseStatsByType: Record<"basic" | "tank" | "eyeball", Partial<Enemy>> = {
-        basic: {
-          health: 22, // these health values are all technically meaningless
-          maxHealth: 22, // but I wanted bosses summoning enemies to be possible
-          speed: 3.0,
+      set(state => {
+        if (state.enemies.length >= MAX_ENEMIES) {
+          return {};
+        }
+
+        const enemyTypePool: Array<"basic" | "tank" | "eyeball"> = ["basic", "tank", "eyeball"];
+        const chosenType =
+          (enemyData.type as "basic" | "tank" | "eyeball" | undefined) ||
+          enemyTypePool[Math.floor(Math.random() * enemyTypePool.length)];
+
+        const baseStatsByType: Record<"basic" | "tank" | "eyeball", Partial<Enemy>> = {
+          basic: {
+            health: 22,
+            maxHealth: 22,
+            speed: 3.0,
+            hitFlash: 0,
+          },
+          tank: {
+            health: 55,
+            maxHealth: 55,
+            speed: 2.2,
+            hitFlash: 0,
+          },
+          eyeball: {
+            health: 16,
+            maxHealth: 16,
+            speed: 2,
+            hitFlash: 0,
+          },
+        };
+
+        const baseStats = baseStatsByType[chosenType];
+
+        const defaultPosition = new THREE.Vector3(0, 0, 0);
+
+        const enemy: Enemy = {
+          id: Math.random().toString(36),
+          position: enemyData.position ?? defaultPosition,
+          health: enemyData.health ?? baseStats.health!,
+          maxHealth: enemyData.maxHealth ?? baseStats.maxHealth!,
           hitFlash: 0,
-        },
-        tank: {
-          health: 55,
-          maxHealth: 55,
-          speed: 2.2,
-          hitFlash: 0,
-        },
-        eyeball: {
-          health: 16,
-          maxHealth: 16,
-          speed: 2,
-          hitFlash: 0,
-        },
-      };
+          speed: enemyData.speed ?? baseStats.speed!,
+          type: chosenType,
+          velocity: new THREE.Vector3(0, 0, 0),
+          isRangedAttacking: false,
+          rangedShotCooldown: 0,
+          ...enemyData,
+        };
 
-      const baseStats = baseStatsByType[chosenType];
-
-      const defaultPosition = new THREE.Vector3(0, 0, 0);
-
-      const enemy: Enemy = {
-        id: Math.random().toString(36),
-        position: enemyData.position ?? defaultPosition,
-        health: enemyData.health ?? baseStats.health!,
-        maxHealth: enemyData.maxHealth ?? baseStats.maxHealth!,
-        hitFlash: 0,
-        speed: enemyData.speed ?? baseStats.speed!,
-        type: chosenType,
-        velocity: new THREE.Vector3(0, 0, 0),
-        isRangedAttacking: false,
-        rangedShotCooldown: 0,
-        ...enemyData,
-      };
-
-      set((state) => ({ enemies: [...state.enemies, enemy] }));
+        return { enemies: [...state.enemies, enemy] };
+      });
     },
 
     removeEnemy: (id) =>

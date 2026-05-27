@@ -49,7 +49,6 @@ export interface Projectile {
   trailColor: string;
   trailColorSecondary: string;
   trailLength: number;
-  trailHistory: SpriteSegment[];
 
 
   // Special effects
@@ -60,7 +59,7 @@ export interface Projectile {
   bouncesLeft: number;
   explosive?: { radius: number; damage: number };
   chainLightning?: { chains: number; range: number; chainedEnemies: Set<string> };
-  
+
   isSummonProjectile?: boolean;
   burn?: { damage: number; duration: number };
   triggerOnHit?: boolean;
@@ -141,7 +140,6 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
     explosive?: { radius: number; damage: number };
     chainLightning?: { chains: number; range: number };
 
-    // ADD THESE:
     isSummonProjectile?: boolean;
     burn?: { damage: number; duration: number };
     triggerOnHit?: boolean;
@@ -153,7 +151,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       velocity: config.direction.clone().normalize().multiplyScalar(config.speed),
       damage: config.damage,
       speed: config.speed,
-      life: config.life ?? 3,        // default lifetime (seconds)
+      life: config.life ?? 3,
       maxLife: config.life ?? 3,
       drag: 0.985,
 
@@ -165,7 +163,6 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       trailColor: getTrailColor(config),
       trailColorSecondary: getTrailColor(config),
       trailLength: config.trailLength,
-      trailHistory: [],
       homing: config.homing,
       piercing: config.piercing,
       piercedEnemies: new Set(),
@@ -180,9 +177,6 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
           }
         : undefined,
 
-      
-
-      // ADD THESE:
       isSummonProjectile: config.isSummonProjectile,
       burn: config.burn,
       triggerOnHit: config.triggerOnHit,
