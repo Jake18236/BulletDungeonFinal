@@ -128,6 +128,8 @@ export default function Darkness() {
           e.size * 1.2
         );
       }
+
+      
       for (const effect of statusEffects) {
         if (effect.type !== "burn") continue;
         const enemy = enemies.find(e => e.id === effect.enemyId);

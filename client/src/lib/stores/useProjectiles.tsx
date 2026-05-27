@@ -236,13 +236,13 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
           },
           { enemy: null as any, dist: Infinity }
         );
-        if (nearest.enemy && nearest.dist < 150) {
+        if (nearest.enemy && nearest.dist < 50) {
           const toTarget = nearest.enemy.position.clone().sub(proj.position);
           const dir = toTarget.clone().normalize();
-          const pullStrength = THREE.MathUtils.clamp((150 - nearest.dist) / 150, 0.08, 1);
+          const pullStrength = THREE.MathUtils.clamp(((50 - nearest.dist) / 50) * 2 , 0.08, 1);
           const magneticAcceleration = dir.multiplyScalar(proj.speed * 18 * pullStrength * delta);
           proj.velocity.add(magneticAcceleration);
-          const maxSpeed = proj.speed * (1 + 0.35 * pullStrength);
+          const maxSpeed = proj.speed * (1 + 200.35 * pullStrength);
           if (proj.velocity.length() > maxSpeed) {
             proj.velocity.normalize().multiplyScalar(maxSpeed);
           }

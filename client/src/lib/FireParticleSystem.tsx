@@ -13,6 +13,7 @@ type FireParticle = {
 
 export class FireParticleSystem {
   particles: FireParticle[];
+  private poolIndex = 0;
 
   private frameSize = 8;
   private frameCount = 6;
@@ -31,7 +32,13 @@ export class FireParticleSystem {
   }
 
   emit(x: number, z: number) {
-    for (const p of this.particles) {
+    // Use pool index to avoid searching from the beginning every time
+    let attempts = 0;
+    while (attempts < this.max) {
+      const p = this.particles[this.poolIndex];
+      this.poolIndex = (this.poolIndex + 1) % this.max;
+      attempts++;
+
       if (!p.active) {
         p.active = true;
 
@@ -93,7 +100,7 @@ export class FireParticleSystem {
       centerY +
       ((p.z - playerZ) * tileSize) / 2;
 
-    const size = fw * 2;
+    const size = fw * 3;
 
     ctx.drawImage(
       sprite,

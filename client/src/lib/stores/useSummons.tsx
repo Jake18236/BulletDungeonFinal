@@ -12,7 +12,7 @@ const WORLD_TO_SCREEN_SCALE = TILE_SIZE;
 
 export interface Summon {
   id: string;
-  type: "ghost" | "scythe" | "spear" | "dagger" | "electrobug";
+  type: "ghost" | "scythe" | "spear" | "dagger" | "lightning";
   position: THREE.Vector3;
   rotation: number;
   facing?: number; 
@@ -22,7 +22,7 @@ export interface Summon {
   fireTimer?: number;
   shootAnimTimer?: number;
 
-  // Orbit-specific (scythe, spear, electrobug)
+  // Orbit-specific (scythe, spear, lightning)
   orbitAngle: number;
   orbitRadius: number;
   orbitSpeed: number;
@@ -90,7 +90,7 @@ interface SummonState {
   daggerCount: number;
   daggerBurn: boolean;
 
-  electroBugDamage: number;
+  lightningDamage: number;
   electroMage: boolean;
   electroShotCounter: number;
   energized: boolean;
@@ -147,7 +147,7 @@ export const useSummons = create<SummonState>((set, get) => ({
   daggerCount: 1,
   daggerBurn: false,
 
-  electroBugDamage: 22,
+  lightningDamage: 22,
   electroMage: false,
   electroShotCounter: 0,
   energized: false,
@@ -225,10 +225,10 @@ export const useSummons = create<SummonState>((set, get) => ({
         set(state => ({ summons: [...state.summons, summon] }));
       }
     }
-    else if (type === "electrobug") {
+    else if (type === "lightning") {
       const summon: Summon = {
-        id: `electrobug_${Date.now()}`,
-        type: "electrobug",
+        id: `lightning_${Date.now()}`,
+        type: "lightning",
         position: playerPos.clone(),
         rotation: 0,
         orbitAngle: Math.random() * Math.PI * 2,
@@ -385,46 +385,6 @@ export const useSummons = create<SummonState>((set, get) => ({
             }
           }
         }
-      // ========================================================================
-      // MAGIC SPEAR 
-      // ========================================================================
-      else if (summon.type === "spear") {
-        updated.orbitAngle = (summon.orbitAngle! + summon.orbitSpeed! * delta) % (Math.PI * 2);
-
-        const x = playerPos.x + Math.cos(updated.orbitAngle) * summon.orbitRadius!;
-        const z = playerPos.z + Math.sin(updated.orbitAngle) * summon.orbitRadius!;
-
-        updated.position = new THREE.Vector3(x, 0, z);
-        updated.rotation = updated.orbitAngle;
-
-        // Check collision
-        enemies.forEach(enemy => {
-          const dist = updated.position.distanceTo(enemy.position);
-          if (dist < 15) {
-            const ps = usePlayer.getState();
-            let damage = state.spearDamage * state.summonDamageMultiplier;
-
-            if (state.spearHolyBonus) {
-              damage += ps.maxHearts * 10;
-            }
-
-            if (state.soulKnight) {
-              damage += state.soulHearts * 15;
-            }
-
-            const angle = THREE.MathUtils.degToRad(45 + Math.random() * 90);
-            addLightning(enemy.position.x, enemy.position.z, angle);
-            applyHit({
-              enemy,
-              damage,
-              impactPos: enemy.position.clone(),
-              color: "#80f6ff",
-              isSummonDamage: true,
-            }, enemies);
-          }
-        });
-      }
-
       // ========================================================================
       // MAGIC DAGGER - Homes in on enemies
       // ========================================================================
@@ -585,42 +545,51 @@ export const useSummons = create<SummonState>((set, get) => ({
       // ========================================================================
       // ELECTRO BUG - Orbits and shoots lightning periodically
       // ========================================================================
-      else if (summon.type === "electrobug") {
-        // Orbit
-        updated.orbitAngle = (summon.orbitAngle! + summon.orbitSpeed! * delta) % (Math.PI * 2);
-
-        const x = playerPos.x + Math.cos(updated.orbitAngle) * summon.orbitRadius!;
-        const z = playerPos.z + Math.sin(updated.orbitAngle) * summon.orbitRadius!;
-
-        updated.position = new THREE.Vector3(x, 0, z);
-        updated.rotation += delta * 5;
-
+      else if (summon.type === "lightning") {
+  
+        if (updated.strikeTimer === undefined) {
+          updated.strikeTimer = 2.0;
+        }
         // Lightning strikes at discrete intervals
-        updated.strikeTimer! -= delta;
+        updated.strikeTimer -= delta;
         if (updated.strikeTimer! <= 0 && enemies.length > 0) {
           updated.strikeTimer = 2.0;
 
-          // Strike 2 nearest enemies
+          // Strike 2 nearest enemies within targeting range
+          const LIGHTNING_RANGE_X = 30;
+          const LIGHTNING_RANGE_Z = 10;
+          
           const sorted = enemies
-            .map(e => ({ enemy: e, dist: summon.position.distanceTo(e.position) }))
+            .filter(e => {
+              const dx = Math.abs(e.position.x - playerPos.x);
+              const dz = Math.abs(e.position.z - playerPos.z);
+              return dx <= LIGHTNING_RANGE_X && dz <= LIGHTNING_RANGE_Z;
+            })
+            .map(e => ({ enemy: e, dist: updated.position.distanceTo(e.position) }))
             .sort((a, b) => a.dist - b.dist)
             .slice(0, 2);
 
           sorted.forEach(({ enemy }) => {
-            let damage = state.electroBugDamage * state.summonDamageMultiplier;
+            let damage = state.lightningDamage * state.summonDamageMultiplier;
             if (state.electroMastery) {
-              damage += 12;
+              damage += 1;
             }
             enemy.health -= damage;
-
+            const angle = THREE.MathUtils.degToRad(45 - Math.random() * 90);
+            addLightning(enemy.position.x, enemy.position.z, angle);
+            applyHit({
+              enemy,
+              damage,
+              impactPos: enemy.position.clone(),
+              color: "#80f6ff",
+              isSummonDamage: true,
+            }, enemies);
             // Energized
             if (state.energized && Math.random() < 0.2) {
               const ps = usePlayer.getState();
               usePlayer.setState({ ammo: Math.min(ps.ammo + 3, ps.maxAmmo) });
             }
           });
-
-          playHit();
         }
       }
 
@@ -662,20 +631,40 @@ export const useSummons = create<SummonState>((set, get) => ({
   },
 
   applyStatusEffect: (enemyId, type, damage, duration) => {
-    const effect: StatusEffect = {
-      id: `${type}_${enemyId}_${Date.now()}`,
-      enemyId,
-      type,
-      damage,
-      duration,
-      elapsed: 0,
-      tickRate: type === "burn" ? 0.25 : 999,
-      lastTick: 0,
-    };
+    set(state => {
+      // Check if this enemy already has an active effect of this type
+      const existingEffectIndex = state.statusEffects.findIndex(
+        e => e.enemyId === enemyId && e.type === type
+      );
 
-    set(state => ({
-      statusEffects: [...state.statusEffects, effect],
-    }));
+      if (existingEffectIndex !== -1) {
+        // Refresh the existing effect's duration instead of stacking
+        const updated = [...state.statusEffects];
+        updated[existingEffectIndex] = {
+          ...updated[existingEffectIndex],
+          duration,
+          elapsed: 0,
+          damage: Math.max(updated[existingEffectIndex].damage, damage),
+        };
+        return { statusEffects: updated };
+      }
+
+      // No existing effect, create a new one
+      const effect: StatusEffect = {
+        id: `${type}_${enemyId}_${Date.now()}`,
+        enemyId,
+        type,
+        damage,
+        duration,
+        elapsed: 0,
+        tickRate: type === "burn" ? 1 : 999,
+        lastTick: 0,
+      };
+
+      return {
+        statusEffects: [...state.statusEffects, effect],
+      };
+    });
   },
 
   removeSummon: (id) => set(state => ({
@@ -730,7 +719,7 @@ export const useSummons = create<SummonState>((set, get) => ({
     daggerDamage: 30,
     daggerCount: 0,
     daggerBurn: false,
-    electroBugDamage: 22,
+    lightningDamage: 22,
     electroMage: false,
     electroShotCounter: 0,
     energized: false,

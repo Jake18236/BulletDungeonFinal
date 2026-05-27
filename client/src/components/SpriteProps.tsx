@@ -309,6 +309,11 @@ export const VisualSprites = {
     img.src = "/sprites/other-explosion.png";
     return img;
   })(),
+  lightning: (() => {
+    const img = new Image();
+    img.src = "/sprites/lightning.png";
+    return img;
+  })(),
 };
 
 

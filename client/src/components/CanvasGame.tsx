@@ -132,7 +132,7 @@ interface TreeLightningAttack {
 }
 
 const { addSummon } = useSummons.getState();
-
+addSummon("lightning")
 
 function generateRoomTerrain(): TerrainObstacle[] {
   const trees: TerrainObstacle[] = [];
@@ -441,6 +441,7 @@ export default memo(function CanvasGame() {
   const playerFacingRef = useRef<1 | -1>(1);
   const fireSystem = useRef(new FireParticleSystem(30000));
   const fireSprite = useRef<HTMLImageElement>(new Image());
+  const fireEmissionThrottleRef = useRef<Record<string, number>>({});
 const spriteReady = useRef(false);
 const lightningSpriteSheet = useRef<HTMLImageElement>(new Image());
 const lightningReady = useRef(false);
@@ -455,6 +456,7 @@ useEffect(() => {
 
   img.src = "/sprites/fire-effect.png";
 }, []);
+
 useEffect(() => {
   const img = new Image();
   img.onload = () => {
@@ -951,7 +953,7 @@ const handleMouseMove = (e: MouseEvent) => {
                   : stats.explosive;
 
                 const projectileBurn = ps.incendiary
-                  ? { damage: 1, duration: 3 }
+                  ? { damage: 4, duration: 3.1 }
                   : undefined;
 
                 addProjectile({
@@ -2076,6 +2078,27 @@ const drawProjectilesAndTrails = (
     });
   };
 
+  const drawSummonLightning = (ctx: CanvasRenderingContext2D) => {
+    const lightningEffects = useVisualEffects.getState().lightningEffects;
+    const sprite = VisualSprites.lightning;
+    
+    const frameW = 32;
+    const frameH = 450;
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+    for (const fx of lightningEffects) {
+      const screenX = snapToGrid(centerX + ((fx.x - position.x) * TILE_SIZE) / 2);
+      const screenY = snapToGrid(centerY + ((fx.y - position.z) * TILE_SIZE) / 2);
+      ctx.save();
+      ctx.translate(screenX, screenY);
+      ctx.rotate(-fx.angle);
+      ctx.imageSmoothingEnabled = false;
+      const drawW = frameW * 2;
+      const drawH = frameH * 2;
+      ctx.drawImage(sprite, fx.frameIndex * frameW, 0, frameW, frameH, -drawW, -drawH, drawW, drawH);
+      ctx.restore();
+    }
+  };
+
   const drawDamageNumbers = (ctx: CanvasRenderingContext2D) => {
     const damageNumbers = useVisualEffects.getState().damageNumbers;
     const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -2165,32 +2188,7 @@ const drawProjectilesAndTrails = (
           );
         }
         ctx.restore();
-      } else {
-        ctx.strokeStyle = nowMs >= attack.dissipateAt ? "rgba(130,130,255,0.35)" : "rgba(130,220,255,0.9)";
-        ctx.lineWidth = 8;
-        ctx.beginPath();
-        ctx.moveTo(snapToGrid(x1), snapToGrid(y1));
-        ctx.lineTo(snapToGrid(x2), snapToGrid(y2));
-        ctx.stroke();
-      }
-    }
-  };
-  const drawSummonLightning = (ctx: CanvasRenderingContext2D) => {
-    const lightningEffects = useVisualEffects.getState().lightningEffects;
-    if (!lightningReady.current || lightningEffects.length === 0) return;
-    const sprite = lightningSpriteSheet.current;
-    const frameW = 32;
-    const frameH = 350;
-    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
-    for (const fx of lightningEffects) {
-      const screenX = snapToGrid(centerX + ((fx.x - position.x) * TILE_SIZE) / 2);
-      const screenY = snapToGrid(centerY + ((fx.y - position.z) * TILE_SIZE) / 2);
-      ctx.save();
-      ctx.translate(screenX, screenY);
-      ctx.rotate(-fx.angle);
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(sprite, fx.frameIndex * frameW, 0, frameW, frameH, -frameW, -frameH, frameW * 2, frameH);
-      ctx.restore();
+      } 
     }
   };
 
@@ -2606,11 +2604,12 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     enemyDeathAnimationsRef.current = nextAnimations;
   };
 
+usePlayer.setState({homing: true});
 
   const drawSummons = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     const summons = useSummons.getState().summons;
     const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
-
+    
     for (const summon of summons) {
       // Skip summons far outside viewport
       if (!isObjectInViewport(summon.position.x, summon.position.z, position.x, position.z, 150)) {
@@ -2619,7 +2618,9 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
 
       const screenX = snapToGrid(centerX + ((summon.position.x - position.x) * TILE_SIZE) / 2);
       const screenY = snapToGrid(centerY + ((summon.position.z - position.z) * TILE_SIZE) / 2);
-
+      ctx.save();
+      ctx.translate(screenX, screenY);
+      ctx.imageSmoothingEnabled = false;
       if (summon.type === "ghost") {
         const sprite = SummonSprites.ghostSheet;
         const isSheetReady = sprite.complete && sprite.naturalWidth > 0 && sprite.naturalHeight > 0;
@@ -2693,9 +2694,7 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
         continue;
       }
 
-      ctx.save();
-      ctx.translate(screenX, screenY);
-      ctx.imageSmoothingEnabled = false;
+      
 
       if (summon.type === "scythe") {
         const sprite = SummonSprites.scythe;
@@ -2708,7 +2707,9 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
           ctx.rotate(summon.rotation ?? 0);
           ctx.drawImage(sprite, -w / 2, -h / 2, w, h);
         }
-      } else if (summon.type === "spear") {
+
+      } 
+      if (summon.type === "spear") {
         ctx.fillStyle = "#ffaa00";
         ctx.strokeStyle = "#cc8800";
         ctx.lineWidth = 2;
@@ -2732,36 +2733,8 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
         ctx.beginPath();
         ctx.arc(0, -15, 10, 0, Math.PI * 2);
         ctx.fill();
-      } else if (summon.type === "electrobug") {
-        ctx.fillStyle = "#00ffff";
-
-        ctx.beginPath();
-        ctx.ellipse(0, 0, 8, 6, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.globalAlpha = 0.4;
-        ctx.fillStyle = "#00ffff";
-        ctx.beginPath();
-        ctx.ellipse(-6, -2, 5, 3, -0.3, 0, Math.PI * 2);
-        ctx.ellipse(6, -2, 5, 3, 0.3, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.globalAlpha = 0.3;
-        ctx.fillStyle = "#00ffff";
-        ctx.beginPath();
-        ctx.arc(0, 0, 12, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.globalAlpha = 1;
-        ctx.strokeStyle = "#00ffff";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(-3, -6);
-        ctx.lineTo(-5, -10);
-        ctx.moveTo(3, -6);
-        ctx.lineTo(5, -10);
-        ctx.stroke();
-      }
+      } 
+      
 
       ctx.restore();
     }
@@ -2789,6 +2762,7 @@ const pool: FireParticle[] = Array.from({ length: 300 }, () => ({
   const drawStatusEffects = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
     const { statusEffects } = useSummons.getState();
+    const FIRE_EMIT_THROTTLE_MS = 50; // Emit fire particles every 50ms instead of every frame
 
     statusEffects.forEach(effect => {
       const enemy = enemies.find(e => e.id === effect.enemyId);
@@ -2798,8 +2772,13 @@ const pool: FireParticle[] = Array.from({ length: 300 }, () => ({
       const screenY = centerY + ((enemy.position.z - position.z) * TILE_SIZE) / 2;
 
       if (effect.type === "burn") {
-        // Flame particles
-        fireSystem.current.emit(enemy.position.x, enemy.position.z);
+        // Throttle fire particle emission to reduce performance impact
+        const lastEmission = fireEmissionThrottleRef.current[effect.id] || 0;
+        if (animationNowMs - lastEmission >= FIRE_EMIT_THROTTLE_MS) {
+          fireSystem.current.emit(enemy.position.x, enemy.position.z);
+          fireSystem.current.emit(enemy.position.x, enemy.position.z);
+          fireEmissionThrottleRef.current[effect.id] = animationNowMs;
+        }
 
       } else if (effect.type === "curse") {
         // Dark aura
@@ -2811,6 +2790,14 @@ const pool: FireParticle[] = Array.from({ length: 300 }, () => ({
         ctx.stroke();
       }
     });
+
+    // Cleanup throttle entries for removed effects
+    const activeEffectIds = new Set(statusEffects.map(e => e.id));
+    for (const id in fireEmissionThrottleRef.current) {
+      if (!activeEffectIds.has(id)) {
+        delete fireEmissionThrottleRef.current[id];
+      }
+    }
 
     ctx.globalAlpha = 1;
   };

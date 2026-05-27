@@ -206,6 +206,19 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     },
   },
 
+  hyper_rounds: {
+  id: "hyper_rounds",
+  name: "Hyper Rounds",
+  description: "Bullet Size -50%, Fire Rate -25%, Bullet Speed +50%, Bullet Damage +100%",
+  icon: "⚡",
+  category: "speed",
+  tier: 3,
+  requires: ["sniper"],
+  apply: () => {
+    // no function yet
+  },
+},
+
   assassin: {
     id: "assassin",
     name: "Assassin",
@@ -255,6 +268,18 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
       });
     },
   },
+  hand_cannon: {
+  id: "hand_cannon",
+  name: "Hand Cannon",
+  description: "Max Ammo -75%, Bullet Damage +250%, Bullet Size +50%, Piercing +1",
+  icon: "🔫",
+  category: "reload",
+  tier: 3,
+  requires: ["big_shot"],
+  apply: () => {
+    // no function yet
+  },
+},
 
   splinter: {
     id: "splinter",
@@ -441,6 +466,19 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
       });
     },
   },
+
+  shotgun: {
+  id: "shotgun",
+  name: "Shotgun",
+  description: "Bullet Damage +100%, Bullet Lifetime -50%",
+  icon: "💥",
+  category: "multishot",
+  tier: 3,
+  requires: ["fan_fire", "split_fire"],
+  apply: () => {
+    // no function yet
+  },
+},
 
   // RELOAD TREE
   quick_hands: {
@@ -702,16 +740,16 @@ explosive_last_round: {
     },
   },
 
-  electro_bug: {
-    id: "electro_bug",
-    name: "Electro Bug",
-    description: "Summon an Electro Bug that strikes 2 nearby enemies with Lightning",
-    icon: "🐛",
+  lightning: {
+    id: "lightning",
+    name: "Lightning",
+    description: "Summon lightning that strikes 1 enemy every 2s",
+    icon: "⚡",
     category: "summon",
     tier: 1,
     apply: () => {
       const { addSummon } = useSummons.getState();
-      addSummon("electrobug");
+      addSummon("lightning");
     },
   },
 
@@ -722,7 +760,7 @@ explosive_last_round: {
     icon: "⚡",
     category: "summon",
     tier: 2,
-    requires: ["electro_bug"],
+    requires: ["lightning"],
     apply: () => {
       useSummons.setState({ energized: true });
     },

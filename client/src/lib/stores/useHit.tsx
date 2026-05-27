@@ -169,7 +169,7 @@ export const useHit = create<HitState>((set, get) => ({
         enemy.health -= finalDamage;
 
         const { addImpact } = useVisualEffects.getState();
-        addImpact(enemy.position.clone(), sourceColor);
+        addImpact(enemy.position.clone());
         addDamageNumber(enemy.position.x, enemy.position.z, finalDamage);
 
         if (!enemy.velocity) enemy.velocity = new THREE.Vector3();
