@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useGame } from "../lib/stores/useGame";
 import { usePlayer } from "../lib/stores/usePlayer";
 
+
 export type SpriteIcon = {
   normal: string;
   selected: string;

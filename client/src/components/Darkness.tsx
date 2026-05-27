@@ -57,6 +57,7 @@ export default function Darkness() {
       const playerPosition = playerState.position;
       const xpOrbs = useEnemies.getState().xpOrbs;
       const impactEffects = useVisualEffects.getState().impactEffects;
+      const explosionEffects = useVisualEffects.getState().explosionEffects;
       const screenCenter = useCamera.getState().screenCenter;
 
       const cx = screenCenter.x;
@@ -94,6 +95,17 @@ export default function Darkness() {
       // 3. Impact effects (limited influence)
       for (let i = 0; i < impactEffects.length; i++) {
         const e = impactEffects[i];
+
+        drawLight(
+          ctx,
+          cx + (e.x - playerPosition.x) * WORLD_TO_SCREEN_SCALE,
+          cy + (e.y - playerPosition.z) * WORLD_TO_SCREEN_SCALE,
+          e.size * 1.2
+        );
+      }
+
+      for (let i = 0; i < explosionEffects.length; i++) {
+        const e = explosionEffects[i];
 
         drawLight(
           ctx,

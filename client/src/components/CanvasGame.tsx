@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState, memo } from "react";
+import { useTexture } from "@react-three/drei";
 import * as THREE from "three";
 import { usePlayer } from "../lib/stores/usePlayer";
 import { ENEMY_TYPE_CONFIG, SHOGGOTH_CONFIG, useEnemies, type Enemy } from "../lib/stores/useEnemies";
 import { bounceAgainstBounds } from "../lib/collision";
 import { useGame } from "../lib/stores/useGame";
 import { useAudio } from "../lib/stores/useAudio";
-
-
+import { FireParticleSystem } from "../lib/FireParticleSystem";
 import { useProjectiles, TrailParticle } from "../lib/stores/useProjectiles";
 import { useHit } from "../lib/stores/useHit";
 import { useSummons } from "../lib/stores/useSummons";
@@ -44,7 +44,7 @@ fontWhiteImage.src = "/sprites/font-atlas-white.png";
 const fontRedImage = new Image();
 fontRedImage.src = "/sprites/font-atlas-red.png";
 
-usePlayer.setState({ splinterBullets: true });
+
 
 const TILE_SIZE = 50;
 export const CANVAS_WIDTH = window.innerWidth;
@@ -67,6 +67,8 @@ electricityLineSpriteSheet.src = "/sprites/electricity-line-spritesheet.png";
 
 const playerSpriteSheet = new Image();
 playerSpriteSheet.src = "/sprites/character4.png";
+
+
 
 const PLAYER_SPRITE_FRAME_SIZE = 32;
 const PLAYER_SPRITE_RENDER_SIZE = 64;
@@ -437,7 +439,20 @@ export default memo(function CanvasGame() {
   
   const footstepSideRef = useRef<1 | -1>(1);
   const playerFacingRef = useRef<1 | -1>(1);
+  const fireSystem = useRef(new FireParticleSystem(30000));
+  const fireSprite = useRef<HTMLImageElement>(new Image());
+const spriteReady = useRef(false);
 
+useEffect(() => {
+  const img = new Image();
+
+  img.onload = () => {
+    fireSprite.current = img;
+    spriteReady.current = true;
+  };
+
+  img.src = "/sprites/fire-effect.png";
+}, []);
 
   const projectileTrailLastPosRef = useRef<Map<string, THREE.Vector3>>(new Map());
   const addImpact = useVisualEffects((state) => state.addImpact);
@@ -486,7 +501,7 @@ export default memo(function CanvasGame() {
   const playHit = useAudio((state) => state.playHit);
   const playSuccess = useAudio((state) => state.playSuccess);
   const screenCenter = useCamera((state) => state.screenCenter);
-
+  
 
 
 
@@ -527,6 +542,7 @@ export default memo(function CanvasGame() {
     offsetY: 0,
   });
   
+
   useEffect(() => {
     if (canvasRef.current) {
       canvasRectRef.current = canvasRef.current.getBoundingClientRect();
@@ -722,7 +738,7 @@ const handleMouseMove = (e: MouseEvent) => {
       
 
       if (phase === "playing") {
-        
+        const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
         const ps = usePlayer.getState();
         updateReload(delta);
         updateInvincibility(delta);
@@ -765,7 +781,9 @@ const handleMouseMove = (e: MouseEvent) => {
 
           playHit();
         });
-        
+        fireSystem.current.update();
+
+
         updateStatusEffects(delta, enemies, (enemyId, damage) => {
           const enemy = enemies.find(e => e.id === enemyId);
           if (enemy) {
@@ -917,7 +935,7 @@ const handleMouseMove = (e: MouseEvent) => {
                   : stats.explosive;
 
                 const projectileBurn = ps.incendiary
-                  ? { damage: 4, duration: 3 }
+                  ? { damage: 1, duration: 3 }
                   : undefined;
 
                 addProjectile({
@@ -969,36 +987,7 @@ const handleMouseMove = (e: MouseEvent) => {
 
               playHit();
 
-              const summonState = useSummons.getState();
-                if (summonState.electroMage) {
-                  const newCounter = summonState.electroShotCounter + 1;
-                  useSummons.setState({ electroShotCounter: newCounter });
-
-                  if (newCounter >= 2) {
-                    useSummons.setState({ electroShotCounter: 0 });
-
-                    // Strike nearest enemy with lightning
-                    if (enemies.length > 0) {
-                      const nearest = enemies.reduce((acc, e) => {
-                        const d = position.distanceTo(e.position);
-                        return d < acc.dist ? { enemy: e, dist: d } : acc;
-                      }, { enemy: null as any, dist: Infinity });
-
-                      if (nearest.enemy && nearest.dist < 150) {
-                        let damage = 22;
-                        if (summonState.electroMastery) {
-                          damage += 12;
-                        }
-                        nearest.enemy.health -= damage;
-
-                        // Energized: 20% chance to refill 3 ammo
-                        if (summonState.energized && Math.random() < 0.2) {
-                          usePlayer.setState({ ammo: Math.min(ammo + 3, maxAmmo) });
-                        }
-                      }
-                    }
-                  }
-                }
+              
 
                 
               fireTimer.current = firerate;
@@ -1400,14 +1389,16 @@ const handleMouseMove = (e: MouseEvent) => {
       }
       
       drawXPOrbs(ctx);
-      
+      const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
       // Draw enemies with viewport culling
+      fireSystem.current.draw(ctx, fireSprite.current!, centerX, centerY, position.x, position.z, TILE_SIZE);
       for (const enemy of enemies) {
         if (isObjectInViewport(enemy.position.x, enemy.position.z, position.x, position.z, 100)) {
+          
           drawEnemy(ctx, enemy);
         }
       }
-
+      
       const cursorCanvas = cursorCanvasRef.current;
       const cursorCtx = cursorCanvas?.getContext("2d");
       if (cursorCtx) {
@@ -1415,6 +1406,9 @@ const handleMouseMove = (e: MouseEvent) => {
         cursorCtx.imageSmoothingEnabled = false;
         drawCursor(cursorCtx);
       }
+      
+
+      
 
       const eyeCanvas = eyeCanvasRef.current;
       const eyeCtx = eyeCanvas?.getContext("2d");
@@ -1447,14 +1441,14 @@ const handleMouseMove = (e: MouseEvent) => {
       
       drawStatusEffects(ctx, animationNowMs);
       drawExplosionEffects(ctx);
-      drawImpactEffects(ctx); // ADD - behind projectiles
-      
+      drawImpactEffects(ctx);
+
       drawEnemyDeaths(ctx, gameplayElapsedMsRef.current);
       
       
       drawReloadIndicator(ctx);
       drawWeapon(ctx, "revolver", phase !== "playing");
-    
+      
       
       animationFrameRef.current = requestAnimationFrame(gameLoop);
     };
@@ -2252,7 +2246,8 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     } else if (!facingRight) {
       ctx.scale(-1, 1);
     }
-
+    
+    
     if (enemy.hitFlash > 0) ctx.filter = "brightness(60)";
     ctx.drawImage(bodySprite.img, Math.floor(-size / 2), Math.floor(-size / 2), Math.floor(size), Math.floor(size));
     ctx.filter = "none";
@@ -2576,6 +2571,7 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     enemyDeathAnimationsRef.current = nextAnimations;
   };
 
+
   const drawSummons = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     const summons = useSummons.getState().summons;
     const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -2736,6 +2732,25 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     }
   };
 
+
+type FireParticle = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  frame: number;
+  active: boolean;
+};
+usePlayer.setState({ incendiary: true});
+const pool: FireParticle[] = Array.from({ length: 300 }, () => ({
+  x: 0, y: 0,
+  vx: 0, vy: 0,
+  life: 0,
+  frame: 0,
+  active: false,
+}));
+
   const drawStatusEffects = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
     const { statusEffects } = useSummons.getState();
@@ -2749,16 +2764,8 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
 
       if (effect.type === "burn") {
         // Flame particles
-        ctx.fillStyle = "#ff6600";
-        ctx.globalAlpha = 0.8;
-        for (let i = 0; i < 3; i++) {
-          const angle = (animationNowMs / 200 + i) % (Math.PI * 2);
-          const x = screenX + Math.cos(angle) * 15;
-          const y = screenY + Math.sin(angle) * 15 - 10;
-          ctx.beginPath();
-          ctx.arc(x, y, 3, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        fireSystem.current.emit(enemy.position.x, enemy.position.z);
+
       } else if (effect.type === "curse") {
         // Dark aura
         ctx.strokeStyle = "#9900ff";
@@ -2772,6 +2779,9 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
 
     ctx.globalAlpha = 1;
   };
+
+
+
 
   const drawCursor = (ctx: CanvasRenderingContext2D) => {
   const size = 32;

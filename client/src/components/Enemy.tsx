@@ -1,7 +1,6 @@
-import { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { useTexture } from "@react-three/drei";
 import * as THREE from "three";
+import { useFireSystem } from "./fireStore";
 
 interface EnemyProps {
   enemy: {
@@ -9,15 +8,19 @@ interface EnemyProps {
     position: THREE.Vector3;
     health: number;
     maxHealth: number;
-    velocity: THREE.Vector3;
   };
 }
 
 export default function Enemy({ enemy }: EnemyProps) {
-  const meshRef = useRef<THREE.Mesh>(null);
+  const fire = useFireSystem();
 
   useFrame(() => {
-    
-    
+    const burning = enemy.health < enemy.maxHealth;
+
+    if (burning && Math.random() < 0.2) {
+      fire?.emit(enemy.position.x, enemy.position.y);
+    }
   });
+
+  return null;
 }
