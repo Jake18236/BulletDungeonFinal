@@ -1031,9 +1031,9 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     }
 
     if (state.isDashing && state.dashDirection) {
-      const dashSpeed = 350;
-      const dashDuration = 0.40;
-      const move = state.dashDirection.clone().multiplyScalar(dashSpeed * delta*20);
+      const dashSpeed = 35;
+      const dashDuration = 0.15;
+      const move = state.dashDirection.clone().multiplyScalar(dashSpeed * delta);
       return {
         position: state.position.clone().add(move),
         isDashing: false,
