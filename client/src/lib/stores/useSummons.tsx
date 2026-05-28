@@ -7,8 +7,6 @@ import { useVisualEffects } from "./useVisualEffects";
 
 const CANVAS_WIDTH = 1490;
 const CANVAS_HEIGHT = 750;
-const TILE_SIZE = 50;
-const WORLD_TO_SCREEN_SCALE = TILE_SIZE;
 
 export interface Summon {
   id: string;
@@ -228,7 +226,7 @@ export const useSummons = create<SummonState>((set, get) => ({
         if (summon.type === "ghost") {
 
             const orbitScreenRadius = 50;
-            const orbitRadius = orbitScreenRadius / WORLD_TO_SCREEN_SCALE; 
+            const orbitRadius = orbitScreenRadius / 50; 
             const orbitSpeed = 0;   
 
 

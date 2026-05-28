@@ -7,8 +7,7 @@ import { useGame } from "../lib/stores/useGame";
 import { useSummons } from "../lib/stores/useSummons";
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from "../components/CanvasGame";
 
-const WORLD_TO_SCREEN_SCALE = 25; // simplified (your TILE_SIZE/2)
-const LIGHT_SAMPLES = 32; // quality vs perf knob
+const LIGHT_SAMPLES = 32;
 
 function drawLight(
   ctx: CanvasRenderingContext2D,
@@ -99,10 +98,10 @@ export default function Darkness() {
           ctx,
           cx +
             (muzzleFlashPosition.x - playerPosition.x) *
-              WORLD_TO_SCREEN_SCALE,
+              25,
           cy +
             (muzzleFlashPosition.z - playerPosition.z) *
-              WORLD_TO_SCREEN_SCALE,
+              25,
           800
         );
       }
@@ -113,8 +112,8 @@ export default function Darkness() {
 
         drawLight(
           ctx,
-          cx + (e.x - playerPosition.x) * WORLD_TO_SCREEN_SCALE,
-          cy + (e.y - playerPosition.z) * WORLD_TO_SCREEN_SCALE,
+          cx + (e.x - playerPosition.x) * 25,
+          cy + (e.y - playerPosition.z) * 25,
           e.size * 1.2
         );
       }
@@ -124,16 +123,16 @@ export default function Darkness() {
         if (!enemy) continue;
         drawSteppedLight(
           ctx,
-          cx + (enemy.position.x - playerPosition.x) * WORLD_TO_SCREEN_SCALE,
-          cy + (enemy.position.z - playerPosition.z) * WORLD_TO_SCREEN_SCALE,
+          cx + (enemy.position.x - playerPosition.x) * 25,
+          cy + (enemy.position.z - playerPosition.z) * 25,
           105,
         );
       }
       for (const l of lightningEffects) {
         drawSteppedLight(
           ctx,
-          cx + (l.x - playerPosition.x) * WORLD_TO_SCREEN_SCALE,
-          cy + (l.y - playerPosition.z) * WORLD_TO_SCREEN_SCALE,
+          cx + (l.x - playerPosition.x) * 25,
+          cy + (l.y - playerPosition.z) * 25,
           210,
         );
       }
@@ -144,8 +143,8 @@ export default function Darkness() {
 
         drawLight(
           ctx,
-          cx + (o.position.x - playerPosition.x) * WORLD_TO_SCREEN_SCALE,
-          cy + (o.position.z - playerPosition.z) * WORLD_TO_SCREEN_SCALE,
+          cx + (o.position.x - playerPosition.x) * 25,
+          cy + (o.position.z - playerPosition.z) * 25,
           88
         );
       }
