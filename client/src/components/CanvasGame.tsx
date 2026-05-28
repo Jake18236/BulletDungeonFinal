@@ -519,7 +519,7 @@ useEffect(() => {
 
 
 
-  const poolSize = 200000;
+  const poolSize = 20000;
 
   const poolRef = useRef<TrailParticle[]>([]);
   const writeIndexRef = useRef(0);
@@ -1862,46 +1862,50 @@ ctx.imageSmoothingEnabled = false;
   // TRAIL EMISSION (DEMO STYLE)
   // =====================================================
   const emitSegment = (
-    x0: number,
-    z0: number,
-    x1: number,
-    z1: number,
-    size: number,
-    velocity: THREE.Vector3,
-    projectileId: string,
-  ) => {
-    const dx = x1 - x0;
-    const dz = z1 - z0;
-    const dist = Math.sqrt(dx * dx + dz * dz);
-    const step = 0.1; // increased from 0.1 to reduce trail density by 60%
+  x0: number,
+  z0: number,
+  x1: number,
+  z1: number,
+  size: number,
+  velocity: THREE.Vector3,
+  projectileId: string,
+) => {
+  const dx = x1 - x0;
+  const dz = z1 - z0;
 
-    if (dist === 0) return;
+  const dist = Math.sqrt(dx * dx + dz * dz);
+  if (dist === 0) return;
 
-    const steps = Math.floor(dist / step);
-    if (steps > 150) return; // skip emission if projectile moved too far (burst fire spike)
-    
-    const trailSize = Math.max(2, size * 0.5);
-    const velocityMagnitude = velocity.length();
-    const trailLife = Math.max(0.1, velocityMagnitude * 0.0005);
+  const step = 0.15; // slightly reduced density
+  const steps = Math.floor(dist / step);
 
-    for (let i = 0; i <= steps; i++) {
-      const t = i / (steps || 1);
-      const x = x0 + dx * t;
-      const z = z0 + dz * t;
+  if (steps > 120) return;
 
-      const p = poolRef.current[writeIndexRef.current];
-      p.x = x;
-      p.y = z;
-      p.size = trailSize;
-      p.life = trailLife;
-      p.maxLife = trailLife;
-      p.projectileId = projectileId;
+  const speed = velocity.length();
+  const trailSize = Math.max(1.5, size * 0.5);
+  const trailLife = Math.max(0.08, Math.min(0.2, speed * 0.0005));
 
-      
-      writeIndexRef.current = (writeIndexRef.current + 1) % poolSize;
-    }
-  };
+  const pool = poolRef.current;
+  let idx = writeIndexRef.current;
 
+  for (let i = 0; i <= steps; i++) {
+    const t = i / (steps || 1);
+
+    const p = pool[idx];
+
+    p.x = x0 + dx * t;
+    p.y = z0 + dz * t;
+    p.size = trailSize;
+    p.life = trailLife;
+    p.maxLife = trailLife;
+    p.projectileId = projectileId;
+
+    idx = (idx + 1) % poolSize;
+  }
+
+  writeIndexRef.current = idx;
+};
+const start = performance.now();
 
 const drawProjectilesAndTrails = (
   ctx: CanvasRenderingContext2D,
@@ -1909,7 +1913,6 @@ const drawProjectilesAndTrails = (
   playerPos: THREE.Vector3
 ) => {
   const { projectiles } = useProjectiles.getState();
-  const CULL_RADIUS = 100; // Cull projectiles beyond this radius
 
   const worldToScreen = (x: number, z: number) =>
     cameraRef.current.worldToScreen(
@@ -1925,11 +1928,7 @@ const drawProjectilesAndTrails = (
 
   const img = getProjectileImage();
 
-  const drawProjectile = (
-    x: number,
-    y: number,
-    size: number
-  ) => {
+  const drawProjectile = (x: number, y: number, size: number) => {
     ctx.drawImage(
       img,
       Math.floor(x - size / 2),
@@ -1939,96 +1938,70 @@ const drawProjectilesAndTrails = (
     );
   };
 
-  // =====================================================
-  // PROJECTILES with VIEWPORT CULLING
-  // =====================================================
-  const activeProjectileIds = new Set<string>();
+  // -----------------------------
+  // PROJECTILES
+  // -----------------------------
+  const activeIds = new Set<string>();
 
-  for (let proj of projectiles) {
-    activeProjectileIds.add(proj.id);
-    
-    // Skip projectiles outside viewport
-    if (!isObjectInViewport(proj.position.x, proj.position.z, playerPos.x, playerPos.z, CULL_RADIUS)) {
-      continue;
-    }
+  for (const proj of projectiles) {
+    activeIds.add(proj.id);
 
-    const prev = {
-      x: proj.previousPosition.x,
-      z: proj.previousPosition.z,
-    };
-
-    const curr = {
-      x: proj.position.x,
-      z: proj.position.z,
-    };
+    const prev = proj.previousPosition;
+    const curr = proj.position;
 
     if (!isPaused) {
-      emitSegment(prev.x, prev.z, curr.x, curr.z, proj.size, proj.velocity, proj.id);
+      emitSegment(
+        prev.x,
+        prev.z,
+        curr.x,
+        curr.z,
+        proj.size,
+        proj.velocity,
+        proj.id
+      );
     }
 
-    const screenPos = worldToScreen(curr.x, curr.z);
-    const snappedX = snapToGrid(screenPos.x);
-    const snappedY = snapToGrid(screenPos.y);
-
-    ctx.globalAlpha = 1;
+    const screen = worldToScreen(curr.x, curr.z);
 
     drawProjectile(
-      snappedX,
-      snappedY,
-      Math.floor(proj.size)
+      snapToGrid(screen.x),
+      snapToGrid(screen.y),
+      proj.size
     );
   }
-// =====================================================
-// TRAIL PARTICLES
-// =====================================================
-ctx.fillStyle = "#f5d6c1";
 
-let particleCount = 0;
+  // -----------------------------
+  // TRAILS (OPTIMIZED PASS)
+  // -----------------------------
+  ctx.fillStyle = "#f5d6c1";
 
-for (let i = 0; i < poolSize; i++) {
-  const p = poolRef.current[i];
+  const pool = poolRef.current;
 
-  // dead particle
-  if (p.life <= 0) continue;
+  // IMPORTANT: DO NOT CALL worldToScreen FIRST OR YOU DOUBLE-TRANSFORM
+  for (let i = 0; i < poolSize; i++) {
+    const p = pool[i];
+    if (p.life <= 0) continue;
 
-  // projectile removed
-  if (
-    p.projectileId &&
-    !activeProjectileIds.has(p.projectileId)
-  ) {
-    p.life = 0;
-    continue;
-  }
-
-  // update life
-  if (!isPaused) {
-    p.life -= 0.016;
+    // decay
+    if (!isPaused) p.life -= 0.016;
 
     if (p.life <= 0) continue;
+
+    const t = p.life / p.maxLife;
+    const size = p.size * (0.5 + t);
+
+    const screen = worldToScreen(p.x, p.y);
+
+    ctx.fillRect(
+      snapToGrid(screen.x - size / 2),
+      snapToGrid(screen.y - size / 2),
+      snapToGrid(size),
+      snapToGrid(size)
+    );
   }
 
-  particleCount++;
-
-  const t = p.life / p.maxLife;
-  const size = p.size * (0.5 + t);
-
-  const screenPos = worldToScreen(p.x, p.y);
-
-  ctx.fillRect(
-    snapToGrid(screenPos.x - size / 2),
-    snapToGrid(screenPos.y - size / 2),
-    snapToGrid(size),
-    snapToGrid(size)
-  );
-}
-
-// debug counter
-useParticles.setState({
-  trailParticleCount: particleCount
-});
   ctx.restore();
 };
-
 
 
   const drawImpactEffects = (ctx: CanvasRenderingContext2D) => {
