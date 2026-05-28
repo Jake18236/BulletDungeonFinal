@@ -87,7 +87,7 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
 
   // ---------------- Impact Effects ----------------
   addImpact: (position: THREE.Vector3, size: number) => {
-    const MAX_IMPACT_EFFECTS = 50;
+    const MAX_IMPACT_EFFECTS = 30;
 
     set(state => {
       const effects = state.impactEffects;
@@ -135,7 +135,7 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
 
   // ---------------- Damage Numbers ----------------
   addDamageNumber: (x, y, damage) => {
-    const MAX_DAMAGE_NUMBERS = 100;
+    const MAX_DAMAGE_NUMBERS = 50;
 
     set(state => {
       const numbers = state.damageNumbers;
@@ -149,7 +149,7 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
         y,
         damage: Math.round(damage),
         life: 0,
-        maxLife: 1,
+        maxLife: 0.8,
         velocity: { x: 0, y: 0 },
         scale: 0,
       };

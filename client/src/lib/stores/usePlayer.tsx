@@ -92,6 +92,17 @@ interface PlayerState {
   fanFireIndex: number;
   fanFireTimer: number;
 
+  // Special mechanics
+  visionRange: number;
+  hasDash: boolean;
+  dashCooldown: number;
+  maxDashCooldown: number;
+  isDashing: boolean;
+  dashDirection: THREE.Vector3 | null;
+  damageFlashTimer: number;
+  damageFlashPosition: THREE.Vector3 | null;
+  lastDamageKnockback: THREE.Vector3 | null;
+
   // XP & LEVELING
   xp: number;
   level: number;
@@ -138,6 +149,14 @@ interface PlayerState {
   levelUp: () => void;
   selectUpgrade: (upgrade: Upgrade) => void;
   setShowLevelUpScreen: (show: boolean) => void;
+
+  // Actions - Dash
+  tryDash: (direction: THREE.Vector3) => boolean;
+  updateDash: (delta: number) => void;
+
+  // Actions - Damage feedback
+  triggerDamageFlash: (position: THREE.Vector3, knockback: THREE.Vector3) => void;
+  updateDamageFlash: (delta: number) => void;
 
   // Reset
   reset: () => void;
@@ -589,6 +608,31 @@ explosive_last_round: {
     },
   },
 
+  hawk_eye: {
+    id: "hawk_eye",
+    name: "Hawk Eye",
+    description: "Vision Range +40%",
+    icon: "👁️",
+    category: "vitality",
+    tier: 1,
+    apply: () => {
+      const player = usePlayer.getState();
+      usePlayer.setState({ visionRange: (player.visionRange || 1) * 1.4 });
+    },
+  },
+
+  dash: {
+    id: "dash",
+    name: "Quick Dash",
+    description: "Right-click to dash. Cooldown: 2 seconds",
+    icon: "💨",
+    category: "vitality",
+    tier: 1,
+    apply: () => {
+      usePlayer.setState({ hasDash: true, dashCooldown: 0, maxDashCooldown: 2 });
+    },
+  },
+
   vitality: {
     id: "vitality",
     name: "Vitality",
@@ -886,6 +930,17 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   fanFireIndex: 0,
   fanFireTimer: 0,
 
+  // Special mechanics
+  visionRange: 1,
+  hasDash: false,
+  dashCooldown: 0,
+  maxDashCooldown: 2,
+  isDashing: false,
+  dashDirection: null,
+  damageFlashTimer: 0,
+  damageFlashPosition: null,
+  lastDamageKnockback: null,
+
   // XP & Leveling
   xp: 20,
   level: 0,
@@ -952,6 +1007,70 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   },
 
   setShowLevelUpScreen: (show) => set({ showLevelUpScreen: show }),
+
+  // === DASH ACTIONS ===
+
+  tryDash: (direction) => {
+    const state = get();
+    if (!state.hasDash || state.dashCooldown > 0 || state.isReloading) return false;
+
+    const normalizedDir = direction.clone().normalize();
+    set({
+      isDashing: true,
+      dashDirection: normalizedDir,
+      dashCooldown: state.maxDashCooldown,
+    });
+
+    return true;
+  },
+
+  updateDash: (delta) => set((state) => {
+    if (state.dashCooldown > 0) {
+      const newCooldown = Math.max(0, state.dashCooldown - delta);
+      return { dashCooldown: newCooldown };
+    }
+
+    if (state.isDashing && state.dashDirection) {
+      const dashSpeed = 35;
+      const dashDuration = 0.15;
+      const move = state.dashDirection.clone().multiplyScalar(dashSpeed * delta);
+      return {
+        position: state.position.clone().add(move),
+        isDashing: false,
+        dashDirection: null,
+      };
+    }
+
+    return {};
+  }),
+
+  // === DAMAGE FEEDBACK ACTIONS ===
+
+  triggerDamageFlash: (position, knockback) => set({
+    damageFlashTimer: 0.3,
+    damageFlashPosition: position.clone(),
+    lastDamageKnockback: knockback.clone(),
+  }),
+
+  updateDamageFlash: (delta) => set((state) => {
+    if (state.damageFlashTimer <= 0) return {};
+
+    const newTimer = Math.max(0, state.damageFlashTimer - delta);
+    if (newTimer > 0 && state.lastDamageKnockback) {
+      const knockbackSpeed = 8;
+      const knockbackMove = state.lastDamageKnockback.clone().multiplyScalar(knockbackSpeed * delta);
+      return {
+        damageFlashTimer: newTimer,
+        position: state.position.clone().add(knockbackMove),
+      };
+    }
+
+    return {
+      damageFlashTimer: 0,
+      damageFlashPosition: null,
+      lastDamageKnockback: null,
+    };
+  }),
 
   // === COMBAT ACTIONS ===
 
@@ -1144,12 +1263,13 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     projectileCount: 1,
     life: 3.0,
     homing: false,
+    incendiary: false,
     piercing: 0,
     bouncing: 0,
     trailLength: 1,
     explosive: undefined,
     chainLightning: undefined,
-    accuracy: 1.0,
+    accuracy: 0.85,
     knockbackMultiplier: 2.0,
     projectileSize: 12.0,
     instantKillThreshold: 0,
@@ -1161,6 +1281,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     freshClip: false,
     freshClipActive: false,
     freshClipTimer: 0,
+    lastAmmoExplosive: false,
     killClip: false,
     killClipStacks: 0,
     lastMovementTime: 0,
@@ -1169,6 +1290,15 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     fanFireActive: false,
     fanFireIndex: 0,
     fanFireTimer: 0,
+    visionRange: 1,
+    hasDash: false,
+    dashCooldown: 0,
+    maxDashCooldown: 2,
+    isDashing: false,
+    dashDirection: null,
+    damageFlashTimer: 0,
+    damageFlashPosition: null,
+    lastDamageKnockback: null,
     xp: 0,
     level: 1,
     xpToNextLevel: calculateXPForLevel(1),

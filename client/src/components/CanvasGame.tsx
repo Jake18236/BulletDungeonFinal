@@ -440,7 +440,7 @@ export default memo(function CanvasGame() {
   
   const footstepSideRef = useRef<1 | -1>(1);
   const playerFacingRef = useRef<1 | -1>(1);
-  const fireSystem = useRef(new FireParticleSystem(30000));
+  const fireSystem = useRef(new FireParticleSystem(15000));
   const fireSprite = useRef<HTMLImageElement>(new Image());
   const fireEmissionThrottleRef = useRef<Record<string, number>>({});
 const spriteReady = useRef(false);
@@ -493,6 +493,8 @@ useEffect(() => {
   const ammo = usePlayer((state) => state.ammo);
   const updateFanFire = usePlayer((state) => state.updateFanFire);
   const movePlayer = usePlayer((state) => state.move);
+  const updateDash = usePlayer((state) => state.updateDash);
+  const updateDamageFlash = usePlayer((state) => state.updateDamageFlash);
   const maxAmmo = usePlayer((state) => state.maxAmmo);
   const firerate = usePlayer((state) => state.firerate);
   const playerLevel = usePlayer((state) => state.level);
@@ -650,13 +652,34 @@ useEffect(() => {
 
 useEffect(() => {
   const handleMouseDown = (e: MouseEvent) => {
-    if (!canInteract || e.button !== 0) return;
-    isMouseDown.current = true;
+    if (!canInteract) return;
+
+    if (e.button === 0) {
+      isMouseDown.current = true;
+    } else if (e.button === 2) {
+      // Right-click dash
+      const ps = usePlayer.getState();
+      if (ps.hasDash && ps.dashCooldown <= 0) {
+        const center = useCamera.getState().screenCenter;
+        const dx = mouseRef.current.x - center.x;
+        const dz = mouseRef.current.y - center.y;
+        const distance = Math.sqrt(dx * dx + dz * dz);
+        if (distance > 0) {
+          const direction = new THREE.Vector3(dx / distance, 0, dz / distance);
+          usePlayer.getState().tryDash(direction);
+        }
+      }
+    }
   };
 
   const handleMouseUp = (e: MouseEvent) => {
-    if (e.button !== 0) return;
-    isMouseDown.current = false;
+    if (e.button === 0) {
+      isMouseDown.current = false;
+    }
+  };
+
+  const handleContextMenu = (e: MouseEvent) => {
+    e.preventDefault();
   };
 
 const handleMouseMove = (e: MouseEvent) => {
@@ -680,11 +703,13 @@ const handleMouseMove = (e: MouseEvent) => {
   window.addEventListener("mousedown", handleMouseDown);
   window.addEventListener("mouseup", handleMouseUp);
   window.addEventListener("mousemove", handleMouseMove);
+  window.addEventListener("contextmenu", handleContextMenu);
 
   return () => {
     window.removeEventListener("mousedown", handleMouseDown);
     window.removeEventListener("mouseup", handleMouseUp);
     window.removeEventListener("mousemove", handleMouseMove);
+    window.removeEventListener("contextmenu", handleContextMenu);
   };
 }, [canInteract]);
 
@@ -754,6 +779,8 @@ const handleMouseMove = (e: MouseEvent) => {
         const ps = usePlayer.getState();
         updateReload(delta);
         updateInvincibility(delta);
+        updateDash(delta);
+        updateDamageFlash(delta);
         updateMuzzleFlash();
         updateSummons(delta, position, enemies, addProjectile, playHit);
         updateFanFire(delta, () => {
@@ -1508,6 +1535,19 @@ const handleMouseMove = (e: MouseEvent) => {
   function handleEnemyDeath(enemy: Enemy) {
     const ps = usePlayer.getState();
 
+    // Boss explosion on death
+    if (enemy.isBoss) {
+      addExplosion(enemy.position.clone(), 280, 1);
+      const { applyExplosiveDamage } = useHit.getState();
+      applyExplosiveDamage(
+        enemy.position.clone(),
+        280 / 25,
+        80,
+        enemies,
+        "#ff4400"
+      );
+    }
+
     addXPOrb(enemy.position.clone(), 25);
     enemyDeathAnimationsRef.current.push({
       id: crypto.randomUUID(),
@@ -1516,7 +1556,7 @@ const handleMouseMove = (e: MouseEvent) => {
       frameDurationMs: 85,
     });
     removeEnemy(enemy.id);
-    
+
     if (ps.splinterBullets) {
       const stats = ps.getProjectileStats();
       const addProjectile = useProjectiles.getState().addProjectile;
@@ -2200,14 +2240,15 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     ctx.save();
     ctx.translate(centerX, centerY);
 
-    // Flashing effect during invincibility
+    // Damage flash effect (brightness filter instead of blinking)
+    if (playerState.damageFlashTimer > 0) {
+      const flashIntensity = Math.min(1, playerState.damageFlashTimer / 0.15);
+      ctx.filter = `brightness(${1 + flashIntensity * 1.5}) saturate(${1 - flashIntensity * 0.5})`;
+    }
+
+    // Flashing effect during invincibility (reduced - mostly invisible now)
     if (playerState.invincibilityTimer > 0) {
-      const flashFrequency = 0.15; // Flash every 150ms
-      const flash = Math.sin((playerState.invincibilityTimer / flashFrequency) * Math.PI * 4) > 0;
-      if (!flash) {
-        ctx.restore();
-        return; // Skip drawing to create flash effect
-      }
+      ctx.globalAlpha = 0.6;
     }
 
     if (playerSpriteSheet.complete && playerSpriteSheet.naturalWidth > 0) {

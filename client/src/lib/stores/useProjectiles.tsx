@@ -201,10 +201,19 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
 
     for (const proj of get().projectiles) {
       // --- Move projectile ---
-      
+
       // Store previous position for continuous collision detection
       proj.previousPosition.copy(proj.position);
-      
+
+      // Add chaotic wobble to projectile movement (every other frame for perf)
+      if (Math.random() < 0.5) {
+        const wobbleIntensity = 0.15;
+        const wobbleX = (Math.random() - 0.5) * wobbleIntensity * proj.speed;
+        const wobbleZ = (Math.random() - 0.5) * wobbleIntensity * proj.speed;
+        proj.velocity.x += wobbleX * delta * 2;
+        proj.velocity.z += wobbleZ * delta * 2;
+      }
+
       // Slow the projectile with diminishing drag over time.
       // The projectile starts fast and decelerates, but the slowing amount decreases
       // the further it travels.
@@ -214,11 +223,11 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       const dragFactor = dragBase / (1 + dragFalloff * travelFactor);
       const speedDecay = Math.max(0.45, 1 - dragFactor * delta);
       proj.velocity.multiplyScalar(speedDecay);
-      
+
       const move = proj.velocity.clone().multiplyScalar(delta);
       proj.position.add(move);
       proj.distanceTraveled += move.length();
-      
+
 
       // --- Homing ---
       if (proj.homing && enemies.length > 0) {

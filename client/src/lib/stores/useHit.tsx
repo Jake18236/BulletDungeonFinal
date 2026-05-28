@@ -157,6 +157,7 @@ export const useHit = create<HitState>((set, get) => ({
   applyExplosiveDamage: (center, radius, damage, allEnemies, sourceColor = "#ff6600") => {
     const { addExplosion, addDamageNumber } = useVisualEffects.getState();
     const { playHit } = useAudio.getState();
+    const { applyStatusEffect } = useSummons.getState();
 
     addExplosion(center, radius, 1);
 
@@ -175,6 +176,9 @@ export const useHit = create<HitState>((set, get) => ({
         if (!enemy.velocity) enemy.velocity = new THREE.Vector3();
         const knockbackDir = enemy.position.clone().sub(center).normalize();
         enemy.velocity.add(knockbackDir.multiplyScalar(24 * falloff));
+
+        // Explosions now burn enemies
+        applyStatusEffect(enemy.id, "burn", 4, 3.0);
       }
     });
 
@@ -226,8 +230,17 @@ export const useHit = create<HitState>((set, get) => ({
     const { loseHeart, position, invincibilityTimer } = usePlayer.getState();
     if (invincibilityTimer > 0) return;
     const { playHit } = useAudio.getState();
+
+    // Calculate knockback direction from impact position
+    let knockbackDir = new THREE.Vector3(0, 0, 0);
+    if (impactPos) {
+      knockbackDir = position.clone().sub(impactPos).normalize();
+    }
+
     loseHeart();
     playHit();
 
+    // Trigger damage flash with knockback instead of blinking
+    usePlayer.getState().triggerDamageFlash(position, knockbackDir);
   },
 }));

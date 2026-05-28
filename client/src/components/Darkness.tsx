@@ -89,8 +89,10 @@ export default function Darkness() {
       // =========================================
       ctx.globalCompositeOperation = "destination-out";
 
-      // 1. Player light (main)
-      drawLight(ctx, cx, cy, 720);
+      // 1. Player light (main) - scales with visionRange
+      const visionRange = playerState.visionRange || 1;
+      const baseLightRadius = 720;
+      drawLight(ctx, cx, cy, baseLightRadius * visionRange);
 
       // 2. Muzzle flash (temporary)
       if (muzzleFlashPosition) {
