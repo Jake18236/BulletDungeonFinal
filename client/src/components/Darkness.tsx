@@ -118,18 +118,6 @@ export default function Darkness() {
           e.size * 1.2
         );
       }
-
-      for (let i = 0; i < explosionEffects.length; i++) {
-        const e = explosionEffects[i];
-        drawSteppedLight(
-          ctx,
-          cx + (e.x - playerPosition.x) * WORLD_TO_SCREEN_SCALE,
-          cy + (e.y - playerPosition.z) * WORLD_TO_SCREEN_SCALE,
-          e.size * 1.2
-        );
-      }
-
-      
       for (const effect of statusEffects) {
         if (effect.type !== "burn") continue;
         const enemy = enemies.find(e => e.id === effect.enemyId);

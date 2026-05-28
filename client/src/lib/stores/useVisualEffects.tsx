@@ -70,8 +70,8 @@ interface VisualEffectsState {
   explosionEffects: ExplosionEffect[];
   lightningEffects: LightningEffect[];
 
-  addImpact: (position: THREE.Vector3, size?: number) => void;
-  addExplosion: (position: THREE.Vector3, count?: number, radius?: number) => void;
+  addImpact: (position: THREE.Vector3, size: number) => void;
+  addExplosion: (position: THREE.Vector3, radius: number, count?: number) => void;
   addDamageNumber: (x: number, y: number, damage: number) => void;
   addLightning: (x: number, y: number, angle: number) => void;
   updateEffects: (delta: number) => void;
@@ -86,7 +86,7 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
   lightningEffects: [],
 
   // ---------------- Impact Effects ----------------
-  addImpact: (position: THREE.Vector3, size = 48) => {
+  addImpact: (position: THREE.Vector3, size: number) => {
     const MAX_IMPACT_EFFECTS = 50;
 
     set(state => {
@@ -112,25 +112,16 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
     });
   },
   // ---------------- Explosion ----------------
-  addExplosion: (position, count = 1, radius = 0) => {
+  addExplosion: (position, radius, count = 1) => {
     const particles: Particle[] = [];
 
-    // Explosion particles
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 1 + Math.random() * 10;
-      const colors = ["#ff4444", "#ff6666", "#ff8888", "#ffaa44"];
-      const color = colors[Math.floor(Math.random() * colors.length)];
-    }
-
-    const pixelDiameter = radius > 0 ? Math.max(radius * 50, 64) : 110;
     const explosionEffect: ExplosionEffect = {
       id: `big_explosion_${Date.now()}`,
       x: position.x,
       y: position.z,
       life: 0,
-      maxLife: 0.4,
-      size: pixelDiameter,
+      maxLife: 0.6,
+      size: radius,
       radius,
       frameIndex: 0,
       totalFrames: 6,
@@ -172,7 +163,7 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
     set(state => ({
       lightningEffects: [...state.lightningEffects, {
         id: `lightning_${Date.now()}_${Math.random()}`,
-        x, y, angle, life: 0, maxLife: 0.36, frameIndex: 0, totalFrames: 6,
+        x, y, angle, life: 0, maxLife: 0.5, frameIndex: 0, totalFrames: 6,
       }],
     }));
   },

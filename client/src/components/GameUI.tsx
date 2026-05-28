@@ -786,7 +786,7 @@ drawBitmapText(ctx, "R - Reload", w * 0.75, h * 0.90, font, fontWhiteImage, {
             display: flex;
             gap: 0px;
             margin-top: 35px;
-            
+            user-select: none;
           }
 
           .heart {
@@ -809,6 +809,7 @@ drawBitmapText(ctx, "R - Reload", w * 0.75, h * 0.90, font, fontWhiteImage, {
             display: flex;
             gap: 0px;
             margin-left: -15px;
+            user-select: none;
           }
 
           .ammo {

@@ -176,15 +176,9 @@ export function DevTools() {
           position: "fixed",
           top: "10px",
           right: "10px",
-          backgroundColor: "rgba(0, 0, 0, 0.5)",
-          color: "#fff",
-          padding: "5px 10px",
-          borderRadius: "5px",
-          zIndex: 1000,
-          fontSize: "12px",
         }}
       >
-        Press O to open DevTools
+
       </div>
     );
   }
