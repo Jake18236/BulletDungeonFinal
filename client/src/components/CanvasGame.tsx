@@ -954,7 +954,7 @@ const handleMouseMove = (e: MouseEvent) => {
                 );
 
                 const projectileExplosive = ps.lastAmmoExplosive && ammo === 1
-                  ? { radius: 6, damage: 50 }
+                  ? { radius: 192, damage: 50 }
                   : stats.explosive;
 
                 const projectileBurn = ps.incendiary
@@ -1455,7 +1455,9 @@ const handleMouseMove = (e: MouseEvent) => {
         
         drawTreeLightning(eyeCtx, gameplayElapsedMsRef.current);
         drawEnemyProjectiles(eyeCtx);
+        drawExplosionEffects(eyeCtx);
         drawProjectilesAndTrails(eyeCtx, phase !== "playing", position);
+        drawEnemyDeaths(eyeCtx, gameplayElapsedMsRef.current);
         drawSummons(eyeCtx, animationNowMs);
         drawSummonLightning(eyeCtx);
         drawDamageNumbers(eyeCtx); 
@@ -1464,10 +1466,8 @@ const handleMouseMove = (e: MouseEvent) => {
       drawPlayer(ctx, animationNowMs);
       
       drawStatusEffects(ctx, animationNowMs);
-      drawExplosionEffects(ctx);
+      
       drawImpactEffects(ctx);
-
-      drawEnemyDeaths(ctx, gameplayElapsedMsRef.current);
       
       
       drawReloadIndicator(ctx);
@@ -2588,7 +2588,7 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     enemyDeathAnimationsRef.current = nextAnimations;
   };
 
-usePlayer.setState({homing: true});
+usePlayer.setState({lastAmmoExplosive: true});
 
   const drawSummons = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     const summons = useSummons.getState().summons;

@@ -158,7 +158,7 @@ export const useHit = create<HitState>((set, get) => ({
     const { addExplosion, addDamageNumber } = useVisualEffects.getState();
     const { playHit } = useAudio.getState();
 
-    addExplosion(center, 1, radius);
+    addExplosion(center, radius, 1);
 
     allEnemies.forEach(enemy => {
       const distance = enemy.position.distanceTo(center);
