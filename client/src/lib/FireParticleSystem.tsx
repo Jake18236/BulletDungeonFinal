@@ -1,6 +1,6 @@
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-type FireParticle = {
+export type FireParticle = {
   x: number;
   z: number;
   vx: number;

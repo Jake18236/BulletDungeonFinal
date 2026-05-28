@@ -12,7 +12,7 @@ const WORLD_TO_SCREEN_SCALE = TILE_SIZE;
 
 export interface Summon {
   id: string;
-  type: "ghost" | "scythe" | "spear" | "dagger" | "lightning";
+  type: "ghost" | "scythe" | "dagger" | "lightning";
   position: THREE.Vector3;
   rotation: number;
   facing?: number; 
@@ -22,7 +22,7 @@ export interface Summon {
   fireTimer?: number;
   shootAnimTimer?: number;
 
-  // Orbit-specific (scythe, spear, lightning)
+  // Orbiting summons
   orbitAngle: number;
   orbitRadius: number;
   orbitSpeed: number;
@@ -72,13 +72,6 @@ interface SummonState {
   curseDamageBonus: number;
   scytheSpeedBonus: boolean;
   scytheDamageBonus: boolean;
-
-  spearDamage: number;
-  spearCount: number;
-  spearHolyBonus: boolean;
-  soulDrain: boolean;
-  soulKnight: boolean;
-  soulHearts: number;
 
   pulsingSummons: boolean;
   pulseTimer: number;
@@ -130,9 +123,6 @@ export const useSummons = create<SummonState>((set, get) => ({
   scytheSpeedBonus: false,
   scytheDamageBonus: false,
 
-  spearDamage: 20,
-  spearCount: 2,
-  spearHolyBonus: false,
   soulDrain: false,
   soulKnight: false,
   soulHearts: 0,
@@ -191,22 +181,6 @@ export const useSummons = create<SummonState>((set, get) => ({
       };
 
       set(state => ({ summons: [...state.summons, summon] }));
-    }
-    else if (type === "spear") {
-      const state = get();
-      for (let i = 0; i < state.spearCount; i++) {
-        const summon: Summon = {
-          id: `spear_${Date.now()}_${i}`,
-          type: "spear",
-          position: playerPos.clone(),
-          rotation: 0,
-          orbitAngle: (i / state.spearCount) * Math.PI * 2,
-          orbitRadius: 35,
-          orbitSpeed: 4,
-        };
-
-        set(state => ({ summons: [...state.summons, summon] }));
-      }
     }
     else if (type === "dagger") {
       const state = get();
@@ -705,12 +679,6 @@ export const useSummons = create<SummonState>((set, get) => ({
     curseDamageBonus: 0,
     scytheSpeedBonus: false,
     scytheDamageBonus: false,
-    spearDamage: 20,
-    spearCount: 2,
-    spearHolyBonus: false,
-    soulDrain: false,
-    soulKnight: false,
-    soulHearts: 0,
     pulsingSummons: false,
     pulseTimer: 0,
     feedTheBeasts: false,

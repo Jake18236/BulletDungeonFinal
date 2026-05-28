@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useGame } from "./lib/stores/useGame";
-import CanvasGame from "./components/CanvasGame";
+import CanvasGame, { CANVAS_HEIGHT, CANVAS_WIDTH } from "./components/CanvasGame";
 import GameUI from "./components/GameUI";
 import DevTools from "./components/DevTools";
 
@@ -16,7 +16,8 @@ function App() {
         </div>
 
       <GameUI />
-      <DevTools />
+      
+
     </div>
     </div>
   );

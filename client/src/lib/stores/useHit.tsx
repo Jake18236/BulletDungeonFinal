@@ -205,7 +205,7 @@ export const useHit = create<HitState>((set, get) => ({
     target.health -= damage;
     chainedEnemies.add(target.id);
 
-    addImpact(target.position.clone(), "#00ffff");
+    addImpact(target.position.clone());
     addDamageNumber(target.position.x, target.position.z, damage);
 
     playHit();

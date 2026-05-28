@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { useGame } from "../lib/stores/useGame";
 import { usePlayer } from "../lib/stores/usePlayer";
 import { useAudio } from "../lib/stores/useAudio";
-import { useDungeon } from "../lib/stores/useDungeon";
 import { useEnemies } from "../lib/stores/useEnemies";
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from "../components/CanvasGame"
 
@@ -424,7 +423,7 @@ if (!showLevelUpScreen || availableUpgrades.length === 0) return null;
 export default function GameUI() {
   const { phase, start, restart } = useGame();
   const { hearts, maxHearts, ammo, maxAmmo, xp, xpToNextLevel, level, showLevelUpScreen, reset: resetPlayer } = usePlayer();
-  const { generateDungeon, reset: resetDungeon } = useDungeon();
+
   const { reset: resetEnemies, elapsedTime } = useEnemies();
   const { isMuted, toggleMute, masterVolume, setVolume } = useAudio();
   const [menuScreen, setMenuScreen] = useState<"main" | "settings" | "controls">("main");
@@ -441,8 +440,6 @@ export default function GameUI() {
   const handleStart = () => {
     resetPlayer();
     resetEnemies();
-    resetDungeon();
-    generateDungeon();
     start();
   };
   const [xpFlashIndex, setXpFlashIndex] = useState(0);
@@ -668,7 +665,7 @@ drawBitmapText(ctx, "R - Reload", w * 0.75, h * 0.90, font, fontWhiteImage, {
   if (phase === "ended") {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-90 z-50">
-        <Card className="w-96 bg-gray-900 text-white border-gray-700">
+
           <CardContent className="p-8 text-center">
             <h2 className="text-3xl font-bold mb-4 text-red-400">Game Over</h2>
             <p className="text-gray-300 mb-4">You have fallen in the dungeon...</p>
@@ -676,7 +673,7 @@ drawBitmapText(ctx, "R - Reload", w * 0.75, h * 0.90, font, fontWhiteImage, {
               Try Again
             </Button>
           </CardContent>
-        </Card>
+       
       </div>
     );
   }

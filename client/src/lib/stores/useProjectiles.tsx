@@ -223,20 +223,49 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       // --- Homing ---
       if (proj.homing && enemies.length > 0) {
         const nearest = enemies.reduce(
-          (acc, e) => {
-            if (proj.piercedEnemies.has(e.id)) return acc;
-            const d = proj.position.distanceTo(e.position);
-            return d < acc.dist ? { enemy: e, dist: d } : acc;
-          },
-          { enemy: null as any, dist: Infinity }
-        );
-        if (nearest.enemy && nearest.dist < 50) {
+            (acc, e) => {
+              if (proj.piercedEnemies.has(e.id)) return acc;
+
+              const toEnemy = e.position
+                .clone()
+                .sub(proj.position);
+
+              const dist = toEnemy.length();
+
+              const projectileDir =
+                proj.velocity.clone().normalize();
+
+              const targetDir =
+                toEnemy.normalize();
+
+              const alignment =
+                projectileDir.dot(targetDir);
+
+              // Ignore enemies too far behind
+              if (alignment < 0) return acc;
+
+              return dist < acc.dist
+                ? { enemy: e, dist }
+                : acc;
+            },
+            { enemy: null as any, dist: Infinity }
+          );
+        if (nearest.enemy && nearest.dist < 20) {
           const toTarget = nearest.enemy.position.clone().sub(proj.position);
           const dir = toTarget.clone().normalize();
-          const pullStrength = THREE.MathUtils.clamp(((50 - nearest.dist) / 50) * 2 , 0.08, 1);
-          const magneticAcceleration = dir.multiplyScalar(proj.speed * 18 * pullStrength * delta);
-          proj.velocity.add(magneticAcceleration);
-          const maxSpeed = proj.speed * (1 + 200.35 * pullStrength);
+          const pullStrength = THREE.MathUtils.clamp(((20 - nearest.dist) / 20) * 8 , 0.8, 1);
+          const desiredVelocity = dir.multiplyScalar(proj.speed);
+
+          const steering = desiredVelocity.sub(proj.velocity);
+
+          // stronger steering when close
+          const steerStrength =
+            THREE.MathUtils.clamp(((20 - nearest.dist) / 20) * 20, 6, 25);
+
+          steering.multiplyScalar(steerStrength * delta);
+
+          proj.velocity.add(steering);
+          const maxSpeed = proj.speed * (1 + 0.35 * pullStrength);
           if (proj.velocity.length() > maxSpeed) {
             proj.velocity.normalize().multiplyScalar(maxSpeed);
           }

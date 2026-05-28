@@ -4,6 +4,9 @@ import { useEnemies } from "../lib/stores/useEnemies";
 import { useProjectiles } from "../lib/stores/useProjectiles";
 import { useGame } from "../lib/stores/useGame";
 import { useVisualEffects } from "../lib/stores/useVisualEffects";
+import { useSummons } from "../lib/stores/useSummons";
+import { useParticles } from "../lib/stores/useParticles";
+import { FireParticleSystem } from "../lib/FireParticleSystem";
 import * as THREE from "three";
 
 const DEVTOOLS_STYLES = {
@@ -13,12 +16,11 @@ const DEVTOOLS_STYLES = {
     right: "10px",
     width: "350px",
     maxHeight: "90vh",
-    backgroundColor: "rgba(0, 0, 0, 0.85)",
-    border: "2px solid #444",
-    borderRadius: "8px",
-    padding: "10px",
+    backgroundColor: "#272030",
+    border: "1px solid #f5d6c1",
+    padding: "15px",
     overflowY: "auto" as const,
-    zIndex: 10000,
+    zIndex: 1000,
     color: "#fff",
     fontSize: "12px",
     fontFamily: "monospace",
@@ -74,12 +76,15 @@ export function DevTools() {
   const [spawnType, setSpawnType] = useState<"basic" | "tank" | "eyeball">("basic");
   const [spawnCount, setSpawnCount] = useState(1);
   const [xpAmount, setXpAmount] = useState(100);
+  const [upgradeInput, setUpgradeInput] = useState("");
 
   const player = usePlayer();
   const enemies = useEnemies();
   const projectiles = useProjectiles();
   const game = useGame();
   const vfx = useVisualEffects();
+  const summons = useSummons();
+  const particles = useParticles();
 
   // Toggle with 'O' key
   useEffect(() => {
@@ -155,6 +160,15 @@ export function DevTools() {
     });
   };
 
+  const addUpgrade = () => {
+    if (upgradeInput.trim()) {
+      usePlayer.setState(state => ({
+        takenUpgrades: new Set([...state.takenUpgrades, upgradeInput.trim()])
+      }));
+      setUpgradeInput("");
+    }
+  };
+
   if (!isOpen) {
     return (
       <div
@@ -166,7 +180,7 @@ export function DevTools() {
           color: "#fff",
           padding: "5px 10px",
           borderRadius: "5px",
-          zIndex: 10000,
+          zIndex: 1000,
           fontSize: "12px",
         }}
       >
@@ -187,6 +201,70 @@ export function DevTools() {
         <div style={DEVTOOLS_STYLES.row}>
           <span style={DEVTOOLS_STYLES.label}>FPS: </span>
           <span style={DEVTOOLS_STYLES.value}>{fps}</span>
+        </div>
+      </div>
+
+      {/* UPGRADE CONSOLE */}
+      <div style={DEVTOOLS_STYLES.section}>
+        <div style={{ fontWeight: "bold", marginBottom: "5px" }}>Upgrade Console</div>
+        <div style={DEVTOOLS_STYLES.row}>
+          <input
+            type="text"
+            value={upgradeInput}
+            onChange={(e) => setUpgradeInput(e.target.value)}
+            onKeyPress={(e) => e.key === "Enter" && addUpgrade()}
+            placeholder="upgrade id"
+            style={{ ...DEVTOOLS_STYLES.input, flex: 1 }}
+          />
+          <button style={DEVTOOLS_STYLES.button} onClick={addUpgrade}>Add</button>
+        </div>
+        <div style={{ fontSize: "10px", color: "#888", marginTop: "4px" }}>
+          Press Enter to add upgrade
+        </div>
+      </div>
+
+      {/* COUNTERS */}
+      <div style={DEVTOOLS_STYLES.section}>
+        <div style={{ fontWeight: "bold", marginBottom: "5px" }}>Entity Counters</div>
+        <div style={DEVTOOLS_STYLES.row}>
+          <span style={DEVTOOLS_STYLES.label}>Enemies: </span>
+          <span style={DEVTOOLS_STYLES.value}>{enemies.enemies.length}</span>
+        </div>
+        <div style={DEVTOOLS_STYLES.row}>
+          <span style={DEVTOOLS_STYLES.label}>Projectiles: </span>
+          <span style={DEVTOOLS_STYLES.value}>{projectiles.projectiles.length}</span>
+        </div>
+        <div style={DEVTOOLS_STYLES.row}>
+          <span style={DEVTOOLS_STYLES.label}>Summons: </span>
+          <span style={DEVTOOLS_STYLES.value}>{summons.summons.length}</span>
+        </div>
+        <div style={DEVTOOLS_STYLES.row}>
+          <span style={DEVTOOLS_STYLES.label}>FireParticles: </span>
+          <span style={DEVTOOLS_STYLES.value}>{particles.fireParticleCount}</span>
+        </div>
+        <div style={DEVTOOLS_STYLES.row}>
+          <span style={DEVTOOLS_STYLES.label}>TrailParticles: </span>
+          <span style={DEVTOOLS_STYLES.value}>{particles.trailParticleCount}</span>
+        </div>
+        <div style={DEVTOOLS_STYLES.row}>
+          <span style={DEVTOOLS_STYLES.label}>Damage Numbers: </span>
+          <span style={DEVTOOLS_STYLES.value}>{vfx.damageNumbers.length}</span>
+        </div>
+        <div style={DEVTOOLS_STYLES.row}>
+          <span style={DEVTOOLS_STYLES.label}>Impact Effects: </span>
+          <span style={DEVTOOLS_STYLES.value}>{vfx.impactEffects.length}</span>
+        </div>
+        <div style={DEVTOOLS_STYLES.row}>
+          <span style={DEVTOOLS_STYLES.label}>Explosion Effects: </span>
+          <span style={DEVTOOLS_STYLES.value}>{vfx.explosionEffects.length}</span>
+        </div>
+        <div style={DEVTOOLS_STYLES.row}>
+          <span style={DEVTOOLS_STYLES.label}>Lightning Effects: </span>
+          <span style={DEVTOOLS_STYLES.value}>{vfx.lightningEffects.length}</span>
+        </div>
+        <div style={DEVTOOLS_STYLES.row}>
+          <span style={DEVTOOLS_STYLES.label}>Status Effects: </span>
+          <span style={DEVTOOLS_STYLES.value}>{summons.statusEffects.length}</span>
         </div>
       </div>
 
@@ -231,7 +309,7 @@ export function DevTools() {
 
       {/* TOGGLES */}
       <div style={DEVTOOLS_STYLES.section}>
-        <div style={{ fontWeight: "bold", marginBottom: "5px" }}>Toggles</div>
+        <div style={{ fontWeight: "bold", marginBottom: "5px" }}>Toggles & Actions</div>
         <div style={DEVTOOLS_STYLES.row}>
           <button style={DEVTOOLS_STYLES.button} onClick={() => setGodMode(!godMode)}>
             God Mode: {godMode ? "ON" : "OFF"}
@@ -239,14 +317,17 @@ export function DevTools() {
         </div>
         <div style={DEVTOOLS_STYLES.row}>
           <button style={DEVTOOLS_STYLES.button} onClick={healPlayer}>Heal</button>
-          <button style={DEVTOOLS_STYLES.button} onClick={refillAmmo}>Refill Ammo</button>
+          <button style={DEVTOOLS_STYLES.button} onClick={refillAmmo}>Refill</button>
           <button style={DEVTOOLS_STYLES.button} onClick={teleportToCenter}>Center</button>
+        </div>
+        <div style={DEVTOOLS_STYLES.row}>
+          <button style={DEVTOOLS_STYLES.button} onClick={clearProjectiles}>Clear Projectiles</button>
         </div>
       </div>
 
       {/* ENEMIES */}
       <div style={DEVTOOLS_STYLES.section}>
-        <div style={{ fontWeight: "bold", marginBottom: "5px" }}>Enemies ({enemies.enemies.length})</div>
+        <div style={{ fontWeight: "bold", marginBottom: "5px" }}>Spawn Enemies</div>
         <div style={DEVTOOLS_STYLES.row}>
           <select
             value={spawnType}
@@ -268,7 +349,7 @@ export function DevTools() {
           <button style={DEVTOOLS_STYLES.button} onClick={spawnEnemies}>Spawn</button>
         </div>
         <div style={DEVTOOLS_STYLES.row}>
-          <button style={DEVTOOLS_STYLES.button} onClick={clearEnemies}>Clear All</button>
+          <button style={DEVTOOLS_STYLES.button} onClick={clearEnemies}>Clear</button>
           <button style={DEVTOOLS_STYLES.button} onClick={killAllEnemies}>Kill All</button>
         </div>
       </div>
@@ -298,46 +379,6 @@ export function DevTools() {
               <span style={{ color: "#888" }}>{id}</span>
             </div>
           ))}
-        </div>
-      </div>
-
-      {/* PERFORMANCE */}
-      <div style={DEVTOOLS_STYLES.section}>
-        <div style={{ fontWeight: "bold", marginBottom: "5px" }}>Performance</div>
-        <div style={DEVTOOLS_STYLES.row}>
-          <span style={DEVTOOLS_STYLES.label}>Projectiles: </span>
-          <span style={DEVTOOLS_STYLES.value}>{projectiles.projectiles.length}</span>
-        </div>
-        <div style={DEVTOOLS_STYLES.row}>
-          <span style={DEVTOOLS_STYLES.label}>XP Orbs: </span>
-          <span style={DEVTOOLS_STYLES.value}>{enemies.xpOrbs.length}</span>
-        </div>
-        <div style={DEVTOOLS_STYLES.row}>
-          <span style={DEVTOOLS_STYLES.label}>Particles: </span>
-          <span style={DEVTOOLS_STYLES.value}>{vfx.particles.length}</span>
-        </div>
-        <div style={DEVTOOLS_STYLES.row}>
-          <span style={DEVTOOLS_STYLES.label}>Damage Numbers: </span>
-          <span style={DEVTOOLS_STYLES.value}>{vfx.damageNumbers.length}</span>
-        </div>
-        <div style={DEVTOOLS_STYLES.row}>
-          <button style={DEVTOOLS_STYLES.button} onClick={clearProjectiles}>Clear Projectiles</button>
-          <button style={DEVTOOLS_STYLES.button} onClick={() => vfx.reset()}>Clear VFX</button>
-        </div>
-      </div>
-
-      {/* TIME */}
-      <div style={DEVTOOLS_STYLES.section}>
-        <div style={{ fontWeight: "bold", marginBottom: "5px" }}>Game Time</div>
-        <div style={DEVTOOLS_STYLES.row}>
-          <span style={DEVTOOLS_STYLES.label}>Elapsed: </span>
-          <span style={DEVTOOLS_STYLES.value}>
-            {Math.floor(enemies.elapsedTime / 60)}:{Math.floor(enemies.elapsedTime % 60).toString().padStart(2, "0")}
-          </span>
-        </div>
-        <div style={DEVTOOLS_STYLES.row}>
-          <span style={DEVTOOLS_STYLES.label}>Phase: </span>
-          <span style={DEVTOOLS_STYLES.value}>{game.phase}</span>
         </div>
       </div>
     </div>

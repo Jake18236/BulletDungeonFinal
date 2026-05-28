@@ -12,6 +12,7 @@ import { useHit } from "../lib/stores/useHit";
 import { useSummons } from "../lib/stores/useSummons";
 import { useCamera } from "../lib/stores/useCamera";
 import { useVisualEffects } from "../lib/stores/useVisualEffects";
+import { useParticles } from "../lib/stores/useParticles";
 import { GameCamera2D, getPixelPerfectScale } from "../lib/camera";
 import fontJson from "./Lantern.json";
 import { buildFont, drawBitmapText } from "../lib/font";
@@ -35,6 +36,7 @@ import {
   bossLaserContinueSprite,
   bossLaserWindupSprite,
 } from "./SpriteProps";
+import { DevTools } from "./DevTools";
 
 const font = buildFont(fontJson);
 
@@ -521,7 +523,6 @@ useEffect(() => {
 
   const poolRef = useRef<TrailParticle[]>([]);
   const writeIndexRef = useRef(0);
-  const activeParticlesRef = useRef<TrailParticle[]>([]);
 
   if (poolRef.current.length === 0) {
     for (let i = 0; i < poolSize; i++) {
@@ -794,6 +795,10 @@ const handleMouseMove = (e: MouseEvent) => {
           playHit();
         });
         fireSystem.current.update();
+        
+        // Update fire particle count in store
+        const activeFireParticles = fireSystem.current.particles.filter(p => p.active).length;
+        useParticles.setState({ fireParticleCount: activeFireParticles });
 
 
         updateStatusEffects(delta, enemies, (enemyId, damage) => {
@@ -1892,8 +1897,6 @@ ctx.imageSmoothingEnabled = false;
       p.maxLife = trailLife;
       p.projectileId = projectileId;
 
-      // Add to active particles array for efficient rendering
-      activeParticlesRef.current.push(p);
       
       writeIndexRef.current = (writeIndexRef.current + 1) % poolSize;
     }
@@ -1975,46 +1978,54 @@ const drawProjectilesAndTrails = (
       Math.floor(proj.size)
     );
   }
+// =====================================================
+// TRAIL PARTICLES
+// =====================================================
+ctx.fillStyle = "#f5d6c1";
 
-  // =====================================================
-  // TRAIL PARTICLES - OPTIMIZED WITH ACTIVE TRACKING
-  // =====================================================
-  ctx.fillStyle = "#f5d6c1";
-  const activeParticles = activeParticlesRef.current;
-  
-  // Update and prune active particles
-  for (let i = activeParticles.length - 1; i >= 0; i--) {
-    const p = activeParticles[i];
+let particleCount = 0;
 
-    if (p.life <= 0) {
-      activeParticles.splice(i, 1);
-      continue;
-    }
+for (let i = 0; i < poolSize; i++) {
+  const p = poolRef.current[i];
 
-    // Remove particles from inactive projectiles
-    if (p.projectileId && !activeProjectileIds.has(p.projectileId)) {
-      p.life = 0;
-      activeParticles.splice(i, 1);
-      continue;
-    }
+  // dead particle
+  if (p.life <= 0) continue;
 
-    if (!isPaused) {
-      p.life -= 0.016;
-    }
-
-    const t = p.life / p.maxLife;
-    const size = p.size * (0.5 + t);
-
-    const screenPos = worldToScreen(p.x, p.y);
-
-    ctx.fillRect(
-      snapToGrid(screenPos.x - size / 2),
-      snapToGrid(screenPos.y - size / 2),
-      snapToGrid(size),
-      snapToGrid(size)
-    );
+  // projectile removed
+  if (
+    p.projectileId &&
+    !activeProjectileIds.has(p.projectileId)
+  ) {
+    p.life = 0;
+    continue;
   }
 
+  // update life
+  if (!isPaused) {
+    p.life -= 0.016;
+
+    if (p.life <= 0) continue;
+  }
+
+  particleCount++;
+
+  const t = p.life / p.maxLife;
+  const size = p.size * (0.5 + t);
+
+  const screenPos = worldToScreen(p.x, p.y);
+
+  ctx.fillRect(
+    snapToGrid(screenPos.x - size / 2),
+    snapToGrid(screenPos.y - size / 2),
+    snapToGrid(size),
+    snapToGrid(size)
+  );
+}
+
+// debug counter
+useParticles.setState({
+  trailParticleCount: particleCount
+});
   ctx.restore();
 };
 
@@ -2610,6 +2621,8 @@ usePlayer.setState({homing: true});
     const summons = useSummons.getState().summons;
     const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
     
+
+
     for (const summon of summons) {
       // Skip summons far outside viewport
       if (!isObjectInViewport(summon.position.x, summon.position.z, position.x, position.z, 150)) {
@@ -2618,9 +2631,7 @@ usePlayer.setState({homing: true});
 
       const screenX = snapToGrid(centerX + ((summon.position.x - position.x) * TILE_SIZE) / 2);
       const screenY = snapToGrid(centerY + ((summon.position.z - position.z) * TILE_SIZE) / 2);
-      ctx.save();
-      ctx.translate(screenX, screenY);
-      ctx.imageSmoothingEnabled = false;
+
       if (summon.type === "ghost") {
         const sprite = SummonSprites.ghostSheet;
         const isSheetReady = sprite.complete && sprite.naturalWidth > 0 && sprite.naturalHeight > 0;
@@ -2645,7 +2656,6 @@ usePlayer.setState({homing: true});
         const drawScale = 2;
         const drawW = frameW * drawScale;
         const drawH = frameH * drawScale;
-
         ctx.save();
         ctx.translate(screenX, screenY);
         ctx.imageSmoothingEnabled = false;
@@ -2655,7 +2665,7 @@ usePlayer.setState({homing: true});
 
         ctx.drawImage(sprite, sx, sy, frameW, frameH, -drawW / 2, -drawH / 2, drawW, drawH);
         ctx.restore();
-        continue;
+
       }
 
       if (summon.type === "dagger") {
@@ -2671,7 +2681,6 @@ usePlayer.setState({homing: true});
             const y = centerY + ((p.z - position.z) * TILE_SIZE) / 2;
             const t = i / summon.trail.length;
             const size = Math.floor(40 * (1 - t * 0.9));
-
             ctx.save();
             ctx.imageSmoothingEnabled = false;
             ctx.drawImage(img, x - size / 2, y - size / 2, size, size);
@@ -2684,14 +2693,12 @@ usePlayer.setState({homing: true});
         const scale = 1.5;
         const w = sprite.naturalWidth * scale;
         const h = sprite.naturalHeight * scale;
-
         ctx.save();
         ctx.translate(screenX, screenY);
         ctx.rotate(summon.rotation);
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(sprite, -w / 2, -h / 2, w, h);
         ctx.restore();
-        continue;
       }
 
       
@@ -2704,60 +2711,18 @@ usePlayer.setState({homing: true});
           const scale = 3;
           const w = sprite.naturalWidth * scale;
           const h = sprite.naturalHeight * scale;
+          ctx.save();
+          ctx.translate(screenX, screenY);
           ctx.rotate(summon.rotation ?? 0);
           ctx.drawImage(sprite, -w / 2, -h / 2, w, h);
+          ctx.restore();
         }
 
       } 
-      if (summon.type === "spear") {
-        ctx.fillStyle = "#ffaa00";
-        ctx.strokeStyle = "#cc8800";
-        ctx.lineWidth = 2;
-
-        ctx.beginPath();
-        ctx.moveTo(0, -25);
-        ctx.lineTo(5, -15);
-        ctx.lineTo(2, -12);
-        ctx.lineTo(0, -18);
-        ctx.lineTo(-2, -12);
-        ctx.lineTo(-5, -15);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.fillStyle = "#8b4513";
-        ctx.fillRect(-2, -12, 4, 30);
-
-        ctx.globalAlpha = 0.4;
-        ctx.fillStyle = "#ffaa00";
-        ctx.beginPath();
-        ctx.arc(0, -15, 10, 0, Math.PI * 2);
-        ctx.fill();
-      } 
-      
-
-      ctx.restore();
     }
   };
 
-
-type FireParticle = {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  frame: number;
-  active: boolean;
-};
 usePlayer.setState({ incendiary: true});
-const pool: FireParticle[] = Array.from({ length: 300 }, () => ({
-  x: 0, y: 0,
-  vx: 0, vy: 0,
-  life: 0,
-  frame: 0,
-  active: false,
-}));
 
   const drawStatusEffects = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -2889,6 +2854,7 @@ const { ammo } = usePlayer.getState();
           imageRendering: "pixelated",
         }}
       />
+      <DevTools />
       <canvas
   ref={cursorCanvasRef}
   width={CANVAS_WIDTH}
