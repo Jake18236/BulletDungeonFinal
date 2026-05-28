@@ -52,7 +52,7 @@ interface HitState {
 
 export const useHit = create<HitState>((set, get) => ({
   applyHit: (params, allEnemies = []) => {
-    const { enemy, damage, impactPos, color = "#ffffff", knockbackStrength = 8 } = params;
+    const { enemy, damage, impactPos, knockbackStrength = 8 } = params;
     
     const { addImpact, addDamageNumber } = useVisualEffects.getState();
     const { playHit } = useAudio.getState();
@@ -62,8 +62,8 @@ export const useHit = create<HitState>((set, get) => ({
     enemy.hitFlash = 0.08;
     
     if (impactPos) {
-      addImpact(impactPos);
-    }
+      addImpact(impactPos, 48);
+    } 
     addDamageNumber(enemy.position.x + (Math.random() * 2 - 1), 
     enemy.position.z + (Math.random() * 2 - 1), 
     damage);
@@ -89,7 +89,7 @@ export const useHit = create<HitState>((set, get) => ({
         dir.normalize();
         
         // Apply knockback gradually over time (0.15 seconds) for smoother acceleration
-        const knockbackDurationMs = 0.15;
+        const knockbackDurationMs = 0.1;
         if (!enemy.knockbackAcceleration) {
           enemy.knockbackAcceleration = new THREE.Vector3();
         }
@@ -169,7 +169,7 @@ export const useHit = create<HitState>((set, get) => ({
         enemy.health -= finalDamage;
 
         const { addImpact } = useVisualEffects.getState();
-        addImpact(enemy.position.clone());
+        addImpact(enemy.position.clone(), 64);
         addDamageNumber(enemy.position.x, enemy.position.z, finalDamage);
 
         if (!enemy.velocity) enemy.velocity = new THREE.Vector3();

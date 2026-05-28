@@ -1686,7 +1686,7 @@ ctx.imageSmoothingEnabled = false;
         const h = sprite.height * scale;
 
         ctx.save();
-        ctx.imageSmoothingEnabled = false; // pixelated
+
         ctx.translate(screenX, screenY);
         ctx.drawImage(sprite, -w / 2, -h / 2, w, h);
         ctx.restore();

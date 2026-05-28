@@ -70,7 +70,7 @@ interface VisualEffectsState {
   explosionEffects: ExplosionEffect[];
   lightningEffects: LightningEffect[];
 
-  addImpact: (position: THREE.Vector3, size?: number) => void;
+  addImpact: (position: THREE.Vector3, size: number) => void;
   addExplosion: (position: THREE.Vector3, count?: number, radius?: number) => void;
   addDamageNumber: (x: number, y: number, damage: number) => void;
   addLightning: (x: number, y: number, angle: number) => void;
@@ -86,7 +86,7 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
   lightningEffects: [],
 
   // ---------------- Impact Effects ----------------
-  addImpact: (position: THREE.Vector3, size = 48) => {
+  addImpact: (position: THREE.Vector3, size: number) => {
     const MAX_IMPACT_EFFECTS = 50;
 
     set(state => {
@@ -172,7 +172,7 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
     set(state => ({
       lightningEffects: [...state.lightningEffects, {
         id: `lightning_${Date.now()}_${Math.random()}`,
-        x, y, angle, life: 0, maxLife: 0.36, frameIndex: 0, totalFrames: 6,
+        x, y, angle, life: 0, maxLife: 0.5, frameIndex: 0, totalFrames: 6,
       }],
     }));
   },
