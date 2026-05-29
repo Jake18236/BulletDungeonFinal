@@ -547,7 +547,6 @@ export const useSummons = create<SummonState>((set, get) => ({
               enemy,
               damage,
               impactPos: enemy.position.clone(),
-              color: "#80f6ff",
               isSummonDamage: true,
             }, enemies);
             // Energized

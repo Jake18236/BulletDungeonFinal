@@ -77,7 +77,7 @@ export interface Enemy {
 
   // BOSSS PROPERTIES:
   isBoss?: boolean;
-  bossType?: "lazarus" | "octopus";
+  bossType?: "lazarus" | "reaper";
   dashCooldown?: number;
   maxDashCooldown?: number;
   windUpTimer?: number;
@@ -97,13 +97,15 @@ export interface Enemy {
   rangedShotCooldown?: number;
   spawnSessionId?: string;
 
-  // OCTOPUS BOSS PROPERTIES:
-  octopusState?: "chasing" | "dashing" | "post_dash" | "recovering";
-  octopusDashDir?: THREE.Vector3;
-  octopusDashTimer?: number;
-  octopusDashCooldown?: number;
-  octopusPostDashTimer?: number;
-  octopusRecoverTimer?: number;
+  // REAPER BOSS PROPERTIES:
+  reaperState?: "moving" | "charging" | "dashing" | "laser_warning" | "recovering";
+  reaperMoveCooldown?: number;
+  reaperChargeTimer?: number;
+  reaperDashTimer?: number;
+  reaperLaserIndex?: number;
+  reaperLaserTimer?: number;
+  reaperLaserDir?: number;
+  reaperRecoverTimer?: number;
 
   // MAGE PROPERTIES:
   mageState?: "moving" | "casting" | "recovering";
@@ -120,7 +122,7 @@ export interface DamagePopup {
   life: number; 
 }
 
-type SpawnSessionEnemyType = "basic" | "tank" | "eyeball" | "lazarus" | "octopus" | "mage";
+type SpawnSessionEnemyType = "basic" | "tank" | "eyeball" | "lazarus" | "reaper" | "mage";
 
 interface SpawnSession {
   id: string;
@@ -148,7 +150,7 @@ interface EnemiesState {
   updateAutoSpawn: (delta: number, playerPos: THREE.Vector3) => void;
   updateDamagePopups: (delta: number) => void;
   spawnLazarusBoss: (position: THREE.Vector3) => void;
-  spawnOctopusBoss: (position: THREE.Vector3) => void;
+  spawnReaperBoss: (position: THREE.Vector3) => void;
   spawnCrow: (position: THREE.Vector3) => void;
 }
 
@@ -201,8 +203,8 @@ export const useEnemies = create<EnemiesState>((set, get) => {
     createSession("tank_3", "tank", "3:00", "30:00", 1000, 580, 5, 10),
     //boss
     createSession("lazarus_1", "lazarus", "1:00", "30:00", 2500, 1, 1, 10),
-    //octopus boss
-    createSession("octopus_1", "octopus", "6:30", "30:00", 3500, 1, 1, 15),
+    //reaper boss
+    createSession("reaper_1", "reaper", "6:30", "30:00", 4500, 1, 1, 20),
     //mage
     createSession("mage_1", "mage", "0:00", "2:00", 35, 40, 1, 2),
     createSession("mage_2", "mage", "2:00", "4:00", 50, 12, 2, 8),
@@ -380,25 +382,25 @@ updateDamagePopups: (delta) => {
           basic: {
             health: 22,
             maxHealth: 22,
-            speed: 3.0,
+            speed: 5.0,
             hitFlash: 0,
           },
           tank: {
             health: 55,
             maxHealth: 55,
-            speed: 2.2,
+            speed: 3.2,
             hitFlash: 0,
           },
           eyeball: {
             health: 16,
             maxHealth: 16,
-            speed: 2,
+            speed: 4,
             hitFlash: 0,
           },
           mage: {
             health: 40,
             maxHealth: 40,
-            speed: 2.8,
+            speed: 3.8,
             hitFlash: 0,
           },
         };
@@ -462,27 +464,29 @@ updateDamagePopups: (delta) => {
       set((state) => ({ enemies: [...state.enemies, boss] }));
     },
 
-    spawnOctopusBoss: (position) => {
+    spawnReaperBoss: (position) => {
       const boss: Enemy = {
-        id: "boss_octopus_" + Date.now(),
+        id: "boss_reaper_" + Date.now(),
         position: position.clone(),
-        health: 3500,
-        maxHealth: 3500,
-        speed: 5.0,
+        health: 4500,
+        maxHealth: 4500,
+        speed: 3.5,
 
         type: "boss",
         velocity: new THREE.Vector3(),
         hitFlash: 0,
 
         isBoss: true,
-        bossType: "octopus",
+        bossType: "reaper",
 
-        octopusState: "chasing",
-        octopusDashDir: new THREE.Vector3(),
-        octopusDashTimer: 0,
-        octopusDashCooldown: 4.0,
-        octopusPostDashTimer: 0,
-        octopusRecoverTimer: 0,
+        reaperState: "moving",
+        reaperMoveCooldown: 3.0 + Math.random() * 2,
+        reaperChargeTimer: 0,
+        reaperDashTimer: 0,
+        reaperLaserIndex: 0,
+        reaperLaserTimer: 0,
+        reaperLaserDir: 0,
+        reaperRecoverTimer: 0,
         rotationY: 0,
       };
 
@@ -495,7 +499,7 @@ updateDamagePopups: (delta) => {
         position: position.clone(),
         health: 18,
         maxHealth: 18,
-        speed: 7.5,
+        speed: 8.5,
         type: "crow",
         velocity: new THREE.Vector3(),
         hitFlash: 0,
@@ -570,8 +574,8 @@ updateDamagePopups: (delta) => {
             continue;
           }
 
-          if (session.enemy === "octopus") {
-            get().spawnOctopusBoss(spawnPos);
+          if (session.enemy === "reaper") {
+            get().spawnReaperBoss(spawnPos);
             const currentEnemies = get().enemies;
             const spawnedBoss = currentEnemies[currentEnemies.length - 1];
             if (!spawnedBoss) continue;

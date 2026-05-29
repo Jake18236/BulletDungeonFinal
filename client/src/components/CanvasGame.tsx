@@ -40,7 +40,7 @@ import {
   bossLaserSpriteSheet,
   bossLaserContinueSprite,
   bossLaserWindupSprite,
-  octopusBossSpriteSheet,
+  reaperBossSpriteSheet,
   crowEnemySpriteSheet,
   mageEnemySpriteSheet,
 } from "./SpriteProps";
@@ -309,15 +309,15 @@ function getEnemyBodyHitRadius(enemy: {
   bossType?: string;
 }) {
   if (enemy.isBoss && enemy.bossType === "lazarus") return SHOGGOTH_CONFIG.bodyHitRadius;
-  if (enemy.isBoss && enemy.bossType === "octopus") return 3.2;
+  if (enemy.isBoss && enemy.bossType === "reaper") return 3.2;
   if (enemy.type === "crow") return 0.6;
-  if (enemy.type === "mage") return 1.0;
+  if (enemy.type === "mage") return 1.6;
   return ENEMY_TYPE_CONFIG[getEnemyType(enemy)].bodyHitRadius;
 }
 
 function getEnemyCollisionRadius(enemy: { type?: string; isBoss?: boolean; bossType?: string }) {
-  if (enemy.isBoss && enemy.bossType === "octopus") return 3.5;
-  if (enemy.type === "crow") return 0.0;
+  if (enemy.isBoss && enemy.bossType === "reaper") return 3.5;
+  if (enemy.type === "crow") return 0.5;
   if (enemy.type === "mage") return 0.9;
   return ENEMY_TYPE_CONFIG[getEnemyType(enemy)].collisionRadius;
 }
@@ -470,6 +470,7 @@ export default memo(function CanvasGame() {
   const fireSprite = useRef<HTMLImageElement>(new Image());
   const fireEmissionThrottleRef = useRef<Record<string, number>>({});
   const spriteReady = useRef(false);
+  const reaperActiveLasersRef = useRef<Array<{ originX: number; originZ: number; angle: number; life: number }>>([]);
   const lightningSpriteSheet = useRef<HTMLImageElement>(new Image());
   const lightningReady = useRef(false);
 
@@ -770,33 +771,14 @@ export default memo(function CanvasGame() {
     });
   };
 
-  const spawnOctopusProjectiles = (enemy: any) => {
-    const baseDir = new THREE.Vector3(
-      position.x - enemy.position.x,
-      0,
-      position.z - enemy.position.z,
-    ).normalize();
-    const spreadAngles = [-0.35, 0, 0.35];
-    for (const angle of spreadAngles) {
-      const cos = Math.cos(angle);
-      const sin = Math.sin(angle);
-      const dir = new THREE.Vector3(
-        baseDir.x * cos - baseDir.z * sin,
-        0,
-        baseDir.x * sin + baseDir.z * cos,
-      );
-      enemyProjectilesRef.current.push({
-        id: crypto.randomUUID(),
-        position: enemy.position.clone(),
-        velocity: dir.multiplyScalar(10),
-        damage: 2,
-        life: 3.5,
-        maxLife: 3.5,
-        size: 0.45,
-        kind: "orb",
-      });
-    }
-  };
+  const REAPER_LASER_OFFSETS = [
+    { x: -1, z: -1 },
+    { x: 1, z: 1 },
+    { x: 2, z: -1 },
+  ] as const;
+  const REAPER_BEAM_LENGTH_WORLD = 16;
+  const REAPER_BEAM_HALF_WIDTH = 0.8;
+  const REAPER_BEAM_PX = 320;
 
   useEffect(() => {
     const gameLoop = (currentTime: number) => {
@@ -1484,8 +1466,8 @@ export default memo(function CanvasGame() {
           }
 
           // #########################################################################
-          // OCTOPUS BOSS LOGIC
-          if (enemy.isBoss && enemy.bossType === "octopus") {
+          // REAPER BOSS LOGIC
+          if (enemy.isBoss && enemy.bossType === "reaper") {
             const updated = { ...enemy };
 
             const dirToPlayer = new THREE.Vector3(
@@ -1499,53 +1481,111 @@ export default memo(function CanvasGame() {
               : new THREE.Vector3(1, 0, 0);
 
             // Teleport if player is too far away
-            const TELEPORT_DIST = 130;
-            if (distToPlayer > TELEPORT_DIST) {
-              const angle = Math.random() * Math.PI * 2;
-              const offset = 15;
+            if (distToPlayer > 130) {
+              const ang = Math.random() * Math.PI * 2;
               updated.position.set(
-                position.x + Math.cos(angle) * offset,
+                position.x + Math.cos(ang) * 15,
                 0,
-                position.z + Math.sin(angle) * offset,
+                position.z + Math.sin(ang) * 15,
               );
             }
 
-            updated.rotationY = Math.atan2(safeDir.z, safeDir.x);
+            const rState = updated.reaperState ?? "moving";
 
-            const state = updated.octopusState ?? "chasing";
+            if (rState === "moving") {
+              const blend = Math.min(1, 7 * delta);
+              updated.velocity.x += (safeDir.x * updated.speed - updated.velocity.x) * blend;
+              updated.velocity.z += (safeDir.z * updated.speed - updated.velocity.z) * blend;
+              const vs = Math.hypot(updated.velocity.x, updated.velocity.z);
+              if (vs > updated.speed) {
+                updated.velocity.x = (updated.velocity.x / vs) * updated.speed;
+                updated.velocity.z = (updated.velocity.z / vs) * updated.speed;
+              }
+              updated.position.x += updated.velocity.x * delta;
+              updated.position.z += updated.velocity.z * delta;
+              updated.rotationY = Math.atan2(safeDir.z, safeDir.x);
 
-            if (state === "chasing") {
-              updated.position.x += safeDir.x * updated.speed * delta;
-              updated.position.z += safeDir.z * updated.speed * delta;
+              updated.reaperMoveCooldown = (updated.reaperMoveCooldown ?? 3) - delta;
+              if ((updated.reaperMoveCooldown ?? 0) <= 0) {
+                updated.reaperState = "charging";
+                updated.reaperChargeTimer = 1.0;
+                updated.dashDirection = safeDir.clone();
+                updated.velocity.set(0, 0, 0);
+              }
+            } else if (rState === "charging") {
+              updated.velocity.multiplyScalar(Math.max(0, 1 - 12 * delta));
+              updated.rotationY = Math.atan2(safeDir.z, safeDir.x);
+              updated.dashDirection = safeDir.clone();
+              updated.reaperChargeTimer = (updated.reaperChargeTimer ?? 1) - delta;
+              if ((updated.reaperChargeTimer ?? 0) <= 0) {
+                const dashDir = updated.dashDirection ?? safeDir;
+                updated.velocity.set(dashDir.x * 32, 0, dashDir.z * 32);
+                updated.reaperState = "dashing";
+                updated.reaperDashTimer = 0;
+              }
+            } else if (rState === "dashing") {
+              const DRAG = 5.5;
+              updated.velocity.x *= Math.max(0, 1 - DRAG * delta);
+              updated.velocity.z *= Math.max(0, 1 - DRAG * delta);
+              updated.position.x += updated.velocity.x * delta;
+              updated.position.z += updated.velocity.z * delta;
+              updated.reaperDashTimer = (updated.reaperDashTimer ?? 0) + delta;
+              const spd = Math.hypot(updated.velocity.x, updated.velocity.z);
+              if (spd < 2.5 || (updated.reaperDashTimer ?? 0) > 1.4) {
+                updated.reaperState = "laser_warning";
+                updated.reaperLaserIndex = 0;
+                const toPlayerAngle = Math.atan2(
+                  position.z - updated.position.z,
+                  position.x - updated.position.x,
+                );
+                updated.reaperLaserDir = toPlayerAngle + (Math.random() - 0.5) * (Math.PI / 2);
+                updated.reaperLaserTimer = 1.0;
+                updated.velocity.set(0, 0, 0);
+              }
+            } else if (rState === "laser_warning") {
+              updated.reaperLaserTimer = (updated.reaperLaserTimer ?? 1) - delta;
+              if ((updated.reaperLaserTimer ?? 0) <= 0) {
+                const laserIdx = updated.reaperLaserIndex ?? 0;
+                const off = REAPER_LASER_OFFSETS[laserIdx % 3];
+                const originX = updated.position.x + off.x;
+                const originZ = updated.position.z + off.z;
+                const laserAngle = updated.reaperLaserDir ?? 0;
+                const dX = Math.cos(laserAngle);
+                const dZ = Math.sin(laserAngle);
+                const tpX = position.x - originX;
+                const tpZ = position.z - originZ;
+                const along = tpX * dX + tpZ * dZ;
+                const latX = tpX - dX * along;
+                const latZ = tpZ - dZ * along;
+                const lat = Math.sqrt(latX * latX + latZ * latZ);
+                if (along >= 0 && along <= REAPER_BEAM_LENGTH_WORLD && lat <= REAPER_BEAM_HALF_WIDTH) {
+                  if (!damagedThisFrameRef.current) {
+                    applyPlayerDamage(new THREE.Vector3(originX + dX * along, 0, originZ + dZ * along));
+                    damagedThisFrameRef.current = true;
+                  }
+                }
+                reaperActiveLasersRef.current.push({ originX, originZ, angle: laserAngle, life: 0.35 });
 
-              updated.octopusDashCooldown = (updated.octopusDashCooldown ?? 4) - delta;
-              if (updated.octopusDashCooldown <= 0) {
-                updated.octopusState = "dashing";
-                updated.octopusDashTimer = 0.6;
-                updated.octopusDashDir = safeDir.clone();
-                updated.octopusDashCooldown = 8.0;
+                const nextIdx = laserIdx + 1;
+                if (nextIdx >= 10) {
+                  updated.reaperState = "recovering";
+                  updated.reaperRecoverTimer = 1.5;
+                } else {
+                  updated.reaperLaserIndex = nextIdx;
+                  const nextAngle = Math.atan2(
+                    position.z - updated.position.z,
+                    position.x - updated.position.x,
+                  );
+                  updated.reaperLaserDir = nextAngle + (Math.random() - 0.5) * (Math.PI / 2);
+                  updated.reaperLaserTimer = 1.0;
+                }
               }
-            } else if (state === "dashing") {
-              const dashDir = updated.octopusDashDir ?? safeDir;
-              const dashSpeed = updated.speed * 5;
-              updated.position.x += dashDir.x * dashSpeed * delta;
-              updated.position.z += dashDir.z * dashSpeed * delta;
-              updated.octopusDashTimer = (updated.octopusDashTimer ?? 0) - delta;
-              if ((updated.octopusDashTimer ?? 0) <= 0) {
-                updated.octopusState = "post_dash";
-                updated.octopusPostDashTimer = 0.25;
-              }
-            } else if (state === "post_dash") {
-              updated.octopusPostDashTimer = (updated.octopusPostDashTimer ?? 0) - delta;
-              if ((updated.octopusPostDashTimer ?? 0) <= 0) {
-                spawnOctopusProjectiles(updated);
-                updated.octopusState = "recovering";
-                updated.octopusRecoverTimer = 0.5;
-              }
-            } else if (state === "recovering") {
-              updated.octopusRecoverTimer = (updated.octopusRecoverTimer ?? 0) - delta;
-              if ((updated.octopusRecoverTimer ?? 0) <= 0) {
-                updated.octopusState = "chasing";
+            } else if (rState === "recovering") {
+              updated.velocity.multiplyScalar(Math.max(0, 1 - 8 * delta));
+              updated.reaperRecoverTimer = (updated.reaperRecoverTimer ?? 1.5) - delta;
+              if ((updated.reaperRecoverTimer ?? 0) <= 0) {
+                updated.reaperState = "moving";
+                updated.reaperMoveCooldown = 3.5 + Math.random() * 2;
               }
             }
 
@@ -1561,8 +1601,8 @@ export default memo(function CanvasGame() {
             if (dist > 0.5) {
               enemy.rotationY = Math.atan2(dz, dx);
               const blend = Math.min(1, 14 * delta);
-              enemy.velocity.x += ((dx / dist) * enemy.speed - enemy.velocity.x) * blend;
-              enemy.velocity.z += ((dz / dist) * enemy.speed - enemy.velocity.z) * blend;
+              enemy.velocity.x += ((dx / dist) * enemy.speed - enemy.velocity.x) * blend + Math.random();
+              enemy.velocity.z += ((dz / dist) * enemy.speed - enemy.velocity.z) * blend + Math.random();
               const vs = Math.hypot(enemy.velocity.x, enemy.velocity.z);
               if (vs > enemy.speed) {
                 enemy.velocity.x = (enemy.velocity.x / vs) * enemy.speed;
@@ -1574,13 +1614,13 @@ export default memo(function CanvasGame() {
             }
             enemy.position.x += enemy.velocity.x * delta;
             enemy.position.z += enemy.velocity.z * delta;
-            enemy.velocity.multiplyScalar(Math.pow(0.92, delta * 60));
+            enemy.velocity.multiplyScalar(Math.pow(0.92, delta * 60 + Math.random()));
             return enemy;
           }
 
           // MAGE ENEMY LOGIC
           if (enemy.type === "mage") {
-            const ENGAGE_DIST = 14;
+            const ENGAGE_DIST = 11;
             const dx = position.x - enemy.position.x;
             const dz = position.z - enemy.position.z;
             const dist = Math.sqrt(dx * dx + dz * dz);
@@ -1848,6 +1888,11 @@ export default memo(function CanvasGame() {
 
         updateXPOrbs(delta, position);
         updateEnemies(aliveEnemies);
+
+        // Decay reaper active laser beams
+        reaperActiveLasersRef.current = reaperActiveLasersRef.current
+          .map(l => ({ ...l, life: l.life - delta }))
+          .filter(l => l.life > 0);
 
         useEnemies.getState().updateAutoSpawn(delta, position);
         footstepMarksRef.current = footstepMarksRef.current
@@ -2828,8 +2873,8 @@ export default memo(function CanvasGame() {
       return;
     }
 
-    // Octopus boss is rendered via drawEnemyEyes
-    if (enemy.isBoss && enemy.bossType === "octopus") {
+    // Reaper boss is rendered via drawEnemyEyes
+    if (enemy.isBoss && enemy.bossType === "reaper") {
       return;
     }
 
@@ -3222,8 +3267,8 @@ export default memo(function CanvasGame() {
     }
 
     // -----------------------------------------------------------------------
-    // OCTOPUS BOSS RENDERING
-    if (enemy.isBoss && enemy.bossType === "octopus") {
+    // REAPER BOSS RENDERING
+    if (enemy.isBoss && enemy.bossType === "reaper") {
       const { x: centerX, y: centerY } =
         cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
       const screenX = snapToGrid(
@@ -3233,48 +3278,117 @@ export default memo(function CanvasGame() {
         centerY + ((enemy.position.z - position.z) * 50) / 2,
       );
 
-      const sheet = octopusBossSpriteSheet;
-      const hasSheet =
-        sheet.complete && sheet.naturalWidth > 0 && sheet.naturalHeight > 0;
+      const sheet = reaperBossSpriteSheet;
+      const hasSheet = sheet.complete && sheet.naturalWidth > 0 && sheet.naturalHeight > 0;
+      const COLS = 6;
+      const drawSize = 192;
+      const rState = enemy.reaperState ?? "moving";
+      const isDashing = rState === "dashing";
+      const isCharging = rState === "charging";
 
-      const COLS = 4;
-      const ROWS = 2;
-      const drawSize = 224;
+      let animFrame: number;
+      if (isDashing) {
+        animFrame = Math.floor(animationNowMs / 65) % COLS;
+      } else if (isCharging) {
+        animFrame = Math.floor(animationNowMs / 350) % COLS;
+      } else {
+        animFrame = Math.floor(animationNowMs / 130) % COLS;
+      }
 
-      if (hasSheet) {
-        const frameW = sheet.naturalWidth / COLS;
-        const frameH = sheet.naturalHeight / ROWS;
+      const frameW = hasSheet ? sheet.naturalWidth / COLS : 48;
+      const frameH = hasSheet ? sheet.naturalHeight : 48;
+      const facingRight = enemy.position.x <= position.x;
+      const vibrateX = isCharging ? Math.sin(animationNowMs * 0.05) * 4 : 0;
 
-        const isDashing =
-          enemy.octopusState === "dashing" || enemy.octopusState === "post_dash";
-
-        let frameIndex: number;
-        if (isDashing) {
-          // Frames 0-1: dash animation (row 0, col 0-1)
-          frameIndex = Math.floor(animationNowMs / 80) % 2;
-        } else {
-          // Frames 2-7: normal animation (cols 2-3 row 0, all 4 cols row 1)
-          const normalFrame = Math.floor(animationNowMs / 110) % 6;
-          frameIndex = normalFrame + 2;
+      // Motion blur ghost copies during dash
+      if (isDashing && hasSheet) {
+        const vLen = Math.hypot(enemy.velocity?.x ?? 0, enemy.velocity?.z ?? 0);
+        if (vLen > 3) {
+          const ndx = -(enemy.velocity?.x ?? 0) / vLen;
+          const ndz = -(enemy.velocity?.z ?? 0) / vLen;
+          for (let g = 1; g <= 5; g++) {
+            ctx.save();
+            ctx.globalAlpha = Math.max(0, 0.28 - g * 0.04);
+            ctx.translate(screenX + ndx * g * 14, screenY + ndz * g * 14);
+            ctx.imageSmoothingEnabled = false;
+            if (!facingRight) ctx.scale(-1, 1);
+            ctx.drawImage(sheet, animFrame * frameW, 0, frameW, frameH,
+              Math.floor(-drawSize / 2), Math.floor(-drawSize / 2), drawSize, drawSize);
+            ctx.restore();
+          }
         }
+      }
 
-        const srcCol = frameIndex % COLS;
-        const srcRow = Math.floor(frameIndex / COLS);
-
-        const facingRight = enemy.position.x <= position.x;
-
+      // Main sprite
+      if (hasSheet) {
         ctx.save();
-        ctx.translate(screenX, screenY);
+        ctx.translate(screenX + vibrateX, screenY);
         ctx.imageSmoothingEnabled = false;
         if (!facingRight) ctx.scale(-1, 1);
         if (enemy.hitFlash > 0) ctx.filter = "brightness(60)";
-        ctx.drawImage(
-          sheet,
-          srcCol * frameW, srcRow * frameH, frameW, frameH,
-          Math.floor(-drawSize / 2), Math.floor(-drawSize / 2),
-          drawSize, drawSize,
-        );
+        ctx.drawImage(sheet, animFrame * frameW, 0, frameW, frameH,
+          Math.floor(-drawSize / 2), Math.floor(-drawSize / 2), drawSize, drawSize);
         ctx.filter = "none";
+        ctx.restore();
+      }
+
+      // Laser warning line
+      if (rState === "laser_warning") {
+        const laserIdx = enemy.reaperLaserIndex ?? 0;
+        const off = REAPER_LASER_OFFSETS[laserIdx % 3];
+        const ox = screenX + off.x * 25;
+        const oy = screenY + off.z * 25;
+        const laserAngle = enemy.reaperLaserDir ?? 0;
+        const windupSheet = bossLaserWindupSprite;
+        const hasWindup = windupSheet.complete && windupSheet.naturalWidth > 0;
+        const pulse = Math.max(0.5, Math.min(1, 0.75 + Math.sin(animationNowMs / 75) * 0.25));
+        if (hasWindup) {
+          ctx.save();
+          ctx.globalAlpha = pulse;
+          ctx.translate(ox, oy);
+          ctx.rotate(laserAngle + Math.PI / 2);
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(
+            windupSheet,
+            0, 0, windupSheet.naturalWidth, windupSheet.naturalHeight,
+            -12, -REAPER_BEAM_PX, 24, REAPER_BEAM_PX,
+          );
+          ctx.globalAlpha = 1;
+          ctx.restore();
+        } else {
+          ctx.save();
+          ctx.globalAlpha = pulse;
+          ctx.strokeStyle = "rgba(255,60,60,0.85)";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(ox, oy);
+          ctx.lineTo(ox + Math.cos(laserAngle) * REAPER_BEAM_PX, oy + Math.sin(laserAngle) * REAPER_BEAM_PX);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+          ctx.restore();
+        }
+      }
+
+      // Active firing lasers
+      for (const laser of reaperActiveLasersRef.current) {
+        const lox = centerX + ((laser.originX - position.x) * 50) / 2;
+        const loy = centerY + ((laser.originZ - position.z) * 50) / 2;
+        const alpha = Math.max(0, laser.life / 0.35);
+        ctx.save();
+        ctx.translate(lox, loy);
+        ctx.rotate(laser.angle);
+        ctx.globalAlpha = alpha * 0.5;
+        ctx.strokeStyle = "rgba(255,40,40,1)";
+        ctx.lineWidth = 18;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(REAPER_BEAM_PX, 0);
+        ctx.stroke();
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
         ctx.restore();
       }
 

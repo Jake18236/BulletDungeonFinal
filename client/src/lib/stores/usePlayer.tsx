@@ -867,7 +867,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   // Position & Movement
   position: new THREE.Vector3(),
   velocity: new THREE.Vector3(),
-  speed: 10,
+  speed: 15,
   isMoving: false,
   lastMovementTime: 0,
 
@@ -1242,7 +1242,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   reset: () => set({
     position: new THREE.Vector3(),
     velocity: new THREE.Vector3(),
-    speed: 10,
+    speed: 12,
     hearts: 5,
     maxHearts: 5,
     invincibilityTimer: 0,

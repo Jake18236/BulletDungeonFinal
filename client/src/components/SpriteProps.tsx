@@ -293,9 +293,9 @@ export const bossLaserWindupSprite = (() => {
   return img;
 })();
 
-export const octopusBossSpriteSheet = (() => {
+export const reaperBossSpriteSheet = (() => {
   const img = new Image();
-  img.src = "/sprites/enemy/octopus-boss.png";
+  img.src = "/sprites/enemy/reaper-boss.png";
   return img;
 })();
 
