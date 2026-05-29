@@ -138,7 +138,7 @@ interface TreeLightningAttack {
 }
 
 const { addSummon } = useSummons.getState();
-addSummon("lightning");
+
 
 function generateRoomTerrain(): TerrainObstacle[] {
   const trees: TerrainObstacle[] = [];
@@ -317,7 +317,7 @@ function getEnemyBodyHitRadius(enemy: {
 
 function getEnemyCollisionRadius(enemy: { type?: string; isBoss?: boolean; bossType?: string }) {
   if (enemy.isBoss && enemy.bossType === "octopus") return 3.5;
-  if (enemy.type === "crow") return 0.6;
+  if (enemy.type === "crow") return 0.0;
   if (enemy.type === "mage") return 0.9;
   return ENEMY_TYPE_CONFIG[getEnemyType(enemy)].collisionRadius;
 }
@@ -1554,20 +1554,33 @@ export default memo(function CanvasGame() {
 
           // CROW ENEMY LOGIC
           if (enemy.type === "crow") {
+            if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
             const dx = position.x - enemy.position.x;
             const dz = position.z - enemy.position.z;
             const dist = Math.sqrt(dx * dx + dz * dz);
             if (dist > 0.5) {
-              enemy.position.x += (dx / dist) * enemy.speed * delta;
-              enemy.position.z += (dz / dist) * enemy.speed * delta;
               enemy.rotationY = Math.atan2(dz, dx);
+              const blend = Math.min(1, 14 * delta);
+              enemy.velocity.x += ((dx / dist) * enemy.speed - enemy.velocity.x) * blend;
+              enemy.velocity.z += ((dz / dist) * enemy.speed - enemy.velocity.z) * blend;
+              const vs = Math.hypot(enemy.velocity.x, enemy.velocity.z);
+              if (vs > enemy.speed) {
+                enemy.velocity.x = (enemy.velocity.x / vs) * enemy.speed;
+                enemy.velocity.z = (enemy.velocity.z / vs) * enemy.speed;
+              }
+            } else {
+              enemy.velocity.x *= Math.max(0, 1 - 8 * delta);
+              enemy.velocity.z *= Math.max(0, 1 - 8 * delta);
             }
+            enemy.position.x += enemy.velocity.x * delta;
+            enemy.position.z += enemy.velocity.z * delta;
+            enemy.velocity.multiplyScalar(Math.pow(0.92, delta * 60));
             return enemy;
           }
 
           // MAGE ENEMY LOGIC
           if (enemy.type === "mage") {
-            const ENGAGE_DIST = 12;
+            const ENGAGE_DIST = 14;
             const dx = position.x - enemy.position.x;
             const dz = position.z - enemy.position.z;
             const dist = Math.sqrt(dx * dx + dz * dz);
@@ -1577,9 +1590,18 @@ export default memo(function CanvasGame() {
 
             if (mState === "moving") {
               if (dist > ENGAGE_DIST) {
-                const spd = enemy.speed * delta;
-                enemy.position.x += (dx / dist) * spd;
-                enemy.position.z += (dz / dist) * spd;
+                if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
+                const blend = Math.min(1, 12 * delta);
+                enemy.velocity.x += ((dx / dist) * enemy.speed - enemy.velocity.x) * blend;
+                enemy.velocity.z += ((dz / dist) * enemy.speed - enemy.velocity.z) * blend;
+                const vs = Math.hypot(enemy.velocity.x, enemy.velocity.z);
+                if (vs > enemy.speed) {
+                  enemy.velocity.x = (enemy.velocity.x / vs) * enemy.speed;
+                  enemy.velocity.z = (enemy.velocity.z / vs) * enemy.speed;
+                }
+                enemy.position.x += enemy.velocity.x * delta;
+                enemy.position.z += enemy.velocity.z * delta;
+                enemy.velocity.multiplyScalar(Math.pow(0.92, delta * 60));
               } else {
                 // Pick action via value system
                 let summonW = 0.5;
@@ -1614,7 +1636,7 @@ export default memo(function CanvasGame() {
                   }
                 } else {
                   // Heal self
-                  const healAmt = enemy.maxHealth * 0.18;
+                  const healAmt = enemy.maxHealth * 0.2;
                   enemy.health = Math.min(enemy.maxHealth, enemy.health + healAmt);
                   // Heal nearby allies
                   for (const ally of enemies) {
@@ -1622,12 +1644,12 @@ export default memo(function CanvasGame() {
                     const ax = ally.position.x - enemy.position.x;
                     const az = ally.position.z - enemy.position.z;
                     if (Math.sqrt(ax * ax + az * az) < 9) {
-                      ally.health = Math.min(ally.maxHealth, ally.health + ally.maxHealth * 0.12);
+                      ally.health = Math.min(ally.maxHealth, ally.health + ally.maxHealth * 0.2);
                     }
                   }
                 }
                 enemy.mageState = "recovering";
-                enemy.mageCastCooldown = 3.0;
+                enemy.mageCastCooldown = 6.0;
               }
             } else if (mState === "recovering") {
               enemy.mageCastCooldown = (enemy.mageCastCooldown ?? 0) - delta;
@@ -1639,6 +1661,8 @@ export default memo(function CanvasGame() {
             return enemy;
           }
 
+          if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
+
           const dx = position.x - enemy.position.x;
           const dz = position.z - enemy.position.z;
           const distance = Math.sqrt(dx * dx + dz * dz);
@@ -1647,70 +1671,54 @@ export default memo(function CanvasGame() {
           if (distance >= 1) {
             const dirX = dx / distance;
             const dirZ = dz / distance;
+            const blend = Math.min(1, 12 * delta);
 
             const isEyeball = enemy.type === "eyeball";
             if (isEyeball) {
               enemy.rotationY = Math.atan2(dirZ, dirX);
-              const isRangedAttacking =
-                (enemy as any).isRangedAttacking ?? false;
+              const isRangedAttacking = (enemy as any).isRangedAttacking ?? false;
 
-              if (
-                distance <=
-                (ENEMY_TYPE_CONFIG.eyeball.engageDistancePx ?? 100) / 25
-              ) {
+              if (distance <= (ENEMY_TYPE_CONFIG.eyeball.engageDistancePx ?? 100) / 25) {
                 (enemy as any).isRangedAttacking = true;
-              } else if (
-                distance >
-                (ENEMY_TYPE_CONFIG.eyeball.disengageDistancePx ?? 150) / 25
-              ) {
+              } else if (distance > (ENEMY_TYPE_CONFIG.eyeball.disengageDistancePx ?? 150) / 25) {
                 (enemy as any).isRangedAttacking = false;
               } else {
                 (enemy as any).isRangedAttacking = isRangedAttacking;
               }
 
               if ((enemy as any).isRangedAttacking) {
-                (enemy as any).rangedShotCooldown =
-                  ((enemy as any).rangedShotCooldown ?? 0) - delta;
+                (enemy as any).rangedShotCooldown = ((enemy as any).rangedShotCooldown ?? 0) - delta;
                 if ((enemy as any).rangedShotCooldown <= 0) {
                   spawnEyeballProjectile(enemy);
-                  (enemy as any).rangedShotCooldown =
-                    ENEMY_TYPE_CONFIG.eyeball.projectileFireInterval ?? 1.1;
+                  (enemy as any).rangedShotCooldown = ENEMY_TYPE_CONFIG.eyeball.projectileFireInterval ?? 1.1;
                 }
+                // Decelerate while attacking
+                enemy.velocity.x *= Math.max(0, 1 - 10 * delta);
+                enemy.velocity.z *= Math.max(0, 1 - 10 * delta);
               } else {
-                const moveAmount = enemy.speed * delta;
-                const movedEnemyPos = moveWithTerrainSlide(
-                  enemy.position,
-                  new THREE.Vector3(dirX * moveAmount, 0, dirZ * moveAmount),
-                  terrainRef.current,
-                  enemyCollisionRadius,
-                );
-                enemy.position.x = movedEnemyPos.x;
-                enemy.position.z = movedEnemyPos.z;
+                enemy.velocity.x += (dirX * enemy.speed - enemy.velocity.x) * blend;
+                enemy.velocity.z += (dirZ * enemy.speed - enemy.velocity.z) * blend;
               }
             } else {
-              const moveAmount = enemy.speed * delta;
-              const movedEnemyPos = moveWithTerrainSlide(
-                enemy.position,
-                new THREE.Vector3(dirX * moveAmount, 0, dirZ * moveAmount),
-                terrainRef.current,
-                enemyCollisionRadius,
-              );
-              enemy.position.x = movedEnemyPos.x;
-              enemy.position.z = movedEnemyPos.z;
+              enemy.velocity.x += (dirX * enemy.speed - enemy.velocity.x) * blend;
+              enemy.velocity.z += (dirZ * enemy.speed - enemy.velocity.z) * blend;
             }
+          } else {
+            enemy.velocity.x *= Math.max(0, 1 - 8 * delta);
+            enemy.velocity.z *= Math.max(0, 1 - 8 * delta);
           }
 
-          if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
+          // Cap velocity at enemy speed (before knockback)
+          const vspd = Math.hypot(enemy.velocity.x, enemy.velocity.z);
+          if (vspd > enemy.speed) {
+            const scale = enemy.speed / vspd;
+            enemy.velocity.x *= scale;
+            enemy.velocity.z *= scale;
+          }
 
-          // Apply gradual knockback acceleration if active
-          if (
-            enemy.knockbackAcceleration &&
-            enemy.knockbackDuration &&
-            enemy.knockbackDuration > 0
-          ) {
-            const accelToApply = enemy.knockbackAcceleration
-              .clone()
-              .multiplyScalar(delta);
+          // Apply knockback acceleration on top of movement velocity
+          if (enemy.knockbackAcceleration && enemy.knockbackDuration && enemy.knockbackDuration > 0) {
+            const accelToApply = enemy.knockbackAcceleration.clone().multiplyScalar(delta);
             enemy.velocity.add(accelToApply);
             enemy.knockbackDuration -= delta;
             if (enemy.knockbackDuration <= 0) {
@@ -1719,6 +1727,7 @@ export default memo(function CanvasGame() {
             }
           }
 
+          // Apply combined velocity
           const velMovedPos = moveWithTerrainSlide(
             enemy.position,
             enemy.velocity.clone().multiplyScalar(delta),
@@ -1729,26 +1738,29 @@ export default memo(function CanvasGame() {
           enemy.position.x = velMovedPos.x;
           enemy.position.z = velMovedPos.z;
           if (!movedByVelocity) {
-            // Gentler bounce-back to feel more physical
-            enemy.velocity.multiplyScalar(-0.5);
+            enemy.velocity.multiplyScalar(-0.4);
           }
 
-          // Reduced and more realistic velocity dampening
-          // This allows enemies to feel more grounded while still losing momentum
-          enemy.velocity.multiplyScalar(Math.pow(0.95, delta * 60));
+          // Velocity dampening
+          enemy.velocity.multiplyScalar(Math.pow(0.92, delta * 60));
           return enemy;
         });
 
+        const MAX_SEP_DIST = 7.5;
         for (let i = 0; i < updatedEnemies.length; i++) {
+          const e1 = updatedEnemies[i];
+          const isCrow1 = e1.type === "crow";
           for (let j = i + 1; j < updatedEnemies.length; j++) {
-            const e1 = updatedEnemies[i];
             const e2 = updatedEnemies[j];
+            // Crows only collide with other crows
+            if (isCrow1 !== (e2.type === "crow")) continue;
+            // Axis-aligned early exit (avoids expensive hypot for most pairs)
             const dx = e1.position.x - e2.position.x;
+            if (dx > MAX_SEP_DIST || dx < -MAX_SEP_DIST) continue;
             const dz = e1.position.z - e2.position.z;
+            if (dz > MAX_SEP_DIST || dz < -MAX_SEP_DIST) continue;
             const dist = Math.hypot(dx, dz);
-            const minDist =
-              getEnemyCollisionRadius(e1) + getEnemyCollisionRadius(e2);
-
+            const minDist = getEnemyCollisionRadius(e1) + getEnemyCollisionRadius(e2);
             if (dist > 0 && dist < minDist) {
               const push = (minDist - dist) / 8;
               const nx = dx / dist;
@@ -2165,13 +2177,30 @@ export default memo(function CanvasGame() {
         centerY + ((orb.position.z - position.z) * 50) / 2,
       );
 
-      const sprite = xpSprite; // assume you imported or loaded xp.png as xpImage
+      // Draw particle trail
+      const trail = orb.trail;
+      if (trail && trail.length > 0) {
+        const isMagnetized = orb.magnetized && orb.kickTimer <= 0;
+        for (let t = 0; t < trail.length; t++) {
+          const tp = trail[t];
+          const tx = snapToGrid(centerX + ((tp.x - position.x) * 50) / 2);
+          const ty = snapToGrid(centerY + ((tp.z - position.z) * 50) / 2);
+          const frac = 1 - t / trail.length;
+          ctx.globalAlpha = frac * (isMagnetized ? 0.55 : 0.28);
+          const r = Math.max(1, frac * (isMagnetized ? 5 : 3));
+          ctx.fillStyle = isMagnetized ? "#aaffcc" : "#66cc44";
+          ctx.beginPath();
+          ctx.arc(tx, ty, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
 
+      const sprite = xpSprite;
       if (sprite.complete) {
-        const scale = 2; // adjust size as needed
+        const scale = 2;
         const w = sprite.width * scale;
         const h = sprite.height * scale;
-
         ctx.save();
         ctx.imageSmoothingEnabled = false;
         ctx.translate(screenX, screenY);
@@ -2827,8 +2856,8 @@ export default memo(function CanvasGame() {
       const animFrame = isCasting
         ? Math.floor(performance.now() / 100) % COLS
         : 0;
-      const drawW = 64;
-      const drawH = hasSheet ? Math.round(drawW * (frameH / frameW)) : 64;
+      const drawW = 96;
+      const drawH = hasSheet ? Math.round(drawW * (frameH / frameW)) : 96;
       const facingRight = enemy.position.x <= position.x;
 
       // Casting glow
@@ -2866,34 +2895,8 @@ export default memo(function CanvasGame() {
       return;
     }
 
-    // Crow enemy rendering
-    if (enemy.type === "crow") {
-      const sheet = crowEnemySpriteSheet;
-      const hasSheet = sheet.complete && sheet.naturalWidth > 0 && sheet.naturalHeight > 0;
-      const cols = 4;
-      const frameW = hasSheet ? sheet.naturalWidth / cols : 20;
-      const frameH = hasSheet ? sheet.naturalHeight : 20;
-      const animFrame = Math.floor(performance.now() / 120) % cols;
-      const drawSize = 40;
-      const facingRight = enemy.position.x <= position.x;
-
-      ctx.save();
-      ctx.translate(screenX, screenY);
-      ctx.imageSmoothingEnabled = false;
-      if (!facingRight) ctx.scale(-1, 1);
-      if (enemy.hitFlash > 0) ctx.filter = "brightness(60)";
-      if (hasSheet) {
-        ctx.drawImage(
-          sheet,
-          animFrame * frameW, 0, frameW, frameH,
-          Math.floor(-drawSize / 2), Math.floor(-drawSize / 2),
-          drawSize, drawSize,
-        );
-      }
-      ctx.filter = "none";
-      ctx.restore();
-      return;
-    }
+    // Crow is rendered in the eye/overlay layer
+    if (enemy.type === "crow") return;
 
     const enemyType: EnemySpriteType = getEnemyType(enemy);
     const bodySprite = enemySpritesByType[enemyType];
@@ -3297,8 +3300,35 @@ export default memo(function CanvasGame() {
       return;
     }
 
-    // Skip crow/mage in eye layer — already drawn in drawEnemy
-    if (enemy.type === "crow" || enemy.type === "mage") return;
+    // Mage is rendered in drawEnemy
+    if (enemy.type === "mage") return;
+
+    // Crow: rendered here in the eye/overlay layer
+    if (enemy.type === "crow") {
+      const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+      const screenX = snapToGrid(centerX + ((enemy.position.x - position.x) * 50) / 2);
+      const screenY = snapToGrid(centerY + ((enemy.position.z - position.z) * 50) / 2);
+      const sheet = crowEnemySpriteSheet;
+      const hasSheet = sheet.complete && sheet.naturalWidth > 0 && sheet.naturalHeight > 0;
+      const cols = 4;
+      const frameW = hasSheet ? sheet.naturalWidth / cols : 20;
+      const frameH = hasSheet ? sheet.naturalHeight : 20;
+      const animFrame = Math.floor(animationNowMs / 120) % cols;
+      const drawSize = 40;
+      const facingRight = enemy.position.x <= position.x;
+      ctx.save();
+      ctx.translate(screenX, screenY);
+      ctx.imageSmoothingEnabled = false;
+      if (!facingRight) ctx.scale(-1, 1);
+      if (enemy.hitFlash > 0) ctx.filter = "brightness(60)";
+      if (hasSheet) {
+        ctx.drawImage(sheet, animFrame * frameW, 0, frameW, frameH,
+          Math.floor(-drawSize / 2), Math.floor(-drawSize / 2), drawSize, drawSize);
+      }
+      ctx.filter = "none";
+      ctx.restore();
+      return;
+    }
 
     const enemyType: EnemySpriteType = getEnemyType(enemy);
     const eyeSprite = enemyEyeSpritesByType[enemyType];
@@ -3605,20 +3635,6 @@ export default memo(function CanvasGame() {
           fireSystem.current.emit(enemy.position.x, enemy.position.z);
           fireEmissionThrottleRef.current[effect.id] = animationNowMs;
         }
-      } else if (effect.type === "curse") {
-        // Dark aura
-        ctx.strokeStyle = "#9900ff";
-        ctx.lineWidth = 2;
-        ctx.globalAlpha = 0.6;
-        ctx.beginPath();
-        ctx.arc(
-          screenX,
-          screenY,
-          20 + Math.sin(animationNowMs / 200) * 3,
-          0,
-          Math.PI * 2,
-        );
-        ctx.stroke();
       }
     });
 

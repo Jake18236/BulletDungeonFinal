@@ -56,6 +56,9 @@ export interface XPOrb {
   position: THREE.Vector3;
   value: number;
   velocity: THREE.Vector3;
+  trail: Array<{ x: number; z: number }>;
+  magnetized: boolean;
+  kickTimer: number;
 }
 
 export interface Enemy {
@@ -199,9 +202,9 @@ export const useEnemies = create<EnemiesState>((set, get) => {
     //boss
     createSession("lazarus_1", "lazarus", "1:00", "30:00", 2500, 1, 1, 10),
     //octopus boss
-    createSession("octopus_1", "octopus", "2:30", "30:00", 3500, 1, 1, 15),
+    createSession("octopus_1", "octopus", "6:30", "30:00", 3500, 1, 1, 15),
     //mage
-    createSession("mage_1", "mage", "1:00", "2:00", 35, 4, 1, 12),
+    createSession("mage_1", "mage", "0:00", "2:00", 35, 40, 1, 2),
     createSession("mage_2", "mage", "2:00", "4:00", 50, 12, 2, 8),
     createSession("mage_3", "mage", "4:00", "30:00", 80, 60, 3, 5),
   ];
@@ -261,6 +264,9 @@ addXPOrb: (position, value) => {
         0,
         (Math.random() - 0.5) * 4,
       ),
+      trail: [],
+      magnetized: false,
+      kickTimer: 0,
     });
 
     return { xpOrbs: orbs };
@@ -294,13 +300,32 @@ addXPOrb: (position, value) => {
 
           if (distSq < MAGNET_RANGE_SQ) {
             const mag = Math.sqrt(distSq);
-            orb.velocity.x = (dx / mag) * MAGNET_SPEED;
-            orb.velocity.z = (dz / mag) * MAGNET_SPEED;
+            if (!orb.magnetized) {
+              // First frame entering magnet range: kick outward
+              orb.magnetized = true;
+              orb.kickTimer = 0.18;
+              orb.velocity.x = -(dx / mag) * 7;
+              orb.velocity.z = -(dz / mag) * 7;
+            } else if (orb.kickTimer > 0) {
+              // Kick phase: decelerate
+              orb.kickTimer -= delta;
+              orb.velocity.x *= Math.max(0, 1 - 9 * delta);
+              orb.velocity.z *= Math.max(0, 1 - 9 * delta);
+            } else {
+              // Pull toward player
+              orb.velocity.x = (dx / mag) * MAGNET_SPEED;
+              orb.velocity.z = (dz / mag) * MAGNET_SPEED;
+            }
           } else {
-            // Simple velocity decay without creating new objects
+            orb.magnetized = false;
             orb.velocity.x *= Math.max(0, 1 - 3 * delta);
             orb.velocity.z *= Math.max(0, 1 - 3 * delta);
           }
+
+          // Update trail — store last 7 positions
+          if (!orb.trail) orb.trail = [];
+          orb.trail.unshift({ x: orb.position.x, z: orb.position.z });
+          if (orb.trail.length > 7) orb.trail.length = 7;
 
           orb.position.x += orb.velocity.x * delta;
           orb.position.z += orb.velocity.z * delta;
@@ -478,7 +503,19 @@ updateDamagePopups: (delta) => {
       set((state) => ({ enemies: [...state.enemies, crow] }));
     },
     
-    updateEnemies: (enemies) => set({ enemies }),
+    updateEnemies: (enemies) =>
+      set((state) => {
+        const updatedIds = new Set(enemies.map(e => e.id));
+
+        // Preserve enemies spawned during update
+        const spawnedMidFrame = state.enemies.filter(
+          e => !updatedIds.has(e.id)
+        );
+
+        return {
+          enemies: [...enemies, ...spawnedMidFrame],
+        };
+      }),
 
     updateAutoSpawn: (delta, playerPos) => {
       const elapsedTime = get().elapsedTime + delta;

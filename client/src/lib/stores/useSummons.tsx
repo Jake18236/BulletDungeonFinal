@@ -45,7 +45,7 @@ export interface Summon {
 export interface StatusEffect {
   id: string;
   enemyId: string;
-  type: "burn" | "curse";
+  type: "burn";
   damage: number;
   duration: number;
   elapsed: number;
@@ -66,8 +66,6 @@ interface SummonState {
   ghostTriggerOnHit: boolean;
 
   scytheDamage: number;
-  scytheCurse: boolean;
-  curseDamageBonus: number;
   scytheSpeedBonus: boolean;
   scytheDamageBonus: boolean;
 
@@ -97,7 +95,7 @@ interface SummonState {
     playHit: () => void
   ) => void;
   updateStatusEffects: (delta: number, enemies: any[], onDamage: (enemyId: string, damage: number) => void) => void;
-  applyStatusEffect: (enemyId: string, type: "burn" | "curse", damage: number, duration: number) => void;
+  applyStatusEffect: (enemyId: string, type: "burn", damage: number, duration: number) => void;
   removeSummon: (id: string) => void;
   handleEnemyKilledBySummon: () => void;
   reset: () => void;
@@ -116,8 +114,6 @@ export const useSummons = create<SummonState>((set, get) => ({
   ghostTriggerOnHit: false,
 
   scytheDamage: 10,
-  scytheCurse: false,
-  curseDamageBonus: 0,
   scytheSpeedBonus: false,
   scytheDamageBonus: false,
 
@@ -341,7 +337,6 @@ export const useSummons = create<SummonState>((set, get) => ({
                 sourcePos: updated.position,
                 color: "#ff4444",
                 knockbackStrength: 6,
-                curse: state.scytheCurse,
                 isSummonDamage: true,
               });
               updated.damagedEnemies![enemy.id] = now;
@@ -487,7 +482,6 @@ export const useSummons = create<SummonState>((set, get) => ({
                 impactPos: updated.position,
                 color: "#ff4444",
                 knockbackStrength: 10,
-                curse: state.scytheCurse,
                 isSummonDamage: true,
               });
               updated.recentTargets.push(enemy.id);
@@ -584,13 +578,8 @@ export const useSummons = create<SummonState>((set, get) => ({
 
       if (effect.lastTick >= effect.tickRate) {
         effect.lastTick = 0;
-
         if (effect.type === "burn") {
           onDamage(effect.enemyId, effect.damage);
-        } else if (effect.type === "curse") {
-          if (effect.elapsed >= effect.duration) {
-            onDamage(effect.enemyId, effect.damage);
-          }
         }
       }
 
@@ -673,8 +662,6 @@ export const useSummons = create<SummonState>((set, get) => ({
     ghostBurn: false,
     ghostTriggerOnHit: false,
     scytheDamage: 40,
-    scytheCurse: false,
-    curseDamageBonus: 0,
     scytheSpeedBonus: false,
     scytheDamageBonus: false,
     pulsingSummons: false,

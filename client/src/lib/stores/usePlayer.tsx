@@ -757,15 +757,14 @@ explosive_last_round: {
   shadowblade: {
     id: "shadowblade",
     name: "Shadowblade",
-    description: "Scythe inflicts Curse: 200% bullet damage after 1s. Curse +15%",
+    description: "Scythe damage +30%. Dark energies empower each strike.",
     icon: "⚫",
     category: "summon",
     tier: 2,
     requires: ["magic_scythe"],
     apply: () => {
       useSummons.setState({
-        scytheCurse: true,
-        curseDamageBonus: 0.15,
+        scytheDamage: useSummons.getState().scytheDamage * 1.3,
       });
     },
   },

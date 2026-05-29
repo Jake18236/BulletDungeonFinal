@@ -20,7 +20,6 @@ export interface ImpactParams {
 
   // Optional effects
   burn?: { damage: number; duration: number };
-  curse?: boolean;
   explosive?: { radius: number; damage: number };
   chainLightning?: { chains: number; range: number; chainedEnemies: Set<string> };
 
@@ -102,13 +101,6 @@ export const useHit = create<HitState>((set, get) => ({
 
     if (params.burn) {
       applyStatusEffect(enemy.id, "burn", params.burn.damage, params.burn.duration);
-    }
-
-    if (params.curse) {
-      const ps = usePlayer.getState();
-      const summonState = useSummons.getState();
-      const curseDamage = ps.baseDamage * 2 * (1 + summonState.curseDamageBonus);
-      applyStatusEffect(enemy.id, "curse", curseDamage, 1);
     }
 
     if (params.explosive && params.impactPos && allEnemies.length > 0) {
