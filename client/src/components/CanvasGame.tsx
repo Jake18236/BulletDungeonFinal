@@ -42,6 +42,7 @@ import {
   bossLaserWindupSprite,
   octopusBossSpriteSheet,
   crowEnemySpriteSheet,
+  mageEnemySpriteSheet,
 } from "./SpriteProps";
 import { DevTools } from "./DevTools";
 
@@ -307,21 +308,17 @@ function getEnemyBodyHitRadius(enemy: {
   isBoss?: boolean;
   bossType?: string;
 }) {
-  if (enemy.isBoss && enemy.bossType === "lazarus") {
-    return SHOGGOTH_CONFIG.bodyHitRadius;
-  }
-  if (enemy.isBoss && enemy.bossType === "octopus") {
-    return 3.2;
-  }
-  if (enemy.type === "crow") {
-    return 0.6;
-  }
+  if (enemy.isBoss && enemy.bossType === "lazarus") return SHOGGOTH_CONFIG.bodyHitRadius;
+  if (enemy.isBoss && enemy.bossType === "octopus") return 3.2;
+  if (enemy.type === "crow") return 0.6;
+  if (enemy.type === "mage") return 1.0;
   return ENEMY_TYPE_CONFIG[getEnemyType(enemy)].bodyHitRadius;
 }
 
 function getEnemyCollisionRadius(enemy: { type?: string; isBoss?: boolean; bossType?: string }) {
   if (enemy.isBoss && enemy.bossType === "octopus") return 3.5;
   if (enemy.type === "crow") return 0.6;
+  if (enemy.type === "mage") return 0.9;
   return ENEMY_TYPE_CONFIG[getEnemyType(enemy)].collisionRadius;
 }
 
@@ -1502,7 +1499,7 @@ export default memo(function CanvasGame() {
               : new THREE.Vector3(1, 0, 0);
 
             // Teleport if player is too far away
-            const TELEPORT_DIST = 60;
+            const TELEPORT_DIST = 130;
             if (distToPlayer > TELEPORT_DIST) {
               const angle = Math.random() * Math.PI * 2;
               const offset = 15;
@@ -1518,38 +1515,15 @@ export default memo(function CanvasGame() {
             const state = updated.octopusState ?? "chasing";
 
             if (state === "chasing") {
-              // Move toward player
               updated.position.x += safeDir.x * updated.speed * delta;
               updated.position.z += safeDir.z * updated.speed * delta;
 
-              // Tick crow spawn cooldown
-              updated.octopusCrowSpawnCooldown = (updated.octopusCrowSpawnCooldown ?? 12) - delta;
-              if (updated.octopusCrowSpawnCooldown <= 0) {
-                updated.octopusState = "spawn_crows";
-                updated.octopusRecoverTimer = 0.5;
-                updated.octopusCrowSpawnCooldown = 14.0;
-                // Spawn 8 crows around boss
-                const spawnCrow = useEnemies.getState().spawnCrow;
-                for (let ci = 0; ci < 8; ci++) {
-                  const angle = (ci / 8) * Math.PI * 2;
-                  spawnCrow(
-                    new THREE.Vector3(
-                      updated.position.x + Math.cos(angle) * 5,
-                      0,
-                      updated.position.z + Math.sin(angle) * 5,
-                    ),
-                  );
-                }
-                return updated;
-              }
-
-              // Tick dash cooldown
               updated.octopusDashCooldown = (updated.octopusDashCooldown ?? 4) - delta;
               if (updated.octopusDashCooldown <= 0) {
                 updated.octopusState = "dashing";
-                updated.octopusDashTimer = 0.4;
+                updated.octopusDashTimer = 0.6;
                 updated.octopusDashDir = safeDir.clone();
-                updated.octopusDashCooldown = 4.5;
+                updated.octopusDashCooldown = 8.0;
               }
             } else if (state === "dashing") {
               const dashDir = updated.octopusDashDir ?? safeDir;
@@ -1565,12 +1539,6 @@ export default memo(function CanvasGame() {
               updated.octopusPostDashTimer = (updated.octopusPostDashTimer ?? 0) - delta;
               if ((updated.octopusPostDashTimer ?? 0) <= 0) {
                 spawnOctopusProjectiles(updated);
-                updated.octopusState = "recovering";
-                updated.octopusRecoverTimer = 0.4;
-              }
-            } else if (state === "spawn_crows") {
-              updated.octopusRecoverTimer = (updated.octopusRecoverTimer ?? 0) - delta;
-              if ((updated.octopusRecoverTimer ?? 0) <= 0) {
                 updated.octopusState = "recovering";
                 updated.octopusRecoverTimer = 0.5;
               }
@@ -1594,6 +1562,80 @@ export default memo(function CanvasGame() {
               enemy.position.z += (dz / dist) * enemy.speed * delta;
               enemy.rotationY = Math.atan2(dz, dx);
             }
+            return enemy;
+          }
+
+          // MAGE ENEMY LOGIC
+          if (enemy.type === "mage") {
+            const ENGAGE_DIST = 12;
+            const dx = position.x - enemy.position.x;
+            const dz = position.z - enemy.position.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            enemy.rotationY = Math.atan2(dz, dx);
+
+            const mState = enemy.mageState ?? "moving";
+
+            if (mState === "moving") {
+              if (dist > ENGAGE_DIST) {
+                const spd = enemy.speed * delta;
+                enemy.position.x += (dx / dist) * spd;
+                enemy.position.z += (dz / dist) * spd;
+              } else {
+                // Pick action via value system
+                let summonW = 0.5;
+                let healW = 0.5;
+
+                if (enemy.health < enemy.maxHealth * 0.6) healW += 0.35;
+
+                const nearbyHurt = enemies.filter(e => {
+                  if (e.id === enemy.id || e.type === "crow") return false;
+                  const ex = e.position.x - enemy.position.x;
+                  const ez = e.position.z - enemy.position.z;
+                  return Math.sqrt(ex * ex + ez * ez) < 10 && e.health < e.maxHealth * 0.7;
+                }).length;
+                healW += nearbyHurt * 0.15;
+
+                enemy.mageAction = healW > summonW ? "heal" : "summon";
+                enemy.mageState = "casting";
+                enemy.mageCastTimer = 0.9;
+              }
+            } else if (mState === "casting") {
+              enemy.mageCastTimer = (enemy.mageCastTimer ?? 0) - delta;
+              if ((enemy.mageCastTimer ?? 0) <= 0) {
+                if (enemy.mageAction === "summon") {
+                  const sc = useEnemies.getState().spawnCrow;
+                  for (let ci = 0; ci < 3; ci++) {
+                    const ang = (ci / 3) * Math.PI * 2 + Math.random() * 0.4;
+                    sc(new THREE.Vector3(
+                      enemy.position.x + Math.cos(ang) * 3,
+                      0,
+                      enemy.position.z + Math.sin(ang) * 3,
+                    ));
+                  }
+                } else {
+                  // Heal self
+                  const healAmt = enemy.maxHealth * 0.18;
+                  enemy.health = Math.min(enemy.maxHealth, enemy.health + healAmt);
+                  // Heal nearby allies
+                  for (const ally of enemies) {
+                    if (ally.id === enemy.id) continue;
+                    const ax = ally.position.x - enemy.position.x;
+                    const az = ally.position.z - enemy.position.z;
+                    if (Math.sqrt(ax * ax + az * az) < 9) {
+                      ally.health = Math.min(ally.maxHealth, ally.health + ally.maxHealth * 0.12);
+                    }
+                  }
+                }
+                enemy.mageState = "recovering";
+                enemy.mageCastCooldown = 3.0;
+              }
+            } else if (mState === "recovering") {
+              enemy.mageCastCooldown = (enemy.mageCastCooldown ?? 0) - delta;
+              if ((enemy.mageCastCooldown ?? 0) <= 0) {
+                enemy.mageState = "moving";
+              }
+            }
+
             return enemy;
           }
 
@@ -2430,7 +2472,6 @@ export default memo(function CanvasGame() {
 
     const pool = poolRef.current;
 
-    // IMPORTANT: DO NOT CALL worldToScreen FIRST OR YOU DOUBLE-TRANSFORM
     for (let i = 0; i < poolSize; i++) {
       const p = pool[i];
       if (p.life <= 0) continue;
@@ -2775,6 +2816,56 @@ export default memo(function CanvasGame() {
       centerY + ((enemy.position.z - position.z) * 50) / 2,
     );
 
+    // Mage enemy rendering
+    if (enemy.type === "mage") {
+      const sheet = mageEnemySpriteSheet;
+      const hasSheet = sheet.complete && sheet.naturalWidth > 0 && sheet.naturalHeight > 0;
+      const COLS = 4;
+      const frameW = hasSheet ? sheet.naturalWidth / COLS : 48;
+      const frameH = hasSheet ? sheet.naturalHeight : 48;
+      const isCasting = enemy.mageState === "casting";
+      const animFrame = isCasting
+        ? Math.floor(performance.now() / 100) % COLS
+        : 0;
+      const drawW = 64;
+      const drawH = hasSheet ? Math.round(drawW * (frameH / frameW)) : 64;
+      const facingRight = enemy.position.x <= position.x;
+
+      // Casting glow
+      if (isCasting) {
+        const action = enemy.mageAction ?? "summon";
+        ctx.save();
+        ctx.translate(screenX, screenY);
+        ctx.globalAlpha = 0.35 + Math.sin(performance.now() / 80) * 0.15;
+        ctx.fillStyle = action === "heal" ? "#44ff88" : "#aa44ff";
+        ctx.beginPath();
+        ctx.arc(0, 0, 28, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      }
+
+      ctx.save();
+      ctx.translate(screenX, screenY);
+      ctx.imageSmoothingEnabled = false;
+      if (!facingRight) ctx.scale(-1, 1);
+      if (enemy.hitFlash > 0) ctx.filter = "brightness(60)";
+      if (hasSheet) {
+        ctx.drawImage(
+          sheet,
+          animFrame * frameW, 0, frameW, frameH,
+          Math.floor(-drawW / 2), Math.floor(-drawH / 2),
+          drawW, drawH,
+        );
+      } else {
+        ctx.fillStyle = "#aa44ff";
+        ctx.fillRect(-drawW / 2, -drawH / 2, drawW, drawH);
+      }
+      ctx.filter = "none";
+      ctx.restore();
+      return;
+    }
+
     // Crow enemy rendering
     if (enemy.type === "crow") {
       const sheet = crowEnemySpriteSheet;
@@ -2798,9 +2889,6 @@ export default memo(function CanvasGame() {
           Math.floor(-drawSize / 2), Math.floor(-drawSize / 2),
           drawSize, drawSize,
         );
-      } else {
-        ctx.fillStyle = "#8833cc";
-        ctx.fillRect(-drawSize / 2, -drawSize / 2, drawSize, drawSize);
       }
       ctx.filter = "none";
       ctx.restore();
@@ -2834,7 +2922,7 @@ export default memo(function CanvasGame() {
 
     ctx.restore();
   };
-
+  
   const drawEnemyEyes = (
     ctx: CanvasRenderingContext2D,
     enemy: any,
@@ -3209,8 +3297,8 @@ export default memo(function CanvasGame() {
       return;
     }
 
-    // Skip crow in eye layer — already drawn in drawEnemy
-    if (enemy.type === "crow") return;
+    // Skip crow/mage in eye layer — already drawn in drawEnemy
+    if (enemy.type === "crow" || enemy.type === "mage") return;
 
     const enemyType: EnemySpriteType = getEnemyType(enemy);
     const eyeSprite = enemyEyeSpritesByType[enemyType];
@@ -3490,7 +3578,6 @@ export default memo(function CanvasGame() {
     }
   };
 
-  usePlayer.setState({ incendiary: true });
 
   const drawStatusEffects = (
     ctx: CanvasRenderingContext2D,

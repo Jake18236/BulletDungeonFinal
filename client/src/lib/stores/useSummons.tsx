@@ -528,8 +528,8 @@ export const useSummons = create<SummonState>((set, get) => ({
           updated.strikeTimer = 2.0;
 
           // Strike 2 nearest enemies within targeting range
-          const LIGHTNING_RANGE_X = 10;
-          const LIGHTNING_RANGE_Z = 5;
+          const LIGHTNING_RANGE_X = 40;
+          const LIGHTNING_RANGE_Z = 15;
           
           const sorted = enemies
             .filter(e => {

@@ -305,6 +305,12 @@ export const crowEnemySpriteSheet = (() => {
   return img;
 })();
 
+export const mageEnemySpriteSheet = (() => {
+  const img = new Image();
+  img.src = "/sprites/enemy/mage-enemy.png";
+  return img;
+})();
+
 export const VisualSprites = {
   impactSheet: (() => {
     const img = new Image();

@@ -97,7 +97,7 @@ interface ProjectilesState {
       position: THREE.Vector3;
       health: number;
       velocity?: THREE.Vector3;
-      type?: "basic" | "tank" | "eyeball" | "tree" | "boss" | "crow";
+      type?: "basic" | "tank" | "eyeball" | "tree" | "boss" | "crow" | "mage";
     }>,
     playerPos: THREE.Vector3,
     roomBounds: number,

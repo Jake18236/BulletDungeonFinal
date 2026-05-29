@@ -64,7 +64,7 @@ export interface Enemy {
   health: number;
   maxHealth: number;
   speed: number;
-  type?: "basic" | "tank" | "eyeball" | "tree" | "boss" | "crow";
+  type?: "basic" | "tank" | "eyeball" | "tree" | "boss" | "crow" | "mage";
   velocity: THREE.Vector3;
   hitFlash: number;
   
@@ -95,13 +95,18 @@ export interface Enemy {
   spawnSessionId?: string;
 
   // OCTOPUS BOSS PROPERTIES:
-  octopusState?: "chasing" | "dashing" | "post_dash" | "spawn_crows" | "recovering";
+  octopusState?: "chasing" | "dashing" | "post_dash" | "recovering";
   octopusDashDir?: THREE.Vector3;
   octopusDashTimer?: number;
   octopusDashCooldown?: number;
   octopusPostDashTimer?: number;
   octopusRecoverTimer?: number;
-  octopusCrowSpawnCooldown?: number;
+
+  // MAGE PROPERTIES:
+  mageState?: "moving" | "casting" | "recovering";
+  mageAction?: "summon" | "heal";
+  mageCastTimer?: number;
+  mageCastCooldown?: number;
 }
 
 export interface DamagePopup {
@@ -112,7 +117,7 @@ export interface DamagePopup {
   life: number; 
 }
 
-type SpawnSessionEnemyType = "basic" | "tank" | "eyeball" | "lazarus" | "octopus";
+type SpawnSessionEnemyType = "basic" | "tank" | "eyeball" | "lazarus" | "octopus" | "mage";
 
 interface SpawnSession {
   id: string;
@@ -195,6 +200,10 @@ export const useEnemies = create<EnemiesState>((set, get) => {
     createSession("lazarus_1", "lazarus", "1:00", "30:00", 2500, 1, 1, 10),
     //octopus boss
     createSession("octopus_1", "octopus", "2:30", "30:00", 3500, 1, 1, 15),
+    //mage
+    createSession("mage_1", "mage", "1:00", "2:00", 35, 4, 1, 12),
+    createSession("mage_2", "mage", "2:00", "4:00", 50, 12, 2, 8),
+    createSession("mage_3", "mage", "4:00", "30:00", 80, 60, 3, 5),
   ];
 
   let spawnSessionTimers = spawnSessions.reduce<Record<string, number>>((acc, session) => {
@@ -214,7 +223,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
   const enemy = state.enemies.find((e) => e.id === id);
   if (!enemy) return;
 
-  enemy.hitFlash = 0.92;
+  enemy.hitFlash = 0.82;
   enemy.health -= dmg;
 
   const newPopup = {
@@ -339,10 +348,10 @@ updateDamagePopups: (delta) => {
 
         const enemyTypePool: Array<"basic" | "tank" | "eyeball"> = ["basic", "tank", "eyeball"];
         const chosenType =
-          (enemyData.type as "basic" | "tank" | "eyeball" | undefined) ||
+          (enemyData.type as "basic" | "tank" | "eyeball" | "mage" | undefined) ||
           enemyTypePool[Math.floor(Math.random() * enemyTypePool.length)];
 
-        const baseStatsByType: Record<"basic" | "tank" | "eyeball", Partial<Enemy>> = {
+        const baseStatsByType: Record<"basic" | "tank" | "eyeball" | "mage", Partial<Enemy>> = {
           basic: {
             health: 22,
             maxHealth: 22,
@@ -361,9 +370,15 @@ updateDamagePopups: (delta) => {
             speed: 2,
             hitFlash: 0,
           },
+          mage: {
+            health: 40,
+            maxHealth: 40,
+            speed: 2.8,
+            hitFlash: 0,
+          },
         };
 
-        const baseStats = baseStatsByType[chosenType];
+        const baseStats = baseStatsByType[chosenType as "basic" | "tank" | "eyeball" | "mage"] ?? baseStatsByType.basic;
 
         const defaultPosition = new THREE.Vector3(0, 0, 0);
 
@@ -443,7 +458,6 @@ updateDamagePopups: (delta) => {
         octopusDashCooldown: 4.0,
         octopusPostDashTimer: 0,
         octopusRecoverTimer: 0,
-        octopusCrowSpawnCooldown: 12.0,
         rotationY: 0,
       };
 
