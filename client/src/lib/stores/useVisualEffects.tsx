@@ -112,7 +112,7 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
     });
   },
   // ---------------- Explosion ----------------
-  addExplosion: (position, radius, count = 1) => {
+  addExplosion: (position, radius, count) => {
     const particles: Particle[] = [];
 
     const explosionEffect: ExplosionEffect = {
@@ -120,8 +120,8 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
       x: position.x,
       y: position.z,
       life: 0,
-      maxLife: 0.6,
-      size: radius,
+      maxLife: 0.5,
+      size: radius * 25,
       radius,
       frameIndex: 0,
       totalFrames: 6,

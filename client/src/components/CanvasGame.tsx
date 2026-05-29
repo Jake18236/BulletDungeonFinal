@@ -2,7 +2,12 @@ import { useEffect, useMemo, useRef, useState, memo } from "react";
 import { useTexture } from "@react-three/drei";
 import * as THREE from "three";
 import { usePlayer } from "../lib/stores/usePlayer";
-import { ENEMY_TYPE_CONFIG, SHOGGOTH_CONFIG, useEnemies, type Enemy } from "../lib/stores/useEnemies";
+import {
+  ENEMY_TYPE_CONFIG,
+  SHOGGOTH_CONFIG,
+  useEnemies,
+  type Enemy,
+} from "../lib/stores/useEnemies";
 import { bounceAgainstBounds } from "../lib/collision";
 import { useGame } from "../lib/stores/useGame";
 import { useAudio } from "../lib/stores/useAudio";
@@ -16,7 +21,7 @@ import { useParticles } from "../lib/stores/useParticles";
 import { GameCamera2D, getPixelPerfectScale } from "../lib/camera";
 import fontJson from "./Lantern.json";
 import { buildFont, drawBitmapText } from "../lib/font";
-import GameUI from "./GameUI"  
+import GameUI from "./GameUI";
 import { LevelUpScreen } from "./GameUI";
 import Darkness from "./Darkness";
 import {
@@ -35,6 +40,8 @@ import {
   bossLaserSpriteSheet,
   bossLaserContinueSprite,
   bossLaserWindupSprite,
+  octopusBossSpriteSheet,
+  crowEnemySpriteSheet,
 } from "./SpriteProps";
 import { DevTools } from "./DevTools";
 
@@ -46,13 +53,12 @@ fontWhiteImage.src = "/sprites/font-atlas-white.png";
 const fontRedImage = new Image();
 fontRedImage.src = "/sprites/font-atlas-red.png";
 
-
-
 export const CANVAS_WIDTH = window.innerWidth;
 export const CANVAS_HEIGHT = window.innerHeight;
 const ROOM_SIZE = 2000;
 const LAZARUS_BASE_BEAM_LENGTH_WORLD = (304 * 4) / 25;
-const LAZARUS_BEAM_LENGTH_WORLD = LAZARUS_BASE_BEAM_LENGTH_WORLD * SHOGGOTH_CONFIG.beamLengthScale;
+const LAZARUS_BEAM_LENGTH_WORLD =
+  LAZARUS_BASE_BEAM_LENGTH_WORLD * SHOGGOTH_CONFIG.beamLengthScale;
 
 const grassSprite = new Image();
 grassSprite.src = "/textures/grass3.png";
@@ -68,8 +74,6 @@ electricityLineSpriteSheet.src = "/sprites/electricity-line-spritesheet.png";
 
 const playerSpriteSheet = new Image();
 playerSpriteSheet.src = "/sprites/character4.png";
-
-
 
 const PLAYER_SPRITE_FRAME_SIZE = 32;
 const PLAYER_SPRITE_RENDER_SIZE = 64;
@@ -133,7 +137,7 @@ interface TreeLightningAttack {
 }
 
 const { addSummon } = useSummons.getState();
-addSummon("lightning")
+addSummon("lightning");
 
 function generateRoomTerrain(): TerrainObstacle[] {
   const trees: TerrainObstacle[] = [];
@@ -205,7 +209,7 @@ function resolveTerrainPenetration(
 ): THREE.Vector3 {
   const resolved = pos.clone();
   const combined = radius; // Pre-compute to avoid repeated addition
-  
+
   for (let i = 0; i < 2; i++) {
     for (const obs of obstacles) {
       const dx = resolved.x - obs.x;
@@ -213,11 +217,11 @@ function resolveTerrainPenetration(
       const distSq = dx * dx + dz * dz;
       const combinedRadius = combined + obs.radius;
       const threshold = combinedRadius * combinedRadius;
-      
+
       if (distSq >= threshold) continue;
 
       const dist = Math.max(Math.sqrt(distSq), 0.0001);
-      const pushOut = ((combined + obs.radius) - dist + 0.01) / dist;
+      const pushOut = (combined + obs.radius - dist + 0.01) / dist;
       resolved.x += dx * pushOut;
       resolved.z += dz * pushOut;
     }
@@ -234,7 +238,7 @@ function moveWithTerrainSlide(
   // Optimized: reuse vector math, early exit
   const targetX = currentPos.x + move.x;
   const targetZ = currentPos.z + move.z;
-  
+
   // Quick check without creating new vector
   let collision = false;
   const combinedRadius = radius;
@@ -247,7 +251,7 @@ function moveWithTerrainSlide(
       break;
     }
   }
-  
+
   if (!collision) {
     const resolved = currentPos.clone().add(move);
     return resolveTerrainPenetration(resolved, obstacles, radius);
@@ -271,7 +275,7 @@ function moveWithTerrainSlide(
     const attemptX = currentPos.x + slide.x;
     const attemptZ = currentPos.z + slide.z;
     let slideCollision = false;
-    
+
     for (const obs of obstacles) {
       const dx = attemptX - obs.x;
       const dz = attemptZ - obs.z;
@@ -281,7 +285,7 @@ function moveWithTerrainSlide(
         break;
       }
     }
-    
+
     if (!slideCollision) {
       const result = currentPos.clone();
       result.x = attemptX;
@@ -298,33 +302,49 @@ function getEnemyType(enemy: { type?: string }): "basic" | "tank" | "eyeball" {
   return "basic";
 }
 
-function getEnemyBodyHitRadius(enemy: { type?: string; isBoss?: boolean; bossType?: string }) {
+function getEnemyBodyHitRadius(enemy: {
+  type?: string;
+  isBoss?: boolean;
+  bossType?: string;
+}) {
   if (enemy.isBoss && enemy.bossType === "lazarus") {
     return SHOGGOTH_CONFIG.bodyHitRadius;
+  }
+  if (enemy.isBoss && enemy.bossType === "octopus") {
+    return 3.2;
+  }
+  if (enemy.type === "crow") {
+    return 0.6;
   }
   return ENEMY_TYPE_CONFIG[getEnemyType(enemy)].bodyHitRadius;
 }
 
-function getEnemyCollisionRadius(enemy: { type?: string }) {
+function getEnemyCollisionRadius(enemy: { type?: string; isBoss?: boolean; bossType?: string }) {
+  if (enemy.isBoss && enemy.bossType === "octopus") return 3.5;
+  if (enemy.type === "crow") return 0.6;
   return ENEMY_TYPE_CONFIG[getEnemyType(enemy)].collisionRadius;
 }
 
-function distancePointToSegment(point: THREE.Vector2, a: THREE.Vector2, b: THREE.Vector2) {
+function distancePointToSegment(
+  point: THREE.Vector2,
+  a: THREE.Vector2,
+  b: THREE.Vector2,
+) {
   // Optimized: avoid cloning vectors, use direct math
   const abx = b.x - a.x;
   const aby = b.y - a.y;
   const abLenSq = abx * abx + aby * aby;
-  
+
   if (abLenSq === 0) {
     const apx = point.x - a.x;
     const apy = point.y - a.y;
     return Math.sqrt(apx * apx + apy * apy);
   }
-  
+
   const apx = point.x - a.x;
   const apy = point.y - a.y;
   const t = THREE.MathUtils.clamp((apx * abx + apy * aby) / abLenSq, 0, 1);
-  
+
   const closestX = a.x + abx * t;
   const closestY = a.y + aby * t;
   const dx = point.x - closestX;
@@ -332,8 +352,10 @@ function distancePointToSegment(point: THREE.Vector2, a: THREE.Vector2, b: THREE
   return Math.sqrt(dx * dx + dy * dy);
 }
 
-
-function pickTreeLightningAttack(nowMs: number, trees: TerrainObstacle[]): TreeLightningAttack | null {
+function pickTreeLightningAttack(
+  nowMs: number,
+  trees: TerrainObstacle[],
+): TreeLightningAttack | null {
   if (trees.length < 2) return null;
 
   // Single pass to find eligible trees
@@ -346,17 +368,22 @@ function pickTreeLightningAttack(nowMs: number, trees: TerrainObstacle[]): TreeL
 
   if (eligibleTrees.length < 2) return null;
 
-  const source = eligibleTrees[Math.floor(Math.random() * eligibleTrees.length)];
-  
+  const source =
+    eligibleTrees[Math.floor(Math.random() * eligibleTrees.length)];
+
   // Single pass to find nearby trees with distance - avoid map/sort
   const nearbyTrees: { tree: TerrainObstacle; dist: number }[] = [];
   for (const tree of trees) {
-    if (tree !== source && nowMs >= tree.cooldownUntil && !tree.lockedByLightning) {
+    if (
+      tree !== source &&
+      nowMs >= tree.cooldownUntil &&
+      !tree.lockedByLightning
+    ) {
       const dx = tree.x - source.x;
       const dz = tree.z - source.z;
       const dist = dx * dx + dz * dz; // Use squared distance to avoid sqrt
       nearbyTrees.push({ tree, dist });
-      
+
       // Keep only best 6 to avoid full sort
       if (nearbyTrees.length > 12) {
         let maxIdx = 0;
@@ -372,8 +399,10 @@ function pickTreeLightningAttack(nowMs: number, trees: TerrainObstacle[]): TreeL
 
   // Quick sort of small array
   nearbyTrees.sort((a, b) => a.dist - b.dist);
-  const target = nearbyTrees[Math.floor(Math.random() * Math.min(6, nearbyTrees.length))].tree;
-  
+  const target =
+    nearbyTrees[Math.floor(Math.random() * Math.min(6, nearbyTrees.length))]
+      .tree;
+
   return {
     source,
     target,
@@ -409,7 +438,7 @@ const isObjectInViewport = (
   objectZ: number,
   playerX: number,
   playerZ: number,
-  cullRadius: number = 80
+  cullRadius: number = 80,
 ): boolean => {
   const dx = objectX - playerX;
   const dz = objectZ - playerZ;
@@ -437,37 +466,39 @@ export default memo(function CanvasGame() {
   const treeLightningSpawnTimerRef = useRef<number>(0);
   const footstepMarksRef = useRef<FootstepMark[]>([]);
   const footstepSpawnTimerRef = useRef<number>(0);
-  
+
   const footstepSideRef = useRef<1 | -1>(1);
   const playerFacingRef = useRef<1 | -1>(1);
   const fireSystem = useRef(new FireParticleSystem(15000));
   const fireSprite = useRef<HTMLImageElement>(new Image());
   const fireEmissionThrottleRef = useRef<Record<string, number>>({});
-const spriteReady = useRef(false);
-const lightningSpriteSheet = useRef<HTMLImageElement>(new Image());
-const lightningReady = useRef(false);
+  const spriteReady = useRef(false);
+  const lightningSpriteSheet = useRef<HTMLImageElement>(new Image());
+  const lightningReady = useRef(false);
 
-useEffect(() => {
-  const img = new Image();
+  useEffect(() => {
+    const img = new Image();
 
-  img.onload = () => {
-    fireSprite.current = img;
-    spriteReady.current = true;
-  };
+    img.onload = () => {
+      fireSprite.current = img;
+      spriteReady.current = true;
+    };
 
-  img.src = "/sprites/fire-effect.png";
-}, []);
+    img.src = "/sprites/fire-effect.png";
+  }, []);
 
-useEffect(() => {
-  const img = new Image();
-  img.onload = () => {
-    lightningSpriteSheet.current = img;
-    lightningReady.current = true;
-  };
-  img.src = "/sprites/lightning.png";
-}, []);
+  useEffect(() => {
+    const img = new Image();
+    img.onload = () => {
+      lightningSpriteSheet.current = img;
+      lightningReady.current = true;
+    };
+    img.src = "/sprites/lightning.png";
+  }, []);
 
-  const projectileTrailLastPosRef = useRef<Map<string, THREE.Vector3>>(new Map());
+  const projectileTrailLastPosRef = useRef<Map<string, THREE.Vector3>>(
+    new Map(),
+  );
   const addImpact = useVisualEffects((state) => state.addImpact);
   const addExplosion = useVisualEffects((state) => state.addExplosion);
   const addDamageNumber = useVisualEffects((state) => state.addDamageNumber);
@@ -512,13 +543,12 @@ useEffect(() => {
 
   const updateSummons = useSummons((state) => state.updateSummons);
   const updateStatusEffects = useSummons((state) => state.updateStatusEffects);
-  const handleEnemyKilledBySummon = useSummons((state) => state.handleEnemyKilledBySummon);
+  const handleEnemyKilledBySummon = useSummons(
+    (state) => state.handleEnemyKilledBySummon,
+  );
   const playHit = useAudio((state) => state.playHit);
   const playSuccess = useAudio((state) => state.playSuccess);
   const screenCenter = useCamera((state) => state.screenCenter);
-  
-
-
 
   const poolSize = 20000;
 
@@ -555,17 +585,21 @@ useEffect(() => {
     offsetX: 0,
     offsetY: 0,
   });
-  
 
   useEffect(() => {
     if (canvasRef.current) {
       canvasRectRef.current = canvasRef.current.getBoundingClientRect();
     }
   }, []);
-  
+
   useEffect(() => {
     const updatePixelScale = () => {
-      const scaled = getPixelPerfectScale(CANVAS_WIDTH, CANVAS_HEIGHT, window.innerWidth, window.innerHeight);
+      const scaled = getPixelPerfectScale(
+        CANVAS_WIDTH,
+        CANVAS_HEIGHT,
+        window.innerWidth,
+        window.innerHeight,
+      );
       setCanvasDisplay({
         width: scaled.width,
         height: scaled.height,
@@ -580,14 +614,13 @@ useEffect(() => {
   }, []);
 
   useEffect(() => {
-    Object.values(VisualSprites).forEach(img => {
+    Object.values(VisualSprites).forEach((img) => {
       if (!img.complete) {
         img.onload = () => {};
       }
     });
   }, []);
 
-  
   useEffect(() => {
     terrainRef.current = generateRoomTerrain();
     treeLightningRef.current = [];
@@ -628,10 +661,14 @@ useEffect(() => {
       if (!canInteract) return;
 
       const playerState = usePlayer.getState();
-      if (e.code === "KeyR" && !playerState.isReloading && playerState.ammo < maxAmmo) {
+      if (
+        e.code === "KeyR" &&
+        !playerState.isReloading &&
+        playerState.ammo < maxAmmo
+      ) {
         startReload();
       }
-    
+
       if (e.code === "KeyB") {
         const spawnPos = position.clone().add(new THREE.Vector3(20, 0, 0));
         useEnemies.getState().spawnLazarusBoss(spawnPos);
@@ -650,81 +687,118 @@ useEffect(() => {
     };
   }, [canInteract, startReload]);
 
-useEffect(() => {
-  const handleMouseDown = (e: MouseEvent) => {
-    if (!canInteract) return;
+  useEffect(() => {
+    const handleMouseDown = (e: MouseEvent) => {
+      if (!canInteract) return;
 
-    if (e.button === 0) {
-      isMouseDown.current = true;
-    } else if (e.button === 2) {
-      // Right-click dash
-      const ps = usePlayer.getState();
-      if (ps.hasDash && ps.dashCooldown <= 0) {
-        const center = useCamera.getState().screenCenter;
-        const dx = mouseRef.current.x - center.x;
-        const dz = mouseRef.current.y - center.y;
-        const distance = Math.sqrt(dx * dx + dz * dz);
-        if (distance > 0) {
-          const direction = new THREE.Vector3(dx / distance, 0, dz / distance);
-          usePlayer.getState().tryDash(direction);
+      if (e.button === 0) {
+        isMouseDown.current = true;
+      } else if (e.button === 2) {
+        // Right-click dash
+        const ps = usePlayer.getState();
+        if (ps.hasDash && ps.dashCooldown <= 0) {
+          const center = useCamera.getState().screenCenter;
+          const dx = mouseRef.current.x - center.x;
+          const dz = mouseRef.current.y - center.y;
+          const distance = Math.sqrt(dx * dx + dz * dz);
+          if (distance > 0) {
+            const direction = new THREE.Vector3(
+              dx / distance,
+              0,
+              dz / distance,
+            );
+            usePlayer.getState().tryDash(direction);
+          }
         }
       }
-    }
-  };
+    };
 
-  const handleMouseUp = (e: MouseEvent) => {
-    if (e.button === 0) {
-      isMouseDown.current = false;
-    }
-  };
+    const handleMouseUp = (e: MouseEvent) => {
+      if (e.button === 0) {
+        isMouseDown.current = false;
+      }
+    };
 
-  const handleContextMenu = (e: MouseEvent) => {
-    e.preventDefault();
-  };
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
 
-const handleMouseMove = (e: MouseEvent) => {
-  const canvas = canvasRef.current;
-  if (!canvas) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
 
-  const rect = canvas.getBoundingClientRect();
+      const rect = canvas.getBoundingClientRect();
 
-  const scaleX = CANVAS_WIDTH / rect.width;
-  const scaleY = CANVAS_HEIGHT / rect.height;
+      const scaleX = CANVAS_WIDTH / rect.width;
+      const scaleY = CANVAS_HEIGHT / rect.height;
 
-  const offsetX = canvasDisplay.offsetX;
-  const offsetY = canvasDisplay.offsetY;
+      const offsetX = canvasDisplay.offsetX;
+      const offsetY = canvasDisplay.offsetY;
 
-  mouseRef.current = {
-    x: (e.clientX - rect.left + offsetX) * scaleX,
-    y: (e.clientY - rect.top + offsetY) * scaleY,
-  };
-};
+      mouseRef.current = {
+        x: (e.clientX - rect.left + offsetX) * scaleX,
+        y: (e.clientY - rect.top + offsetY) * scaleY,
+      };
+    };
 
-  window.addEventListener("mousedown", handleMouseDown);
-  window.addEventListener("mouseup", handleMouseUp);
-  window.addEventListener("mousemove", handleMouseMove);
-  window.addEventListener("contextmenu", handleContextMenu);
+    window.addEventListener("mousedown", handleMouseDown);
+    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("contextmenu", handleContextMenu);
 
-  return () => {
-    window.removeEventListener("mousedown", handleMouseDown);
-    window.removeEventListener("mouseup", handleMouseUp);
-    window.removeEventListener("mousemove", handleMouseMove);
-    window.removeEventListener("contextmenu", handleContextMenu);
-  };
-}, [canInteract]);
-
+    return () => {
+      window.removeEventListener("mousedown", handleMouseDown);
+      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("contextmenu", handleContextMenu);
+    };
+  }, [canInteract]);
 
   const spawnEyeballProjectile = (enemy: any) => {
-    const direction = new THREE.Vector3(position.x - enemy.position.x, 0, position.z - enemy.position.z).normalize();
+    const direction = new THREE.Vector3(
+      position.x - enemy.position.x,
+      0,
+      position.z - enemy.position.z,
+    ).normalize();
     enemyProjectilesRef.current.push({
       id: crypto.randomUUID(),
       position: enemy.position.clone(),
-      velocity: direction.multiplyScalar(ENEMY_TYPE_CONFIG.eyeball.projectileSpeed ?? 9),
+      velocity: direction.multiplyScalar(
+        ENEMY_TYPE_CONFIG.eyeball.projectileSpeed ?? 9,
+      ),
       damage: enemy.attack ?? 1,
       life: ENEMY_TYPE_CONFIG.eyeball.projectileLife ?? 2.8,
       maxLife: ENEMY_TYPE_CONFIG.eyeball.projectileLife ?? 2.8,
       size: ENEMY_TYPE_CONFIG.eyeball.projectileSize ?? 0.35,
     });
+  };
+
+  const spawnOctopusProjectiles = (enemy: any) => {
+    const baseDir = new THREE.Vector3(
+      position.x - enemy.position.x,
+      0,
+      position.z - enemy.position.z,
+    ).normalize();
+    const spreadAngles = [-0.35, 0, 0.35];
+    for (const angle of spreadAngles) {
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      const dir = new THREE.Vector3(
+        baseDir.x * cos - baseDir.z * sin,
+        0,
+        baseDir.x * sin + baseDir.z * cos,
+      );
+      enemyProjectilesRef.current.push({
+        id: crypto.randomUUID(),
+        position: enemy.position.clone(),
+        velocity: dir.multiplyScalar(10),
+        damage: 2,
+        life: 3.5,
+        maxLife: 3.5,
+        size: 0.45,
+        kind: "orb",
+      });
+    }
   };
 
   useEffect(() => {
@@ -742,7 +816,8 @@ const handleMouseMove = (e: MouseEvent) => {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      const animationNowMs = phase === "playing" ? currentTime : pausedAnimationTimeRef.current;
+      const animationNowMs =
+        phase === "playing" ? currentTime : pausedAnimationTimeRef.current;
       const playerState = usePlayer.getState();
       const position = playerState.position;
       playerPositionRef.current.copy(position);
@@ -762,20 +837,20 @@ const handleMouseMove = (e: MouseEvent) => {
         viewportWidth: CANVAS_WIDTH,
         viewportHeight: CANVAS_HEIGHT,
       });
-      useCamera.getState().setScreenCenter(
-        cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT),
-      );
-      
-      
+      useCamera
+        .getState()
+        .setScreenCenter(
+          cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT),
+        );
 
       ctx.fillStyle = "#1a1a1a";
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
       drawDungeon(ctx, animationNowMs);
-      
 
       if (phase === "playing") {
-        const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+        const { x: centerX, y: centerY } =
+          cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
         const ps = usePlayer.getState();
         updateReload(delta);
         updateInvincibility(delta);
@@ -786,22 +861,32 @@ const handleMouseMove = (e: MouseEvent) => {
         updateFanFire(delta, () => {
           const fanIndex = usePlayer.getState().fanFireIndex;
           const angle = (fanIndex / 10) * Math.PI * 2;
-          const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
-          const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+          const direction = new THREE.Vector3(
+            Math.cos(angle),
+            0,
+            Math.sin(angle),
+          );
+          const { x: centerX, y: centerY } =
+            cameraRef.current.getPlayerScreenCenter(
+              CANVAS_WIDTH,
+              CANVAS_HEIGHT,
+            );
           const aimAngle = Math.atan2(
             mouseRef.current.y - centerY,
             mouseRef.current.x - centerX,
           );
           const gunOffsetPixels = 3;
-          const gunOffset = gunOffsetPixels / (25);
-          const gunPosition = ps.position.clone().add(
-            new THREE.Vector3(
-              Math.cos(aimAngle) * gunOffset,
-              0,
-              Math.sin(aimAngle) * gunOffset,
-            ),
-          );
-          
+          const gunOffset = gunOffsetPixels / 25;
+          const gunPosition = ps.position
+            .clone()
+            .add(
+              new THREE.Vector3(
+                Math.cos(aimAngle) * gunOffset,
+                0,
+                Math.sin(aimAngle) * gunOffset,
+              ),
+            );
+
           const stats = usePlayer.getState().getProjectileStats();
 
           useProjectiles.getState().addProjectile({
@@ -821,22 +906,26 @@ const handleMouseMove = (e: MouseEvent) => {
           playHit();
         });
         fireSystem.current.update();
-        
+
         // Update fire particle count in store
-        const activeFireParticles = fireSystem.current.particles.filter(p => p.active).length;
+        const activeFireParticles = fireSystem.current.particles.filter(
+          (p) => p.active,
+        ).length;
         useParticles.setState({ fireParticleCount: activeFireParticles });
 
-
         updateStatusEffects(delta, enemies, (enemyId, damage) => {
-          const enemy = enemies.find(e => e.id === enemyId);
+          const enemy = enemies.find((e) => e.id === enemyId);
           if (enemy) {
-            applyHit({
-              enemy,
-              damage,
-              impactPos: enemy.position.clone(),
-              color: "#ffb347",
-              isSummonDamage: true,
-            }, enemies);
+            applyHit(
+              {
+                enemy,
+                damage,
+                impactPos: enemy.position.clone(),
+                color: "#ffb347",
+                isSummonDamage: true,
+              },
+              enemies,
+            );
             if (enemy.health <= 0) {
               handleEnemyKilledBySummon();
 
@@ -846,8 +935,13 @@ const handleMouseMove = (e: MouseEvent) => {
                 const addProjectile = useProjectiles.getState().addProjectile;
 
                 for (let i = 0; i < 3; i++) {
-                  const angle = (i / 3) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
-                  const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+                  const angle =
+                    (i / 3) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
+                  const direction = new THREE.Vector3(
+                    Math.cos(angle),
+                    0,
+                    Math.sin(angle),
+                  );
 
                   addProjectile({
                     position: enemy.position.clone(),
@@ -868,9 +962,8 @@ const handleMouseMove = (e: MouseEvent) => {
           }
         });
 
-
         updateEffects(delta);
-        
+
         damagedThisFrameRef.current = false;
 
         gameplayElapsedMsRef.current += delta * 1000;
@@ -882,7 +975,10 @@ const handleMouseMove = (e: MouseEvent) => {
             treeLightningSpawnTimerRef.current += delta;
             while (treeLightningSpawnTimerRef.current >= 1.2) {
               treeLightningSpawnTimerRef.current -= 1.2;
-              const newAttack = pickTreeLightningAttack(nowMs, terrainRef.current);
+              const newAttack = pickTreeLightningAttack(
+                nowMs,
+                terrainRef.current,
+              );
               if (newAttack) {
                 newAttack.source.lockedByLightning = true;
                 newAttack.target.lockedByLightning = true;
@@ -909,22 +1005,38 @@ const handleMouseMove = (e: MouseEvent) => {
               attack.frame = (attack.frame + 1) % 4;
             }
 
-            const lineStart = new THREE.Vector2(attack.source.x, attack.source.z);
+            const lineStart = new THREE.Vector2(
+              attack.source.x,
+              attack.source.z,
+            );
             const lineEnd = new THREE.Vector2(attack.target.x, attack.target.z);
             const playerPoint = new THREE.Vector2(position.x, position.z);
             const lineHitRadius = 1.35;
             const playerRadius = 0.8;
-            const distanceToBeam = distancePointToSegment(playerPoint, lineStart, lineEnd);
+            const distanceToBeam = distancePointToSegment(
+              playerPoint,
+              lineStart,
+              lineEnd,
+            );
 
             attack.damageTimer += delta;
-            if (distanceToBeam <= lineHitRadius + playerRadius && invincibilityTimer <= 0 && !damagedThisFrameRef.current && attack.damageTimer >= 0.2) {
-              applyPlayerDamage(1, new THREE.Vector3(position.x, 0, position.z));
+            if (
+              distanceToBeam <= lineHitRadius + playerRadius &&
+              invincibilityTimer <= 0 &&
+              !damagedThisFrameRef.current &&
+              attack.damageTimer >= 0.2
+            ) {
+              applyPlayerDamage(
+                new THREE.Vector3(position.x, 0, position.z),
+              );
               damagedThisFrameRef.current = true;
-              attack.damageTimer = 0;
+              
             }
           }
 
-          treeLightningRef.current = treeLightningRef.current.filter((attack) => nowMs < attack.endsAt);
+          treeLightningRef.current = treeLightningRef.current.filter(
+            (attack) => nowMs < attack.endsAt,
+          );
         }
 
         if (ammo === 0 && !isReloading) {
@@ -941,37 +1053,57 @@ const handleMouseMove = (e: MouseEvent) => {
 
         setFiring(isMouseDown.current && !isReloading && ammo > 0);
 
-        if (isMouseDown.current && !isReloading && ammo > 0 && canFire.current) {
-            if (fireShot()) {
-              const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
-
-              const stats = usePlayer.getState().getProjectileStats();
-              const baseAngle = Math.atan2(
-                mouseRef.current.y - centerY,
-                mouseRef.current.x - centerX
+        if (
+          isMouseDown.current &&
+          !isReloading &&
+          ammo > 0 &&
+          canFire.current
+        ) {
+          if (fireShot()) {
+            const { x: centerX, y: centerY } =
+              cameraRef.current.getPlayerScreenCenter(
+                CANVAS_WIDTH,
+                CANVAS_HEIGHT,
               );
-              const horizontalAim = Math.cos(baseAngle);
-              if (horizontalAim < 0) {
-                playerFacingRef.current = -1;
-              } else if (horizontalAim > 0) {
-                playerFacingRef.current = 1;
-              }
-              const handOffset = 0;
-              const barrelLength = 5;
-              const totalOffsetPixels = handOffset + barrelLength;
-              const totalOffset = totalOffsetPixels / (25);
-              const barrelFlashPosition = ps.position.clone().add(
+
+            const stats = usePlayer.getState().getProjectileStats();
+            const baseAngle = Math.atan2(
+              mouseRef.current.y - centerY,
+              mouseRef.current.x - centerX,
+            );
+            const horizontalAim = Math.cos(baseAngle);
+            if (horizontalAim < 0) {
+              playerFacingRef.current = -1;
+            } else if (horizontalAim > 0) {
+              playerFacingRef.current = 1;
+            }
+            const handOffset = 0;
+            const barrelLength = 5;
+            const totalOffsetPixels = handOffset + barrelLength;
+            const totalOffset = totalOffsetPixels / 25;
+            const barrelFlashPosition = ps.position
+              .clone()
+              .add(
                 new THREE.Vector3(
-                  Math.cos(baseAngle) * totalOffset*1.5,
+                  Math.cos(baseAngle) * totalOffset * 1.5,
                   0,
-                  Math.sin(baseAngle) * totalOffset*1.5,
+                  Math.sin(baseAngle) * totalOffset * 1.5,
                 ),
               );
 
-              // Helper function to fire a projectile in a direction
-              const fireProjectileInDirection = (angle: number, damageMultiplier: number = 1) => {
-                const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
-                const barrelPosition = ps.position.clone().add(
+            // Helper function to fire a projectile in a direction
+            const fireProjectileInDirection = (
+              angle: number,
+              damageMultiplier: number = 1,
+            ) => {
+              const direction = new THREE.Vector3(
+                Math.cos(angle),
+                0,
+                Math.sin(angle),
+              );
+              const barrelPosition = ps.position
+                .clone()
+                .add(
                   new THREE.Vector3(
                     Math.cos(angle) * totalOffset * 5.5,
                     0,
@@ -979,93 +1111,108 @@ const handleMouseMove = (e: MouseEvent) => {
                   ),
                 );
 
-                const projectileExplosive = ps.lastAmmoExplosive && ammo === 1
-                  ? { radius: 192, damage: 50 }
+              const projectileExplosive =
+                ps.lastAmmoExplosive && ammo === 1
+                  ? { radius: 192 / 25, damage: 50 }
                   : stats.explosive;
 
-                const projectileBurn = ps.incendiary
-                  ? { damage: 4, duration: 3.1 }
-                  : undefined;
+              const projectileBurn = ps.incendiary
+                ? { damage: 4, duration: 3.1 }
+                : undefined;
 
-                addProjectile({
-                  position: barrelPosition,
-                  direction,
-                  damage: stats.damage * damageMultiplier,
-                  speed: stats.speed,
-                  life: stats.life,
-                  size: stats.projectileSize,
-                  range: stats.range,
-                  homing: stats.homing,
-                  piercing: stats.piercing,
-                  bouncing: stats.bouncing,
-                  explosive: projectileExplosive,
-                  chainLightning: stats.chainLightning,
-                  trailLength: stats.trailLength,
-                  burn: projectileBurn,
-                });
-                
-              };
+              addProjectile({
+                position: barrelPosition,
+                direction,
+                damage: stats.damage * damageMultiplier,
+                speed: stats.speed,
+                life: stats.life,
+                size: stats.projectileSize,
+                range: stats.range,
+                homing: stats.homing,
+                piercing: stats.piercing,
+                bouncing: stats.bouncing,
+                explosive: projectileExplosive,
+                chainLightning: stats.chainLightning,
+                trailLength: stats.trailLength,
+                burn: projectileBurn,
+              });
+            };
 
-              // Normal projectiles
-              const spreadAngle = stats.projectileCount > 1 ? 0.15 : 0;
-              for (let i = 0; i < stats.projectileCount; i++) {
-                let angle = baseAngle;
-                if (stats.projectileCount > 1) {
-                  const offset = (i - (stats.projectileCount - 1) / 2) * spreadAngle;
-                  angle += offset;
-                }
-
-                const inaccuracy = (1 - stats.accuracy);
-                angle += ((Math.random() / 4) - 0.125) * inaccuracy;
-
-                fireProjectileInDirection(angle);
+            // Normal projectiles
+            const spreadAngle = stats.projectileCount > 1 ? 0.15 : 0;
+            for (let i = 0; i < stats.projectileCount; i++) {
+              let angle = baseAngle;
+              if (stats.projectileCount > 1) {
+                const offset =
+                  (i - (stats.projectileCount - 1) / 2) * spreadAngle;
+                angle += offset;
               }
 
-              // Split Fire: fire behind
-              if (ps.splitFire) {
-                fireProjectileInDirection(baseAngle + Math.PI);
-              }
+              const inaccuracy = 1 - stats.accuracy;
+              angle += (Math.random() / 4 - 0.125) * inaccuracy;
 
-              // Fan Fire: on last ammo, fire 10 bullets in a circle
-              if (ps.fanFire && ammo === 1) {
-                ps.startFanFire();
-              }
-              if (phase === "playing") cameraRef.current.shake({ strength: 35, durationMs: 60 });
-              ps.fireMuzzleFlash(barrelFlashPosition);
-              
-
-              playHit();
-
-              
-
-                
-              fireTimer.current = firerate;
-              canFire.current = false;
+              fireProjectileInDirection(angle);
             }
-          
-        }
 
+            // Split Fire: fire behind
+            if (ps.splitFire) {
+              fireProjectileInDirection(baseAngle + Math.PI);
+            }
+
+            // Fan Fire: on last ammo, fire 10 bullets in a circle
+            if (ps.fanFire && ammo === 1) {
+              ps.startFanFire();
+            }
+            if (phase === "playing")
+              cameraRef.current.shake({ strength: 35, durationMs: 60 });
+            ps.fireMuzzleFlash(barrelFlashPosition);
+
+            playHit();
+
+            fireTimer.current = firerate;
+            canFire.current = false;
+          }
+        }
 
         let moveX = 0;
         let moveZ = 0;
 
-        if (keysPressed.current.has("KeyW") || keysPressed.current.has("ArrowUp")) moveZ -= 1;
-        if (keysPressed.current.has("KeyS") || keysPressed.current.has("ArrowDown")) moveZ += 1;
-        if (keysPressed.current.has("KeyA") || keysPressed.current.has("ArrowLeft")) moveX -= 1;
-        if (keysPressed.current.has("KeyD") || keysPressed.current.has("ArrowRight")) moveX += 1;
-        
-        if (moveX < 0 && !((isMouseDown.current && !isReloading && ammo > 0))) {
+        if (
+          keysPressed.current.has("KeyW") ||
+          keysPressed.current.has("ArrowUp")
+        )
+          moveZ -= 1;
+        if (
+          keysPressed.current.has("KeyS") ||
+          keysPressed.current.has("ArrowDown")
+        )
+          moveZ += 1;
+        if (
+          keysPressed.current.has("KeyA") ||
+          keysPressed.current.has("ArrowLeft")
+        )
+          moveX -= 1;
+        if (
+          keysPressed.current.has("KeyD") ||
+          keysPressed.current.has("ArrowRight")
+        )
+          moveX += 1;
+
+        if (moveX < 0 && !(isMouseDown.current && !isReloading && ammo > 0)) {
           playerFacingRef.current = -1;
-        } else if (moveX > 0  && !((isMouseDown.current && !isReloading && ammo > 0))) {
+        } else if (
+          moveX > 0 &&
+          !(isMouseDown.current && !isReloading && ammo > 0)
+        ) {
           playerFacingRef.current = 1;
         }
 
-          if (moveX !== 0 || moveZ !== 0) { 
-            usePlayer.getState().setMoving(true);
+        if (moveX !== 0 || moveZ !== 0) {
+          usePlayer.getState().setMoving(true);
           const len = Math.sqrt(moveX ** 2 + moveZ ** 2);
           const playerState = usePlayer.getState();
           let speedModifier = isFiring && !isReloading ? 0.4 : 1;
-          
+
           // Apply speed when firing bonus
           if (isFiring && !isReloading && playerState.speedWhenFiring > 0) {
             speedModifier += playerState.speedWhenFiring;
@@ -1076,9 +1223,19 @@ const handleMouseMove = (e: MouseEvent) => {
 
           const currentPos = usePlayer.getState().position.clone();
           const moveStep = new THREE.Vector3(dx, 0, dz);
-          const movedPos = moveWithTerrainSlide(currentPos, moveStep, terrainRef.current, 0.8);
+          const movedPos = moveWithTerrainSlide(
+            currentPos,
+            moveStep,
+            terrainRef.current,
+            0.8,
+          );
 
-          const bounced = bounceAgainstBounds(movedPos, new THREE.Vector3(0,0,0), ROOM_SIZE, 1);
+          const bounced = bounceAgainstBounds(
+            movedPos,
+            new THREE.Vector3(0, 0, 0),
+            ROOM_SIZE,
+            1,
+          );
           usePlayer.setState({ position: bounced.position });
 
           footstepSpawnTimerRef.current += delta;
@@ -1087,10 +1244,17 @@ const handleMouseMove = (e: MouseEvent) => {
             const moveDir = new THREE.Vector3(dx, 0, dz).normalize();
             const side = footstepSideRef.current;
             footstepSideRef.current = side === 1 ? -1 : 1;
-            const lateral = new THREE.Vector3(-moveDir.z, 0, moveDir.x).multiplyScalar(0.35 * side);
+            const lateral = new THREE.Vector3(
+              -moveDir.z,
+              0,
+              moveDir.x,
+            ).multiplyScalar(0.35 * side);
             footstepMarksRef.current.push({
               id: crypto.randomUUID(),
-              position: bounced.position.clone().sub(moveDir.clone().multiplyScalar(0.35)).add(lateral),
+              position: bounced.position
+                .clone()
+                .sub(moveDir.clone().multiplyScalar(0.35))
+                .add(lateral),
               life: 0,
               maxLife: 0.6,
               radius: 6,
@@ -1111,178 +1275,375 @@ const handleMouseMove = (e: MouseEvent) => {
           (enemyId, damage, knockback, projectileData) => {
             const enemy = enemies.find((e) => e.id === enemyId);
             if (enemy) {
-              applyHit({
-                enemy,
-                damage,
-                impactPos: projectileData?.impactPos,
-                color: projectileData?.color || "#ffffff",
-                knockbackStrength: knockback.length(),
-                explosive: projectileData?.explosive,
-                chainLightning: projectileData?.chainLightning,
-                burn: projectileData?.burn,
-                isPlayerDamage: true,
-              }, enemies);
+              applyHit(
+                {
+                  enemy,
+                  damage,
+                  impactPos: projectileData?.impactPos,
+                  color: projectileData?.color || "#ffffff",
+                  knockbackStrength: knockback.length(),
+                  explosive: projectileData?.explosive,
+                  chainLightning: projectileData?.chainLightning,
+                  burn: projectileData?.burn,
+                  isPlayerDamage: true,
+                },
+                enemies,
+              );
             }
           },
           phase !== "playing",
         );
 
+        const updatedEnemies = enemies.map((enemy) => {
+          // BOSS LOGIC
+          enemy.hitFlash = Math.max(enemy.hitFlash - delta, 0);
 
-      const updatedEnemies = enemies.map((enemy) => {
-      // BOSS LOGIC
-        enemy.hitFlash = Math.max(enemy.hitFlash - delta, 0);
+          // #########################################################################
+          if (enemy.isBoss && enemy.bossType === "lazarus") {
+            const updated = { ...enemy };
 
-
-        // #########################################################################
-        if (enemy.isBoss && enemy.bossType === "lazarus") {
-          const updated = { ...enemy };
-
-          if (!updated.isEnraged && updated.health < updated.maxHealth * 0.45) {
-            updated.isEnraged = true;
-            updated.maxProjectileCooldown = 1;
-            updated.maxWindUpTime = 0.8;
-            updated.speed *= 1.15;
-          }
-
-          const dirToPlayer = new THREE.Vector3().subVectors(position, updated.position);
-          const distanceToPlayer = dirToPlayer.length();
-          const safeDirection = distanceToPlayer > 0.001 ? dirToPlayer.clone().normalize() : new THREE.Vector3(1, 0, 0);
-          const orbitDirection = new THREE.Vector3(-safeDirection.z, 0, safeDirection.x);
-
-          const canAdvance = distanceToPlayer > SHOGGOTH_CONFIG.idealDistance;
-          const canRetreat = distanceToPlayer < SHOGGOTH_CONFIG.minDistance;
-
-          if (updated.attackState === "chasing") {
-            let moveDirection = new THREE.Vector3();
-            if (canAdvance) {
-              moveDirection.copy(safeDirection);
-            } else if (canRetreat) {
-              moveDirection.copy(safeDirection).multiplyScalar(-0.65);
+            if (
+              !updated.isEnraged &&
+              updated.health < updated.maxHealth * 0.45
+            ) {
+              updated.isEnraged = true;
+              updated.maxProjectileCooldown = 1;
+              updated.maxWindUpTime = 0.8;
+              updated.speed *= 1.15;
             }
 
-            if (moveDirection.lengthSq() > 0) {
-              updated.position.add(moveDirection.normalize().multiplyScalar(updated.speed * delta));
-            }
+            const dirToPlayer = new THREE.Vector3().subVectors(
+              position,
+              updated.position,
+            );
+            const distanceToPlayer = dirToPlayer.length();
+            const safeDirection =
+              distanceToPlayer > 0.001
+                ? dirToPlayer.clone().normalize()
+                : new THREE.Vector3(1, 0, 0);
+            const orbitDirection = new THREE.Vector3(
+              -safeDirection.z,
+              0,
+              safeDirection.x,
+            );
 
-            updated.rotationY = Math.atan2(safeDirection.z, safeDirection.x);
-            updated.projectileCooldown = (updated.projectileCooldown ?? 0) - delta;
-            if (updated.projectileCooldown <= 0 && distanceToPlayer <= SHOGGOTH_CONFIG.maxDistance) {
-              updated.attackState = "laser_windup";
+            const canAdvance = distanceToPlayer > SHOGGOTH_CONFIG.idealDistance;
+            const canRetreat = distanceToPlayer < SHOGGOTH_CONFIG.minDistance;
 
-              
-              updated.windUpTimer = 0;
-              updated.clawWindUp = 0;
-              updated.clawGlowIntensity = 0;
-              updated.dashDirection = safeDirection.clone();
-            }
-          } else if (updated.attackState === "laser_windup") {
-            
-            updated.windUpTimer = (updated.windUpTimer ?? 0) + delta;
-            const windupProgress = Math.min(updated.windUpTimer / (updated.maxWindUpTime ?? 1), 1);
-            const lockedDirection = (updated.dashDirection && updated.dashDirection.lengthSq() > 0)
-              ? updated.dashDirection.clone().normalize()
-              : safeDirection;
-
-            updated.rotationY = Math.atan2(lockedDirection.z, lockedDirection.x);
-            updated.clawWindUp = windupProgress;
-            updated.clawGlowIntensity = windupProgress;
-            updated.velocity.multiplyScalar(0.82);
-
-            if (updated.windUpTimer >= (updated.maxWindUpTime ?? 1)) {
-              updated.attackState = "laser_firing";
-              
-              updated.windUpTimer = 0;
-              updated.laserBaseRotation = updated.rotationY ?? Math.atan2(lockedDirection.z, lockedDirection.x);
-              updated.projectileCooldown = SHOGGOTH_CONFIG.beamDamageInterval;
-              playHit();
-            }
-          } else if (updated.attackState === "laser_firing") {
-            if (phase === "playing") cameraRef.current.shake({ strength: 5, durationMs: 1000});
-            updated.windUpTimer = (updated.windUpTimer ?? 0) + delta;
-            const fireDuration = SHOGGOTH_CONFIG.fireDuration;
-            const spinAmount = (updated.windUpTimer ?? 0) * SHOGGOTH_CONFIG.rotationSpeed;
-            const baseRotation = updated.laserBaseRotation ?? updated.rotationY ?? 0;
-            const currentRotation = baseRotation + spinAmount;
-            updated.rotationY = currentRotation;
-
-            const circleStrafe = orbitDirection.clone().multiplyScalar(updated.speed * 0.42 * delta);
-            updated.position.add(circleStrafe);
-            
-            updated.projectileCooldown = (updated.projectileCooldown ?? 0) - delta;
-            if (updated.projectileCooldown <= 0) {
-              const beamOriginOffsetWorld = SHOGGOTH_CONFIG.beamOriginOffsetPx / (25);
-              for (const beamOffset of SHOGGOTH_CONFIG.beamAngles) {
-                
-                const beamAngle = currentRotation + beamOffset;
-                const beamDirection = new THREE.Vector3(Math.cos(beamAngle), 0, Math.sin(beamAngle));
-                const beamOrigin = updated.position.clone().add(beamDirection.clone().multiplyScalar(beamOriginOffsetWorld));
-                const toPlayer = new THREE.Vector3().subVectors(position, beamOrigin);
-                const along = toPlayer.dot(beamDirection);
-                const lateral = toPlayer.clone().sub(beamDirection.clone().multiplyScalar(along)).length();
-
-                if (
-                  along >= 0.35 &&
-                  along <= LAZARUS_BEAM_LENGTH_WORLD &&
-                  lateral <= SHOGGOTH_CONFIG.beamHalfWidthWorld &&
-                  invincibilityTimer <= 0 &&
-                  !damagedThisFrameRef.current
-                ) {
-                  applyPlayerDamage(
-                    updated.isEnraged ? 1 : 1,
-                    beamOrigin.clone().add(beamDirection.clone().multiplyScalar(Math.min(along, LAZARUS_BEAM_LENGTH_WORLD))),
-                  );
-                  damagedThisFrameRef.current = true;
-                }
+            if (updated.attackState === "chasing") {
+              let moveDirection = new THREE.Vector3();
+              if (canAdvance) {
+                moveDirection.copy(safeDirection);
+              } else if (canRetreat) {
+                moveDirection.copy(safeDirection).multiplyScalar(-0.65);
               }
 
-              updated.projectileCooldown = SHOGGOTH_CONFIG.beamDamageInterval;
+              if (moveDirection.lengthSq() > 0) {
+                updated.position.add(
+                  moveDirection
+                    .normalize()
+                    .multiplyScalar(updated.speed * delta),
+                );
+              }
+
+              updated.rotationY = Math.atan2(safeDirection.z, safeDirection.x);
+              updated.projectileCooldown =
+                (updated.projectileCooldown ?? 0) - delta;
+              if (
+                updated.projectileCooldown <= 0 &&
+                distanceToPlayer <= SHOGGOTH_CONFIG.maxDistance
+              ) {
+                updated.attackState = "laser_windup";
+
+                updated.windUpTimer = 0;
+                updated.clawWindUp = 0;
+                updated.clawGlowIntensity = 0;
+                updated.dashDirection = safeDirection.clone();
+              }
+            } else if (updated.attackState === "laser_windup") {
+              updated.windUpTimer = (updated.windUpTimer ?? 0) + delta;
+              const windupProgress = Math.min(
+                updated.windUpTimer / (updated.maxWindUpTime ?? 1),
+                1,
+              );
+              const lockedDirection =
+                updated.dashDirection && updated.dashDirection.lengthSq() > 0
+                  ? updated.dashDirection.clone().normalize()
+                  : safeDirection;
+
+              updated.rotationY = Math.atan2(
+                lockedDirection.z,
+                lockedDirection.x,
+              );
+              updated.clawWindUp = windupProgress;
+              updated.clawGlowIntensity = windupProgress;
+              updated.velocity.multiplyScalar(0.82);
+
+              if (updated.windUpTimer >= (updated.maxWindUpTime ?? 1)) {
+                updated.attackState = "laser_firing";
+
+                updated.windUpTimer = 0;
+                updated.laserBaseRotation =
+                  updated.rotationY ??
+                  Math.atan2(lockedDirection.z, lockedDirection.x);
+                updated.projectileCooldown = SHOGGOTH_CONFIG.beamDamageInterval;
+                playHit();
+              }
+            } else if (updated.attackState === "laser_firing") {
+              if (phase === "playing")
+                cameraRef.current.shake({ strength: 5, durationMs: 1000 });
+              updated.windUpTimer = (updated.windUpTimer ?? 0) + delta;
+              const fireDuration = SHOGGOTH_CONFIG.fireDuration;
+              const spinAmount =
+                (updated.windUpTimer ?? 0) * SHOGGOTH_CONFIG.rotationSpeed;
+              const baseRotation =
+                updated.laserBaseRotation ?? updated.rotationY ?? 0;
+              const currentRotation = baseRotation + spinAmount;
+              updated.rotationY = currentRotation;
+
+              const circleStrafe = orbitDirection
+                .clone()
+                .multiplyScalar(updated.speed * 0.42 * delta);
+              updated.position.add(circleStrafe);
+
+              updated.projectileCooldown =
+                (updated.projectileCooldown ?? 0) - delta;
+              if (updated.projectileCooldown <= 0) {
+                const beamOriginOffsetWorld =
+                  SHOGGOTH_CONFIG.beamOriginOffsetPx / 25;
+                for (const beamOffset of SHOGGOTH_CONFIG.beamAngles) {
+                  const beamAngle = currentRotation + beamOffset;
+                  const beamDirection = new THREE.Vector3(
+                    Math.cos(beamAngle),
+                    0,
+                    Math.sin(beamAngle),
+                  );
+                  const beamOrigin = updated.position
+                    .clone()
+                    .add(
+                      beamDirection
+                        .clone()
+                        .multiplyScalar(beamOriginOffsetWorld),
+                    );
+                  const toPlayer = new THREE.Vector3().subVectors(
+                    position,
+                    beamOrigin,
+                  );
+                  const along = toPlayer.dot(beamDirection);
+                  const lateral = toPlayer
+                    .clone()
+                    .sub(beamDirection.clone().multiplyScalar(along))
+                    .length();
+
+                  if (
+                    along >= 0.35 &&
+                    along <= LAZARUS_BEAM_LENGTH_WORLD &&
+                    lateral <= SHOGGOTH_CONFIG.beamHalfWidthWorld &&
+                    invincibilityTimer <= 0 &&
+                    !damagedThisFrameRef.current
+                  ) {
+                    applyPlayerDamage(
+                      beamOrigin
+                        .clone()
+                        .add(
+                          beamDirection
+                            .clone()
+                            .multiplyScalar(
+                              Math.min(along, LAZARUS_BEAM_LENGTH_WORLD),
+                            ),
+                        ),
+                    );
+                    damagedThisFrameRef.current = true;
+                  }
+                }
+
+                updated.projectileCooldown = SHOGGOTH_CONFIG.beamDamageInterval;
+              }
+
+              if (updated.windUpTimer >= fireDuration) {
+                updated.attackState = "recovering";
+                updated.windUpTimer = updated.isEnraged ? 0.35 : 0.5;
+                updated.projectileCooldown =
+                  updated.maxProjectileCooldown ?? 3.8;
+                updated.laserBaseRotation = updated.rotationY;
+              }
+            } else if (updated.attackState === "recovering") {
+              updated.windUpTimer = (updated.windUpTimer ?? 0) - delta;
+              updated.clawGlowIntensity = Math.max(
+                (updated.clawGlowIntensity ?? 0) - delta * 2.8,
+                0,
+              );
+              updated.clawWindUp = Math.max(
+                (updated.clawWindUp ?? 0) - delta * 2.8,
+                0,
+              );
+
+              if (updated.windUpTimer <= 0) {
+                updated.attackState = "chasing";
+              }
             }
 
-            if (updated.windUpTimer >= fireDuration) {
-              updated.attackState = "recovering";
-              updated.windUpTimer = updated.isEnraged ? 0.35 : 0.5;
-              updated.projectileCooldown = updated.maxProjectileCooldown ?? 3.8;
-              updated.laserBaseRotation = updated.rotationY;
-            }
-          } else if (updated.attackState === "recovering") {
-            updated.windUpTimer = (updated.windUpTimer ?? 0) - delta;
-            updated.clawGlowIntensity = Math.max((updated.clawGlowIntensity ?? 0) - delta * 2.8, 0);
-            updated.clawWindUp = Math.max((updated.clawWindUp ?? 0) - delta * 2.8, 0);
-
-            if (updated.windUpTimer <= 0) {
-              updated.attackState = "chasing";
-            }
+            return updated;
           }
 
-          return updated;
-        }
-        const dx = position.x - enemy.position.x;
-        const dz = position.z - enemy.position.z;
-        const distance = Math.sqrt(dx * dx + dz * dz);
-        const enemyCollisionRadius = getEnemyCollisionRadius(enemy);
+          // #########################################################################
+          // OCTOPUS BOSS LOGIC
+          if (enemy.isBoss && enemy.bossType === "octopus") {
+            const updated = { ...enemy };
 
-        if (distance >= 1) {
-          const dirX = dx / distance;
-          const dirZ = dz / distance;
+            const dirToPlayer = new THREE.Vector3(
+              position.x - updated.position.x,
+              0,
+              position.z - updated.position.z,
+            );
+            const distToPlayer = dirToPlayer.length();
+            const safeDir = distToPlayer > 0.001
+              ? dirToPlayer.clone().normalize()
+              : new THREE.Vector3(1, 0, 0);
 
-          const isEyeball = enemy.type === "eyeball";
-          if (isEyeball) {
-            enemy.rotationY = Math.atan2(dirZ, dirX);
-            const isRangedAttacking = (enemy as any).isRangedAttacking ?? false;
-
-            if (distance <= (ENEMY_TYPE_CONFIG.eyeball.engageDistancePx ?? 100) / (25)) {
-              (enemy as any).isRangedAttacking = true;
-            } else if (distance > (ENEMY_TYPE_CONFIG.eyeball.disengageDistancePx ?? 150) / (25)) {
-              (enemy as any).isRangedAttacking = false;
-            } else {
-              (enemy as any).isRangedAttacking = isRangedAttacking;
+            // Teleport if player is too far away
+            const TELEPORT_DIST = 60;
+            if (distToPlayer > TELEPORT_DIST) {
+              const angle = Math.random() * Math.PI * 2;
+              const offset = 15;
+              updated.position.set(
+                position.x + Math.cos(angle) * offset,
+                0,
+                position.z + Math.sin(angle) * offset,
+              );
             }
 
-            if ((enemy as any).isRangedAttacking) {
-              (enemy as any).rangedShotCooldown = ((enemy as any).rangedShotCooldown ?? 0) - delta;
-              if ((enemy as any).rangedShotCooldown <= 0) {
-                spawnEyeballProjectile(enemy);
-                (enemy as any).rangedShotCooldown = ENEMY_TYPE_CONFIG.eyeball.projectileFireInterval ?? 1.1;
+            updated.rotationY = Math.atan2(safeDir.z, safeDir.x);
+
+            const state = updated.octopusState ?? "chasing";
+
+            if (state === "chasing") {
+              // Move toward player
+              updated.position.x += safeDir.x * updated.speed * delta;
+              updated.position.z += safeDir.z * updated.speed * delta;
+
+              // Tick crow spawn cooldown
+              updated.octopusCrowSpawnCooldown = (updated.octopusCrowSpawnCooldown ?? 12) - delta;
+              if (updated.octopusCrowSpawnCooldown <= 0) {
+                updated.octopusState = "spawn_crows";
+                updated.octopusRecoverTimer = 0.5;
+                updated.octopusCrowSpawnCooldown = 14.0;
+                // Spawn 8 crows around boss
+                const spawnCrow = useEnemies.getState().spawnCrow;
+                for (let ci = 0; ci < 8; ci++) {
+                  const angle = (ci / 8) * Math.PI * 2;
+                  spawnCrow(
+                    new THREE.Vector3(
+                      updated.position.x + Math.cos(angle) * 5,
+                      0,
+                      updated.position.z + Math.sin(angle) * 5,
+                    ),
+                  );
+                }
+                return updated;
+              }
+
+              // Tick dash cooldown
+              updated.octopusDashCooldown = (updated.octopusDashCooldown ?? 4) - delta;
+              if (updated.octopusDashCooldown <= 0) {
+                updated.octopusState = "dashing";
+                updated.octopusDashTimer = 0.4;
+                updated.octopusDashDir = safeDir.clone();
+                updated.octopusDashCooldown = 4.5;
+              }
+            } else if (state === "dashing") {
+              const dashDir = updated.octopusDashDir ?? safeDir;
+              const dashSpeed = updated.speed * 5;
+              updated.position.x += dashDir.x * dashSpeed * delta;
+              updated.position.z += dashDir.z * dashSpeed * delta;
+              updated.octopusDashTimer = (updated.octopusDashTimer ?? 0) - delta;
+              if ((updated.octopusDashTimer ?? 0) <= 0) {
+                updated.octopusState = "post_dash";
+                updated.octopusPostDashTimer = 0.25;
+              }
+            } else if (state === "post_dash") {
+              updated.octopusPostDashTimer = (updated.octopusPostDashTimer ?? 0) - delta;
+              if ((updated.octopusPostDashTimer ?? 0) <= 0) {
+                spawnOctopusProjectiles(updated);
+                updated.octopusState = "recovering";
+                updated.octopusRecoverTimer = 0.4;
+              }
+            } else if (state === "spawn_crows") {
+              updated.octopusRecoverTimer = (updated.octopusRecoverTimer ?? 0) - delta;
+              if ((updated.octopusRecoverTimer ?? 0) <= 0) {
+                updated.octopusState = "recovering";
+                updated.octopusRecoverTimer = 0.5;
+              }
+            } else if (state === "recovering") {
+              updated.octopusRecoverTimer = (updated.octopusRecoverTimer ?? 0) - delta;
+              if ((updated.octopusRecoverTimer ?? 0) <= 0) {
+                updated.octopusState = "chasing";
+              }
+            }
+
+            return updated;
+          }
+
+          // CROW ENEMY LOGIC
+          if (enemy.type === "crow") {
+            const dx = position.x - enemy.position.x;
+            const dz = position.z - enemy.position.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            if (dist > 0.5) {
+              enemy.position.x += (dx / dist) * enemy.speed * delta;
+              enemy.position.z += (dz / dist) * enemy.speed * delta;
+              enemy.rotationY = Math.atan2(dz, dx);
+            }
+            return enemy;
+          }
+
+          const dx = position.x - enemy.position.x;
+          const dz = position.z - enemy.position.z;
+          const distance = Math.sqrt(dx * dx + dz * dz);
+          const enemyCollisionRadius = getEnemyCollisionRadius(enemy);
+
+          if (distance >= 1) {
+            const dirX = dx / distance;
+            const dirZ = dz / distance;
+
+            const isEyeball = enemy.type === "eyeball";
+            if (isEyeball) {
+              enemy.rotationY = Math.atan2(dirZ, dirX);
+              const isRangedAttacking =
+                (enemy as any).isRangedAttacking ?? false;
+
+              if (
+                distance <=
+                (ENEMY_TYPE_CONFIG.eyeball.engageDistancePx ?? 100) / 25
+              ) {
+                (enemy as any).isRangedAttacking = true;
+              } else if (
+                distance >
+                (ENEMY_TYPE_CONFIG.eyeball.disengageDistancePx ?? 150) / 25
+              ) {
+                (enemy as any).isRangedAttacking = false;
+              } else {
+                (enemy as any).isRangedAttacking = isRangedAttacking;
+              }
+
+              if ((enemy as any).isRangedAttacking) {
+                (enemy as any).rangedShotCooldown =
+                  ((enemy as any).rangedShotCooldown ?? 0) - delta;
+                if ((enemy as any).rangedShotCooldown <= 0) {
+                  spawnEyeballProjectile(enemy);
+                  (enemy as any).rangedShotCooldown =
+                    ENEMY_TYPE_CONFIG.eyeball.projectileFireInterval ?? 1.1;
+                }
+              } else {
+                const moveAmount = enemy.speed * delta;
+                const movedEnemyPos = moveWithTerrainSlide(
+                  enemy.position,
+                  new THREE.Vector3(dirX * moveAmount, 0, dirZ * moveAmount),
+                  terrainRef.current,
+                  enemyCollisionRadius,
+                );
+                enemy.position.x = movedEnemyPos.x;
+                enemy.position.z = movedEnemyPos.z;
               }
             } else {
               const moveAmount = enemy.speed * delta;
@@ -1295,54 +1656,46 @@ const handleMouseMove = (e: MouseEvent) => {
               enemy.position.x = movedEnemyPos.x;
               enemy.position.z = movedEnemyPos.z;
             }
-          } else {
-            const moveAmount = enemy.speed * delta;
-            const movedEnemyPos = moveWithTerrainSlide(
-              enemy.position,
-              new THREE.Vector3(dirX * moveAmount, 0, dirZ * moveAmount),
-              terrainRef.current,
-              enemyCollisionRadius,
-            );
-            enemy.position.x = movedEnemyPos.x;
-            enemy.position.z = movedEnemyPos.z;
           }
-        }
 
-        if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
+          if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
 
-        // Apply gradual knockback acceleration if active
-        if (enemy.knockbackAcceleration && enemy.knockbackDuration && enemy.knockbackDuration > 0) {
-          const accelToApply = enemy.knockbackAcceleration.clone().multiplyScalar(delta);
-          enemy.velocity.add(accelToApply);
-          enemy.knockbackDuration -= delta;
-          if (enemy.knockbackDuration <= 0) {
-            enemy.knockbackAcceleration = undefined;
-            enemy.knockbackDuration = undefined;
+          // Apply gradual knockback acceleration if active
+          if (
+            enemy.knockbackAcceleration &&
+            enemy.knockbackDuration &&
+            enemy.knockbackDuration > 0
+          ) {
+            const accelToApply = enemy.knockbackAcceleration
+              .clone()
+              .multiplyScalar(delta);
+            enemy.velocity.add(accelToApply);
+            enemy.knockbackDuration -= delta;
+            if (enemy.knockbackDuration <= 0) {
+              enemy.knockbackAcceleration = undefined;
+              enemy.knockbackDuration = undefined;
+            }
           }
-        }
 
-        const velMovedPos = moveWithTerrainSlide(
-          enemy.position,
-          enemy.velocity.clone().multiplyScalar(delta),
-          terrainRef.current,
-          enemyCollisionRadius,
-        );
-        const movedByVelocity = !velMovedPos.equals(enemy.position);
-        enemy.position.x = velMovedPos.x;
-        enemy.position.z = velMovedPos.z;
-        if (!movedByVelocity) {
-          // Gentler bounce-back to feel more physical
-          enemy.velocity.multiplyScalar(-0.5);
-        }
+          const velMovedPos = moveWithTerrainSlide(
+            enemy.position,
+            enemy.velocity.clone().multiplyScalar(delta),
+            terrainRef.current,
+            enemyCollisionRadius,
+          );
+          const movedByVelocity = !velMovedPos.equals(enemy.position);
+          enemy.position.x = velMovedPos.x;
+          enemy.position.z = velMovedPos.z;
+          if (!movedByVelocity) {
+            // Gentler bounce-back to feel more physical
+            enemy.velocity.multiplyScalar(-0.5);
+          }
 
-        // Reduced and more realistic velocity dampening
-        // This allows enemies to feel more grounded while still losing momentum
-        enemy.velocity.multiplyScalar(
-        Math.pow(0.95, delta * 60)
-        );
-        return enemy;
-      });
-          
+          // Reduced and more realistic velocity dampening
+          // This allows enemies to feel more grounded while still losing momentum
+          enemy.velocity.multiplyScalar(Math.pow(0.95, delta * 60));
+          return enemy;
+        });
 
         for (let i = 0; i < updatedEnemies.length; i++) {
           for (let j = i + 1; j < updatedEnemies.length; j++) {
@@ -1351,7 +1704,8 @@ const handleMouseMove = (e: MouseEvent) => {
             const dx = e1.position.x - e2.position.x;
             const dz = e1.position.z - e2.position.z;
             const dist = Math.hypot(dx, dz);
-            const minDist = getEnemyCollisionRadius(e1) + getEnemyCollisionRadius(e2);
+            const minDist =
+              getEnemyCollisionRadius(e1) + getEnemyCollisionRadius(e2);
 
             if (dist > 0 && dist < minDist) {
               const push = (minDist - dist) / 8;
@@ -1378,7 +1732,7 @@ const handleMouseMove = (e: MouseEvent) => {
           const enemyHitRadius = getEnemyBodyHitRadius(enemy);
           if (dist > 0 && dist < PLAYER_RADIUS + enemyHitRadius) {
             if (invincibilityTimer <= 0 && !damagedThisFrameRef.current) {
-              applyPlayerDamage(1, enemy.position);
+              applyPlayerDamage(enemy.position);
               damagedThisFrameRef.current = true;
             }
           }
@@ -1397,57 +1751,84 @@ const handleMouseMove = (e: MouseEvent) => {
           aliveEnemies.push(enemy);
         }
 
-
         const updatedEnemyProjectiles: EnemyProjectile[] = [];
         for (const projectile of enemyProjectilesRef.current) {
           projectile.life -= delta;
           if (projectile.life <= 0) continue;
 
-          projectile.position.add(projectile.velocity.clone().multiplyScalar(delta));
+          projectile.position.add(
+            projectile.velocity.clone().multiplyScalar(delta),
+          );
 
           const toPlayerX = projectile.position.x - position.x;
           const toPlayerZ = projectile.position.z - position.z;
           const hitDistance = Math.hypot(toPlayerX, toPlayerZ);
 
-          if (hitDistance <= PLAYER_RADIUS + projectile.size && invincibilityTimer <= 0 && !damagedThisFrameRef.current) {
-            applyPlayerDamage(Math.max(1, Math.round(projectile.damage)), projectile.position);
+          if (
+            hitDistance <= PLAYER_RADIUS + projectile.size &&
+            invincibilityTimer <= 0 &&
+            !damagedThisFrameRef.current
+          ) {
+            applyPlayerDamage(
+              projectile.position,
+            );
             damagedThisFrameRef.current = true;
             continue;
           }
 
-          if (Math.abs(projectile.position.x) > ROOM_SIZE || Math.abs(projectile.position.z) > ROOM_SIZE) {
+          if (
+            Math.abs(projectile.position.x) > ROOM_SIZE ||
+            Math.abs(projectile.position.z) > ROOM_SIZE
+          ) {
             continue;
           }
 
           updatedEnemyProjectiles.push(projectile);
         }
 
-        if(damagedThisFrameRef.current) {
-          if (phase === "playing") cameraRef.current.shake({ strength: 100, durationMs: 100 });
+        if (damagedThisFrameRef.current) {
+          if (phase === "playing")
+            cameraRef.current.shake({ strength: 100, durationMs: 100 });
         }
         enemyProjectilesRef.current = updatedEnemyProjectiles;
 
         updateXPOrbs(delta, position);
         updateEnemies(aliveEnemies);
-        
+
         useEnemies.getState().updateAutoSpawn(delta, position);
         footstepMarksRef.current = footstepMarksRef.current
           .map((mark) => ({ ...mark, life: mark.life + delta }))
           .filter((mark) => mark.life < mark.maxLife);
         if (hearts <= 0) end();
       }
-      
+
       drawXPOrbs(ctx);
-      const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+      const { x: centerX, y: centerY } =
+        cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
       // Draw enemies with viewport culling
-      fireSystem.current.draw(ctx, fireSprite.current!, centerX, centerY, position.x, position.z, 50);
+      fireSystem.current.draw(
+        ctx,
+        fireSprite.current!,
+        centerX,
+        centerY,
+        position.x,
+        position.z,
+        50,
+      );
       for (const enemy of enemies) {
-        if (isObjectInViewport(enemy.position.x, enemy.position.z, position.x, position.z, 100)) {
-          
+        if (
+          isObjectInViewport(
+            enemy.position.x,
+            enemy.position.z,
+            position.x,
+            position.z,
+            100,
+          )
+        ) {
           drawEnemy(ctx, enemy);
         }
       }
-      
+
       const cursorCanvas = cursorCanvasRef.current;
       const cursorCtx = cursorCanvas?.getContext("2d");
       if (cursorCtx) {
@@ -1455,30 +1836,43 @@ const handleMouseMove = (e: MouseEvent) => {
         cursorCtx.imageSmoothingEnabled = false;
         drawCursor(cursorCtx);
       }
-      
-
-      
 
       const eyeCanvas = eyeCanvasRef.current;
       const eyeCtx = eyeCanvas?.getContext("2d");
       if (eyeCtx) {
         eyeCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         eyeCtx.imageSmoothingEnabled = false;
-        
+
         // Draw enemy eyes with viewport culling
         for (const enemy of enemies) {
-          if (isObjectInViewport(enemy.position.x, enemy.position.z, position.x, position.z, 100)) {
+          if (
+            isObjectInViewport(
+              enemy.position.x,
+              enemy.position.z,
+              position.x,
+              position.z,
+              100,
+            )
+          ) {
             drawEnemyEyes(eyeCtx, enemy, animationNowMs);
           }
         }
-        
+
         // Draw terrain obstacle eyes with viewport culling
         for (const obstacle of terrainRef.current) {
-          if (isObjectInViewport(obstacle.x, obstacle.z, position.x, position.z, 100)) {
+          if (
+            isObjectInViewport(
+              obstacle.x,
+              obstacle.z,
+              position.x,
+              position.z,
+              100,
+            )
+          ) {
             drawEnemyEyes(eyeCtx, obstacle, animationNowMs);
           }
         }
-        
+
         drawTreeLightning(eyeCtx, gameplayElapsedMsRef.current);
         drawEnemyProjectiles(eyeCtx);
         drawExplosionEffects(eyeCtx);
@@ -1486,20 +1880,18 @@ const handleMouseMove = (e: MouseEvent) => {
         drawEnemyDeaths(eyeCtx, gameplayElapsedMsRef.current);
         drawSummons(eyeCtx, animationNowMs);
         drawSummonLightning(eyeCtx);
-        drawDamageNumbers(eyeCtx); 
+        drawDamageNumbers(eyeCtx);
       }
       drawFootsteps(ctx);
       drawPlayer(ctx, animationNowMs);
-      
+
       drawStatusEffects(ctx, animationNowMs);
-      
+
       drawImpactEffects(ctx);
-      
-      
+
       drawReloadIndicator(ctx);
       drawWeapon(ctx, "revolver", phase !== "playing");
-      
-      
+
       animationFrameRef.current = requestAnimationFrame(gameLoop);
     };
 
@@ -1537,14 +1929,12 @@ const handleMouseMove = (e: MouseEvent) => {
 
     // Boss explosion on death
     if (enemy.isBoss) {
-      addExplosion(enemy.position.clone(), 280, 1);
       const { applyExplosiveDamage } = useHit.getState();
       applyExplosiveDamage(
         enemy.position.clone(),
-        280 / 25,
+        320 / 25,
         80,
         enemies,
-        "#ff4400"
       );
     }
 
@@ -1563,10 +1953,16 @@ const handleMouseMove = (e: MouseEvent) => {
 
       for (let i = 0; i < 3; i++) {
         const angle = (i / 3) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
-        const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+        const direction = new THREE.Vector3(
+          Math.cos(angle),
+          0,
+          Math.sin(angle),
+        );
 
         addProjectile({
-          position: enemy.position.clone().add(direction.clone().multiplyScalar(0.6)),
+          position: enemy.position
+            .clone()
+            .add(direction.clone().multiplyScalar(0.6)),
           size: 4,
           direction,
           damage: stats.damage * 0.2,
@@ -1584,59 +1980,64 @@ const handleMouseMove = (e: MouseEvent) => {
 
   let grassPattern: CanvasPattern | null = null;
 
-  const drawDungeon = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
+  const drawDungeon = (
+    ctx: CanvasRenderingContext2D,
+    animationNowMs: number,
+  ) => {
     if (!grassPattern && grassSprite.complete) {
-    grassPattern = ctx.createPattern(grassSprite, "repeat");
-  }
+      grassPattern = ctx.createPattern(grassSprite, "repeat");
+    }
 
-  if (!grassPattern) return;
-  const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
-  
-  const floorSize = ROOM_SIZE * 50;
+    if (!grassPattern) return;
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT,
+    );
 
-  const offsetX = (-position.x * 50) / 2;
-  const offsetZ = (-position.z * 50) / 2;
+    const floorSize = ROOM_SIZE * 50;
 
-  // Camera offset in pixels
-  const pixelOffsetX = (-position.x * 50) / 2;
-  const pixelOffsetZ = (-position.z * 50) / 2;
-  const cameraOffset = cameraRef.current.getRenderOffset();
+    const offsetX = (-position.x * 50) / 2;
+    const offsetZ = (-position.z * 50) / 2;
 
-  // full world offset INCLUDING camera pull
-  const worldOffsetX =
-    (-position.x * 50) / 2 + cameraOffset.x;
+    // Camera offset in pixels
+    const pixelOffsetX = (-position.x * 50) / 2;
+    const pixelOffsetZ = (-position.z * 50) / 2;
+    const cameraOffset = cameraRef.current.getRenderOffset();
 
-  const worldOffsetY =
-    (-position.z * 50) / 2 + cameraOffset.y;
+    // full world offset INCLUDING camera pull
+    const worldOffsetX = (-position.x * 50) / 2 + cameraOffset.x;
 
-  ctx.save();
+    const worldOffsetY = (-position.z * 50) / 2 + cameraOffset.y;
 
-  ctx.fillStyle = grassPattern;
+    ctx.save();
 
-  // move pattern with world
-  ctx.translate(worldOffsetX, worldOffsetY);
-ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = grassPattern;
 
-  ctx.fillRect(
-    -worldOffsetX - CANVAS_WIDTH,
-    -worldOffsetY - CANVAS_HEIGHT,
-    CANVAS_WIDTH * 3,
-    CANVAS_HEIGHT * 3
-  );
-  
-  
+    // move pattern with world
+    ctx.translate(worldOffsetX, worldOffsetY);
+    ctx.imageSmoothingEnabled = false;
 
-  ctx.restore();
+    ctx.fillRect(
+      -worldOffsetX - CANVAS_WIDTH,
+      -worldOffsetY - CANVAS_HEIGHT,
+      CANVAS_WIDTH * 3,
+      CANVAS_HEIGHT * 3,
+    );
 
+    ctx.restore();
 
     // ============================================
     // TERRAIN OBSTACLES
     // ============================================
 
     terrainRef.current.forEach((obstacle) => {
-      const screenX = snapToGrid(centerX + ((obstacle.x - position.x) * 50) / 2);
-      const screenY = snapToGrid(centerY + ((obstacle.z - position.z) * 50) / 2);
-      const radiusPx = obstacle.radius * (25);
+      const screenX = snapToGrid(
+        centerX + ((obstacle.x - position.x) * 50) / 2,
+      );
+      const screenY = snapToGrid(
+        centerY + ((obstacle.z - position.z) * 50) / 2,
+      );
+      const radiusPx = obstacle.radius * 25;
       ctx.imageSmoothingEnabled = false;
 
       if (treeSprite.complete && treeSprite.naturalWidth > 0) {
@@ -1705,17 +2106,22 @@ ctx.imageSmoothingEnabled = false;
       wallThickness,
       floorSize,
     );
-
-
   };
 
   const drawXPOrbs = (ctx: CanvasRenderingContext2D) => {
-    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT,
+    );
     const xpOrbs = useEnemies.getState().xpOrbs;
 
     xpOrbs.forEach((orb) => {
-      const screenX = snapToGrid(centerX + ((orb.position.x - position.x) * 50) / 2);
-      const screenY = snapToGrid(centerY + ((orb.position.z - position.z) * 50) / 2);
+      const screenX = snapToGrid(
+        centerX + ((orb.position.x - position.x) * 50) / 2,
+      );
+      const screenY = snapToGrid(
+        centerY + ((orb.position.z - position.z) * 50) / 2,
+      );
 
       const sprite = xpSprite; // assume you imported or loaded xp.png as xpImage
 
@@ -1725,7 +2131,7 @@ ctx.imageSmoothingEnabled = false;
         const h = sprite.height * scale;
 
         ctx.save();
-
+        ctx.imageSmoothingEnabled = false;
         ctx.translate(screenX, screenY);
         ctx.drawImage(sprite, -w / 2, -h / 2, w, h);
         ctx.restore();
@@ -1734,7 +2140,10 @@ ctx.imageSmoothingEnabled = false;
   };
 
   const drawReloadIndicator = (ctx: CanvasRenderingContext2D) => {
-    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT,
+    );
 
     if (isReloading) {
       const radius = 40;
@@ -1744,44 +2153,54 @@ ctx.imageSmoothingEnabled = false;
 
       // Background bar
       ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
-      ctx.fillRect(snapToGrid(snappedCenterX - radius), barY, radius * 2, barHeight);
+      ctx.fillRect(
+        snapToGrid(snappedCenterX - radius),
+        barY,
+        radius * 2,
+        barHeight,
+      );
 
       // Progress bar - use solid color instead of gradient
       const progress = reloadProgress / reloadTime;
       const barWidth = snapToGrid(radius * 2 * progress);
 
       // Simple color based on progress instead of gradient
-      const hue = 30 + (progress * 10); // Goes from orange to yellow
+      const hue = 30 + progress * 10; // Goes from orange to yellow
       ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
-      ctx.fillRect(snapToGrid(snappedCenterX - radius), barY, barWidth, barHeight);
+      ctx.fillRect(
+        snapToGrid(snappedCenterX - radius),
+        barY,
+        barWidth,
+        barHeight,
+      );
 
       // Border with glow
       ctx.strokeStyle = "#ffaa00";
       ctx.lineWidth = 2;
-      ctx.strokeRect(snapToGrid(snappedCenterX - radius), barY, radius * 2, barHeight);
+      ctx.strokeRect(
+        snapToGrid(snappedCenterX - radius),
+        barY,
+        radius * 2,
+        barHeight,
+      );
 
       // Outer glow
       ctx.strokeStyle = "rgba(255, 170, 0, 0.3)";
       ctx.lineWidth = 4;
-      ctx.strokeRect(snapToGrid(snappedCenterX - radius - 1), snapToGrid(barY - 1), radius * 2 + 2, barHeight + 2);
+      ctx.strokeRect(
+        snapToGrid(snappedCenterX - radius - 1),
+        snapToGrid(barY - 1),
+        radius * 2 + 2,
+        barHeight + 2,
+      );
 
-      
       ctx.save();
       ctx.translate(snapToGrid(centerX), snapToGrid(barY - 20));
-  
-      
-      drawBitmapText(
-      ctx,
-      "RELOADING",
-      0,
-      0,
-      font,
-      fontWhiteImage,
-      {
+
+      drawBitmapText(ctx, "RELOADING", 0, 0, font, fontWhiteImage, {
         align: "center",
-        scale: 1 
-      }
-      );
+        scale: 1,
+      });
 
       ctx.restore();
 
@@ -1809,52 +2228,50 @@ ctx.imageSmoothingEnabled = false;
   const drawWeapon = (
     ctx: CanvasRenderingContext2D,
     type: string,
-    isPaused: boolean
+    isPaused: boolean,
   ) => {
-    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT,
+    );
 
     const canRotate = phase === "playing" && !isPaused;
 
     if (canRotate) {
-  const dx = mouseRef.current.x - centerX;
-  const dy = mouseRef.current.y - centerY;
+      const dx = mouseRef.current.x - centerX;
+      const dy = mouseRef.current.y - centerY;
 
-  weaponAngleRef.current = Math.atan2(dy, dx);
-}
+      weaponAngleRef.current = Math.atan2(dy, dx);
+    }
 
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     ctx.translate(centerX, centerY);
 
     if (type === "revolver") {
-      
       const scale = 2;
       const gunRotation = weaponAngleRef.current;
-      
-    
 
       const flipGun = Math.abs(weaponAngleRef.current) > Math.PI / 2;
 
-      
-      
       ctx.rotate(gunRotation);
       ctx.translate(2, 0);
 
       ctx.scale(-scale, scale);
-      
+
       if (flipGun) ctx.scale(1, -1);
 
       // ===========================
       // MUZZLE FLASH
       // ===========================
-      
+
       if (muzzleFlashTimer > 0 && muzzleFlashPosition) {
         const sprite = VisualSprites.muzzleFlash;
-        
+
         ctx.save();
-        ctx.scale(-1,1)
-        ctx.translate(-3.5,0)
-        
+        ctx.scale(-1, 1);
+        ctx.translate(-3.5, 0);
+
         const w = sprite.width;
         const h = sprite.height;
 
@@ -1862,12 +2279,16 @@ ctx.imageSmoothingEnabled = false;
 
         ctx.restore();
       }
-      
+
       // ===========================
       // REVOLVER SPRITE
       // ===========================
       const sprite = WeaponSprites.revolver;
-      if (sprite.complete && sprite.naturalWidth > 0 && sprite.naturalHeight > 0) {
+      if (
+        sprite.complete &&
+        sprite.naturalWidth > 0 &&
+        sprite.naturalHeight > 0
+      ) {
         ctx.save();
         const frameCount = 5;
         const frameWidth = Math.floor(sprite.naturalWidth / frameCount);
@@ -1889,182 +2310,179 @@ ctx.imageSmoothingEnabled = false;
 
         ctx.restore();
       }
-    
     }
-
 
     ctx.restore();
   };
 
-
-   // =====================================================
+  // =====================================================
   // TRAIL EMISSION (DEMO STYLE)
   // =====================================================
   const emitSegment = (
-  x0: number,
-  z0: number,
-  x1: number,
-  z1: number,
-  size: number,
-  velocity: THREE.Vector3,
-  projectileId: string,
-) => {
-  const dx = x1 - x0;
-  const dz = z1 - z0;
+    x0: number,
+    z0: number,
+    x1: number,
+    z1: number,
+    size: number,
+    velocity: THREE.Vector3,
+    projectileId: string,
+  ) => {
+    const dx = x1 - x0;
+    const dz = z1 - z0;
 
-  const dist = Math.sqrt(dx * dx + dz * dz);
-  if (dist === 0) return;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist === 0) return;
 
-  const step = 0.15; // slightly reduced density
-  const steps = Math.floor(dist / step);
+    const step = 0.15; // slightly reduced density
+    const steps = Math.floor(dist / step);
 
-  if (steps > 120) return;
+    if (steps > 120) return;
 
-  const speed = velocity.length();
-  const trailSize = Math.max(1.5, size * 0.5);
-  const trailLife = Math.max(0.08, Math.min(0.2, speed * 0.0005));
+    const speed = velocity.length();
+    const trailSize = Math.max(1.5, size * 0.5);
+    const trailLife = Math.max(0.08, Math.min(0.2, speed * 0.0005));
 
-  const pool = poolRef.current;
-  let idx = writeIndexRef.current;
+    const pool = poolRef.current;
+    let idx = writeIndexRef.current;
 
-  for (let i = 0; i <= steps; i++) {
-    const t = i / (steps || 1);
+    for (let i = 0; i <= steps; i++) {
+      const t = i / (steps || 1);
 
-    const p = pool[idx];
+      const p = pool[idx];
 
-    p.x = x0 + dx * t;
-    p.y = z0 + dz * t;
-    p.size = trailSize;
-    p.life = trailLife;
-    p.maxLife = trailLife;
-    p.projectileId = projectileId;
+      p.x = x0 + dx * t;
+      p.y = z0 + dz * t;
+      p.size = trailSize;
+      p.life = trailLife;
+      p.maxLife = trailLife;
+      p.projectileId = projectileId;
 
-    idx = (idx + 1) % poolSize;
-  }
+      idx = (idx + 1) % poolSize;
+    }
 
-  writeIndexRef.current = idx;
-};
-const start = performance.now();
-
-const drawProjectilesAndTrails = (
-  ctx: CanvasRenderingContext2D,
-  isPaused: boolean,
-  playerPos: THREE.Vector3
-) => {
-  const { projectiles } = useProjectiles.getState();
-
-  const worldToScreen = (x: number, z: number) =>
-    cameraRef.current.worldToScreen(
-      { x, y: z },
-      { x: playerPos.x, y: playerPos.z },
-      CANVAS_WIDTH,
-      CANVAS_HEIGHT,
-      25
-    );
-
-  ctx.save();
-  ctx.imageSmoothingEnabled = false;
-
-  const img = getProjectileImage();
-
-  const drawProjectile = (x: number, y: number, size: number) => {
-    ctx.drawImage(
-      img,
-      Math.floor(x - size / 2),
-      Math.floor(y - size / 2),
-      Math.floor(size),
-      Math.floor(size)
-    );
+    writeIndexRef.current = idx;
   };
+  const start = performance.now();
 
-  // -----------------------------
-  // PROJECTILES
-  // -----------------------------
-  const activeIds = new Set<string>();
+  const drawProjectilesAndTrails = (
+    ctx: CanvasRenderingContext2D,
+    isPaused: boolean,
+    playerPos: THREE.Vector3,
+  ) => {
+    const { projectiles } = useProjectiles.getState();
 
-  for (const proj of projectiles) {
-    activeIds.add(proj.id);
+    const worldToScreen = (x: number, z: number) =>
+      cameraRef.current.worldToScreen(
+        { x, y: z },
+        { x: playerPos.x, y: playerPos.z },
+        CANVAS_WIDTH,
+        CANVAS_HEIGHT,
+        25,
+      );
 
-    const prev = proj.previousPosition;
-    const curr = proj.position;
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
 
-    if (!isPaused) {
-      emitSegment(
-        prev.x,
-        prev.z,
-        curr.x,
-        curr.z,
-        proj.size,
-        proj.velocity,
-        proj.id
+    const img = getProjectileImage();
+
+    const drawProjectile = (x: number, y: number, size: number) => {
+      ctx.drawImage(
+        img,
+        Math.floor(x - size / 2),
+        Math.floor(y - size / 2),
+        Math.floor(size),
+        Math.floor(size),
+      );
+    };
+
+    // -----------------------------
+    // PROJECTILES
+    // -----------------------------
+    const activeIds = new Set<string>();
+
+    for (const proj of projectiles) {
+      activeIds.add(proj.id);
+
+      const prev = proj.previousPosition;
+      const curr = proj.position;
+
+      if (!isPaused) {
+        emitSegment(
+          prev.x,
+          prev.z,
+          curr.x,
+          curr.z,
+          proj.size,
+          proj.velocity,
+          proj.id,
+        );
+      }
+
+      const screen = worldToScreen(curr.x, curr.z);
+
+      drawProjectile(snapToGrid(screen.x), snapToGrid(screen.y), proj.size);
+    }
+
+    // -----------------------------
+    // TRAILS (OPTIMIZED PASS)
+    // -----------------------------
+    ctx.fillStyle = "#f5d6c1";
+
+    const pool = poolRef.current;
+
+    // IMPORTANT: DO NOT CALL worldToScreen FIRST OR YOU DOUBLE-TRANSFORM
+    for (let i = 0; i < poolSize; i++) {
+      const p = pool[i];
+      if (p.life <= 0) continue;
+
+      // decay
+      if (!isPaused) p.life -= 0.016;
+
+      if (p.life <= 0) continue;
+
+      const t = p.life / p.maxLife;
+      const size = p.size * (0.5 + t);
+
+      const screen = worldToScreen(p.x, p.y);
+
+      ctx.fillRect(
+        snapToGrid(screen.x - size / 2),
+        snapToGrid(screen.y - size / 2),
+        snapToGrid(size),
+        snapToGrid(size),
       );
     }
 
-    const screen = worldToScreen(curr.x, curr.z);
-
-    drawProjectile(
-      snapToGrid(screen.x),
-      snapToGrid(screen.y),
-      proj.size
-    );
-  }
-
-  // -----------------------------
-  // TRAILS (OPTIMIZED PASS)
-  // -----------------------------
-  ctx.fillStyle = "#f5d6c1";
-
-  const pool = poolRef.current;
-
-  // IMPORTANT: DO NOT CALL worldToScreen FIRST OR YOU DOUBLE-TRANSFORM
-  for (let i = 0; i < poolSize; i++) {
-    const p = pool[i];
-    if (p.life <= 0) continue;
-
-    // decay
-    if (!isPaused) p.life -= 0.016;
-
-    if (p.life <= 0) continue;
-
-    const t = p.life / p.maxLife;
-    const size = p.size * (0.5 + t);
-
-    const screen = worldToScreen(p.x, p.y);
-
-    ctx.fillRect(
-      snapToGrid(screen.x - size / 2),
-      snapToGrid(screen.y - size / 2),
-      snapToGrid(size),
-      snapToGrid(size)
-    );
-  }
-
-  ctx.restore();
-};
-
+    ctx.restore();
+  };
 
   const drawImpactEffects = (ctx: CanvasRenderingContext2D) => {
     const impactEffects = useVisualEffects.getState().impactEffects;
     const sprite = VisualSprites.impactSheet;
     if (!sprite.complete || sprite.naturalWidth === 0) return;
 
-    const frameWidth = sprite.width / 2; 
+    const frameWidth = sprite.width / 2;
     const frameHeight = sprite.height;
 
-    impactEffects.forEach(impact => {
-      const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
-      const screenX = snapToGrid(centerX + ((impact.x - position.x) * 50)/2);
-      const screenY = snapToGrid(centerY + ((impact.y - position.z) * 50)/2);
+    impactEffects.forEach((impact) => {
+      const { x: centerX, y: centerY } =
+        cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+      const screenX = snapToGrid(centerX + ((impact.x - position.x) * 50) / 2);
+      const screenY = snapToGrid(centerY + ((impact.y - position.z) * 50) / 2);
 
       ctx.save();
       ctx.imageSmoothingEnabled = false;
-      
+
       ctx.drawImage(
         sprite,
-        frameWidth * impact.frameIndex, 0,  // source x, y
-        frameWidth, frameHeight,            // source width, height
-        snapToGrid(screenX - impact.size/2), snapToGrid(screenY - impact.size/2),  // dest x, y
-        impact.size, impact.size            // dest width, height
+        frameWidth * impact.frameIndex,
+        0, // source x, y
+        frameWidth,
+        frameHeight, // source width, height
+        snapToGrid(screenX - impact.size / 2),
+        snapToGrid(screenY - impact.size / 2), // dest x, y
+        impact.size,
+        impact.size, // dest width, height
       );
       ctx.restore();
     });
@@ -2078,10 +2496,15 @@ const drawProjectilesAndTrails = (
     const frameWidth = sprite.width / 6;
     const frameHeight = sprite.height;
 
-    explosionEffects.forEach(explosion => {
-      const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
-      const screenX = snapToGrid(centerX + ((explosion.x - position.x) * 50) / 2);
-      const screenY = snapToGrid(centerY + ((explosion.y - position.z) * 50) / 2);
+    explosionEffects.forEach((explosion) => {
+      const { x: centerX, y: centerY } =
+        cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+      const screenX = snapToGrid(
+        centerX + ((explosion.x - position.x) * 50) / 2,
+      );
+      const screenY = snapToGrid(
+        centerY + ((explosion.y - position.z) * 50) / 2,
+      );
       const size = explosion.size;
 
       ctx.save();
@@ -2104,10 +2527,13 @@ const drawProjectilesAndTrails = (
   const drawSummonLightning = (ctx: CanvasRenderingContext2D) => {
     const lightningEffects = useVisualEffects.getState().lightningEffects;
     const sprite = VisualSprites.lightning;
-    
+
     const frameW = 32;
     const frameH = 450;
-    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT,
+    );
     for (const fx of lightningEffects) {
       const screenX = snapToGrid(centerX + ((fx.x - position.x) * 50) / 2);
       const screenY = snapToGrid(centerY + ((fx.y - position.z) * 50) / 2);
@@ -2117,37 +2543,53 @@ const drawProjectilesAndTrails = (
       ctx.imageSmoothingEnabled = false;
       const drawW = frameW * 2;
       const drawH = frameH * 2;
-      ctx.drawImage(sprite, fx.frameIndex * frameW, 0, frameW, frameH, -drawW, -drawH, drawW, drawH);
+      ctx.drawImage(
+        sprite,
+        fx.frameIndex * frameW,
+        0,
+        frameW,
+        frameH,
+        -drawW,
+        -drawH,
+        drawW,
+        drawH,
+      );
       ctx.restore();
     }
   };
 
   const drawDamageNumbers = (ctx: CanvasRenderingContext2D) => {
     const damageNumbers = useVisualEffects.getState().damageNumbers;
-    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT,
+    );
 
     ctx.save();
-    damageNumbers.forEach(dmg => {
+    damageNumbers.forEach((dmg) => {
       const screenX = snapToGrid(centerX + ((dmg.x - position.x) * 50) / 2);
       const screenY = snapToGrid(centerY + ((dmg.y - position.z) * 50) / 2);
 
       const lifePercent = dmg.life / dmg.maxLife;
-      const alpha = Math.max(0, Math.min(1, lifePercent < 0.7 ? 1 : (1 - (lifePercent - 0.7) / 0.3)));
+      const alpha = Math.max(
+        0,
+        Math.min(1, lifePercent < 0.7 ? 1 : 1 - (lifePercent - 0.7) / 0.3),
+      );
 
       ctx.globalAlpha = alpha;
 
       drawBitmapText(
-      ctx,
-      dmg.damage.toString(),
-      screenX,
-      screenY,
-      font,
-      fontWhiteImage,
-  {
-    align: "center",
-    scale: dmg.scale // IMPORTANT: use integers
-  }
-);
+        ctx,
+        dmg.damage.toString(),
+        screenX,
+        screenY,
+        font,
+        fontWhiteImage,
+        {
+          align: "center",
+          scale: dmg.scale, // IMPORTANT: use integers
+        },
+      );
     });
 
     ctx.restore();
@@ -2156,13 +2598,24 @@ const drawProjectilesAndTrails = (
   const drawTreeLightning = (ctx: CanvasRenderingContext2D, nowMs: number) => {
     if (treeLightningRef.current.length === 0) return;
 
-    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT,
+    );
 
     for (const attack of treeLightningRef.current) {
-      const x1 = snapToGrid(centerX + ((attack.source.x - position.x) * 50) / 2);
-      const y1 = snapToGrid(centerY + ((attack.source.z - position.z) * 50) / 2);
-      const x2 = snapToGrid(centerX + ((attack.target.x - position.x) * 50) / 2);
-      const y2 = snapToGrid(centerY + ((attack.target.z - position.z) * 50) / 2);
+      const x1 = snapToGrid(
+        centerX + ((attack.source.x - position.x) * 50) / 2,
+      );
+      const y1 = snapToGrid(
+        centerY + ((attack.source.z - position.z) * 50) / 2,
+      );
+      const x2 = snapToGrid(
+        centerX + ((attack.target.x - position.x) * 50) / 2,
+      );
+      const y2 = snapToGrid(
+        centerY + ((attack.target.z - position.z) * 50) / 2,
+      );
 
       if (nowMs < attack.connectAt) {
         const steps = 22;
@@ -2174,7 +2627,13 @@ const drawProjectilesAndTrails = (
           const jitterY = Math.round((Math.random() - 0.5) * 8);
           ctx.fillStyle = "rgba(120,220,255,0.9)";
           ctx.beginPath();
-          ctx.arc(snapToGrid(px + jitterX), snapToGrid(py + jitterY), 2, 0, Math.PI * 2);
+          ctx.arc(
+            snapToGrid(px + jitterX),
+            snapToGrid(py + jitterY),
+            2,
+            0,
+            Math.PI * 2,
+          );
           ctx.fill();
         }
         continue;
@@ -2186,7 +2645,10 @@ const drawProjectilesAndTrails = (
       const angle = Math.atan2(dy, dx);
       const frame = nowMs >= attack.dissipateAt ? 4 : attack.frame;
 
-      if (electricityLineSpriteSheet.complete && electricityLineSpriteSheet.naturalWidth > 0) {
+      if (
+        electricityLineSpriteSheet.complete &&
+        electricityLineSpriteSheet.naturalWidth > 0
+      ) {
         const frameW = 64;
         const frameH = 32;
         const spriteScale = 2;
@@ -2211,31 +2673,44 @@ const drawProjectilesAndTrails = (
           );
         }
         ctx.restore();
-      } 
+      }
     }
   };
 
   const drawFootsteps = (ctx: CanvasRenderingContext2D) => {
-    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT,
+    );
     for (const mark of footstepMarksRef.current) {
       const alpha = 1 - mark.life / mark.maxLife;
-      const screenX = snapToGrid(centerX + ((mark.position.x - position.x) * 50) / 2);
-      const screenY = snapToGrid(centerY + ((mark.position.z - position.z) * 50) / 2);
+      const screenX = snapToGrid(
+        centerX + ((mark.position.x - position.x) * 50) / 2,
+      );
+      const screenY = snapToGrid(
+        centerY + ((mark.position.z - position.z) * 50) / 2,
+      );
 
       ctx.save();
       ctx.fillStyle = `rgba(61, 85, 85, ${Math.max(0, Math.min(1, 1.35 * alpha))})`;
       ctx.beginPath();
       const radiusX = Math.max(1, Math.round(mark.radius * alpha));
-      const radiusY = Math.max(1, Math.round((mark.radius * 0.6) * alpha));
+      const radiusY = Math.max(1, Math.round(mark.radius * 0.6 * alpha));
       ctx.ellipse(screenX, screenY, radiusX, radiusY, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
   };
 
-const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
+  const drawPlayer = (
+    ctx: CanvasRenderingContext2D,
+    animationNowMs: number,
+  ) => {
     const playerState = usePlayer.getState();
-    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT,
+    );
 
     ctx.save();
     ctx.translate(centerX, centerY);
@@ -2246,16 +2721,14 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
       ctx.filter = `brightness(${1 + flashIntensity * 1.5}) saturate(${1 - flashIntensity * 0.5})`;
     }
 
-    // Flashing effect during invincibility (reduced - mostly invisible now)
-    if (playerState.invincibilityTimer > 0) {
-      ctx.globalAlpha = 0.6;
-    }
-
     if (playerSpriteSheet.complete && playerSpriteSheet.naturalWidth > 0) {
       const animState = playerState.isMoving
-        ? (playerState.isFiring ? PLAYER_SPRITE_ANIMATIONS.walking : PLAYER_SPRITE_ANIMATIONS.running)
+        ? playerState.isFiring
+          ? PLAYER_SPRITE_ANIMATIONS.walking
+          : PLAYER_SPRITE_ANIMATIONS.running
         : PLAYER_SPRITE_ANIMATIONS.idle;
-      const frame = Math.floor((animationNowMs / 1000) * animState.fps) % animState.frames;
+      const frame =
+        Math.floor((animationNowMs / 1000) * animState.fps) % animState.frames;
       const sourceX = frame * PLAYER_SPRITE_FRAME_SIZE;
       const sourceY = animState.row * PLAYER_SPRITE_FRAME_SIZE;
       ctx.scale(playerFacingRef.current, 1);
@@ -2272,6 +2745,7 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
         PLAYER_SPRITE_RENDER_SIZE,
       );
     }
+    ctx.filter = "none";
 
     ctx.restore();
   };
@@ -2284,10 +2758,54 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
       return;
     }
 
-    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+    // Octopus boss is rendered via drawEnemyEyes
+    if (enemy.isBoss && enemy.bossType === "octopus") {
+      return;
+    }
 
-    const screenX = snapToGrid(centerX + ((enemy.position.x - position.x) * 50) / 2);
-    const screenY = snapToGrid(centerY + ((enemy.position.z - position.z) * 50) / 2);
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT,
+    );
+
+    const screenX = snapToGrid(
+      centerX + ((enemy.position.x - position.x) * 50) / 2,
+    );
+    const screenY = snapToGrid(
+      centerY + ((enemy.position.z - position.z) * 50) / 2,
+    );
+
+    // Crow enemy rendering
+    if (enemy.type === "crow") {
+      const sheet = crowEnemySpriteSheet;
+      const hasSheet = sheet.complete && sheet.naturalWidth > 0 && sheet.naturalHeight > 0;
+      const cols = 4;
+      const frameW = hasSheet ? sheet.naturalWidth / cols : 20;
+      const frameH = hasSheet ? sheet.naturalHeight : 20;
+      const animFrame = Math.floor(performance.now() / 120) % cols;
+      const drawSize = 40;
+      const facingRight = enemy.position.x <= position.x;
+
+      ctx.save();
+      ctx.translate(screenX, screenY);
+      ctx.imageSmoothingEnabled = false;
+      if (!facingRight) ctx.scale(-1, 1);
+      if (enemy.hitFlash > 0) ctx.filter = "brightness(60)";
+      if (hasSheet) {
+        ctx.drawImage(
+          sheet,
+          animFrame * frameW, 0, frameW, frameH,
+          Math.floor(-drawSize / 2), Math.floor(-drawSize / 2),
+          drawSize, drawSize,
+        );
+      } else {
+        ctx.fillStyle = "#8833cc";
+        ctx.fillRect(-drawSize / 2, -drawSize / 2, drawSize, drawSize);
+      }
+      ctx.filter = "none";
+      ctx.restore();
+      return;
+    }
 
     const enemyType: EnemySpriteType = getEnemyType(enemy);
     const bodySprite = enemySpritesByType[enemyType];
@@ -2303,30 +2821,44 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     } else if (!facingRight) {
       ctx.scale(-1, 1);
     }
-    
-    
+
     if (enemy.hitFlash > 0) ctx.filter = "brightness(60)";
-    ctx.drawImage(bodySprite.img, Math.floor(-size / 2), Math.floor(-size / 2), Math.floor(size), Math.floor(size));
+    ctx.drawImage(
+      bodySprite.img,
+      Math.floor(-size / 2),
+      Math.floor(-size / 2),
+      Math.floor(size),
+      Math.floor(size),
+    );
     ctx.filter = "none";
 
     ctx.restore();
   };
 
-  const drawEnemyEyes = (ctx: CanvasRenderingContext2D, enemy: any, animationNowMs: number) => {
+  const drawEnemyEyes = (
+    ctx: CanvasRenderingContext2D,
+    enemy: any,
+    animationNowMs: number,
+  ) => {
     if (!enemy) return;
 
     if (enemy.type === "tree") {
       if (enemy.spriteFrame === 0) return;
 
-      const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+      const { x: centerX, y: centerY } =
+        cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
       const screenX = snapToGrid(centerX + ((enemy.x - position.x) * 50) / 2);
       const screenY = snapToGrid(centerY + ((enemy.z - position.z) * 50) / 2);
 
-      if (treeEnemyEyesSprite.complete && treeEnemyEyesSprite.naturalWidth > 0 && treeEnemyEyesSprite.naturalHeight > 0) {
+      if (
+        treeEnemyEyesSprite.complete &&
+        treeEnemyEyesSprite.naturalWidth > 0 &&
+        treeEnemyEyesSprite.naturalHeight > 0
+      ) {
         const frameW = treeEnemyEyesSprite.naturalWidth / 2;
         const frameH = treeEnemyEyesSprite.naturalHeight;
         const eyeFrame = enemy.spriteFrame === 1 ? 0 : 1;
-        const radiusPx = enemy.radius * (25);
+        const radiusPx = enemy.radius * 25;
         const scale = 2;
         const drawW = frameW * scale;
         const drawH = frameH * scale;
@@ -2352,25 +2884,45 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     if (!enemy.position) return;
 
     if (enemy.isBoss && enemy.bossType === "lazarus") {
-      const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
-      const screenX = snapToGrid(centerX + ((enemy.position.x - position.x) * 50) / 2);
-      const screenY = snapToGrid(centerY + ((enemy.position.z - position.z) * 50) / 2);
+      const { x: centerX, y: centerY } =
+        cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+      const screenX = snapToGrid(
+        centerX + ((enemy.position.x - position.x) * 50) / 2,
+      );
+      const screenY = snapToGrid(
+        centerY + ((enemy.position.z - position.z) * 50) / 2,
+      );
       const bossSheet = lazarusBossSpriteSheet;
       const windupSheet = bossLaserWindupSprite;
       const laserSheet = bossLaserSpriteSheet;
       const laserContinueSheet = bossLaserContinueSprite;
-      const hasBossSheet = bossSheet.complete && bossSheet.naturalWidth > 0 && bossSheet.naturalHeight > 0;
-      const hasWindupSheet = windupSheet.complete && windupSheet.naturalWidth > 0 && windupSheet.naturalHeight > 0;
-      const hasLaserSheet = laserSheet.complete && laserSheet.naturalWidth > 0 && laserSheet.naturalHeight > 0;
+      const hasBossSheet =
+        bossSheet.complete &&
+        bossSheet.naturalWidth > 0 &&
+        bossSheet.naturalHeight > 0;
+      const hasWindupSheet =
+        windupSheet.complete &&
+        windupSheet.naturalWidth > 0 &&
+        windupSheet.naturalHeight > 0;
+      const hasLaserSheet =
+        laserSheet.complete &&
+        laserSheet.naturalWidth > 0 &&
+        laserSheet.naturalHeight > 0;
       const hasLaserContinueSheet =
-        laserContinueSheet.complete && laserContinueSheet.naturalWidth > 0 && laserContinueSheet.naturalHeight > 0;
+        laserContinueSheet.complete &&
+        laserContinueSheet.naturalWidth > 0 &&
+        laserContinueSheet.naturalHeight > 0;
 
       const drawSize = 170;
       if (hasBossSheet) {
         const frameW = bossSheet.naturalWidth / 3;
         const frameH = bossSheet.naturalHeight / 2;
         const animFrame = Math.floor(animationNowMs / 130) % 3;
-        const bodyFrame = enemy.attackState === "laser_windup" || enemy.attackState === "laser_firing" ? 2 : animFrame;
+        const bodyFrame =
+          enemy.attackState === "laser_windup" ||
+          enemy.attackState === "laser_firing"
+            ? 2
+            : animFrame;
         const gasFrameIndex = 4;
         const gasSourceX = (gasFrameIndex % 3) * frameW;
         const gasSourceY = Math.floor(gasFrameIndex / 3) * frameH;
@@ -2380,7 +2932,17 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
         ctx.translate(screenX, screenY);
         ctx.rotate(bodyRotation);
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(bossSheet, gasSourceX, gasSourceY, frameW, frameH, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
+        ctx.drawImage(
+          bossSheet,
+          gasSourceX,
+          gasSourceY,
+          frameW,
+          frameH,
+          -drawSize / 2,
+          -drawSize / 2,
+          drawSize,
+          drawSize,
+        );
         ctx.restore();
 
         ctx.save();
@@ -2388,7 +2950,17 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
         ctx.rotate(bodyRotation);
         ctx.imageSmoothingEnabled = false;
         if (enemy.hitFlash > 0) ctx.filter = "brightness(8)";
-        ctx.drawImage(bossSheet, bodyFrame * frameW, 0, frameW, frameH, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
+        ctx.drawImage(
+          bossSheet,
+          bodyFrame * frameW,
+          0,
+          frameW,
+          frameH,
+          -drawSize / 2,
+          -drawSize / 2,
+          drawSize,
+          drawSize,
+        );
         ctx.filter = "none";
         ctx.restore();
       }
@@ -2420,14 +2992,19 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
         ctx.translate(startX, startY);
         ctx.rotate(beamAngle + Math.PI / 2);
         ctx.imageSmoothingEnabled = false;
-        
-        
+
         for (let tile = 0; tile < tileCount; tile++) {
           const useContinueSheet = tile > 0 && !!continueSheet;
           const beamSheet = useContinueSheet ? continueSheet : firstSheet;
-          const drawSourceX = useContinueSheet ? (continueSourceX ?? sourceX) : sourceX;
-          const drawSourceW = useContinueSheet ? (continueSourceW ?? sourceW) : sourceW;
-          const drawSourceH = useContinueSheet ? (continueSourceH ?? sourceH) : sourceH;
+          const drawSourceX = useContinueSheet
+            ? (continueSourceX ?? sourceX)
+            : sourceX;
+          const drawSourceW = useContinueSheet
+            ? (continueSourceW ?? sourceW)
+            : sourceW;
+          const drawSourceH = useContinueSheet
+            ? (continueSourceH ?? sourceH)
+            : sourceH;
           const drawY = -tileStep * (tile + 1);
           ctx.drawImage(
             beamSheet,
@@ -2435,7 +3012,7 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
             0,
             drawSourceW,
             drawSourceH,
-            -beamWidthPx * 2 / 2,
+            (-beamWidthPx * 2) / 2,
             drawY * 2,
             beamWidthPx * 2,
             tileDrawH * 2,
@@ -2471,9 +3048,16 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
       if (enemy.attackState === "laser_firing" && hasLaserSheet) {
         const frameW = laserSheet.naturalWidth / 6;
         const frameH = laserSheet.naturalHeight;
-        const continueFrameW = hasLaserContinueSheet ? laserContinueSheet.naturalWidth / 6 : frameW;
-        const continueFrameH = hasLaserContinueSheet ? laserContinueSheet.naturalHeight : frameH;
-        const fireProgress = Math.min(1, (enemy.windUpTimer ?? 0) / SHOGGOTH_CONFIG.fireDuration);
+        const continueFrameW = hasLaserContinueSheet
+          ? laserContinueSheet.naturalWidth / 6
+          : frameW;
+        const continueFrameH = hasLaserContinueSheet
+          ? laserContinueSheet.naturalHeight
+          : frameH;
+        const fireProgress = Math.min(
+          1,
+          (enemy.windUpTimer ?? 0) / SHOGGOTH_CONFIG.fireDuration,
+        );
 
         let frame = 1;
         if (fireProgress < 0.03) {
@@ -2484,10 +3068,13 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
         }
 
         for (const beamOffset of SHOGGOTH_CONFIG.beamAngles) {
-          const beamAngle = laserBaseRotation + ((enemy.windUpTimer ?? 0) * SHOGGOTH_CONFIG.rotationSpeed) + beamOffset;
+          const beamAngle =
+            laserBaseRotation +
+            (enemy.windUpTimer ?? 0) * SHOGGOTH_CONFIG.rotationSpeed +
+            beamOffset;
           const startX = screenX + Math.cos(beamAngle) * beamOriginOffsetPx;
           const startY = screenY + Math.sin(beamAngle) * beamOriginOffsetPx;
-          
+
           drawTiledBeam(
             laserSheet,
             frame * frameW,
@@ -2510,6 +3097,103 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
       const hpPct = Math.max(0, enemy.health / enemy.maxHealth);
 
       ctx.fillStyle = "rgba(0,0,0,0.72)";
+      ctx.fillRect(
+        snapToGrid(screenX - barW / 2 - 2),
+        snapToGrid(barY - 2),
+        barW + 4,
+        barH + 4,
+      );
+      ctx.fillStyle = "#400";
+      ctx.fillRect(snapToGrid(screenX - barW / 2), barY, barW, barH);
+      ctx.fillStyle = hpPct > 0.45 ? "#5DFF63" : "#ffc642";
+      ctx.fillRect(
+        snapToGrid(screenX - barW / 2),
+        barY,
+        snapToGrid(barW * hpPct),
+        barH,
+      );
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(snapToGrid(screenX - barW / 2), barY, barW, barH);
+      drawBitmapText(
+        ctx,
+        "BOSS",
+        snapToGrid(screenX),
+        snapToGrid(barY - 10),
+        font,
+        fontRedImage,
+        {
+          align: "center",
+          scale: 1,
+        },
+      );
+      return;
+    }
+
+    // -----------------------------------------------------------------------
+    // OCTOPUS BOSS RENDERING
+    if (enemy.isBoss && enemy.bossType === "octopus") {
+      const { x: centerX, y: centerY } =
+        cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+      const screenX = snapToGrid(
+        centerX + ((enemy.position.x - position.x) * 50) / 2,
+      );
+      const screenY = snapToGrid(
+        centerY + ((enemy.position.z - position.z) * 50) / 2,
+      );
+
+      const sheet = octopusBossSpriteSheet;
+      const hasSheet =
+        sheet.complete && sheet.naturalWidth > 0 && sheet.naturalHeight > 0;
+
+      const COLS = 4;
+      const ROWS = 2;
+      const drawSize = 224;
+
+      if (hasSheet) {
+        const frameW = sheet.naturalWidth / COLS;
+        const frameH = sheet.naturalHeight / ROWS;
+
+        const isDashing =
+          enemy.octopusState === "dashing" || enemy.octopusState === "post_dash";
+
+        let frameIndex: number;
+        if (isDashing) {
+          // Frames 0-1: dash animation (row 0, col 0-1)
+          frameIndex = Math.floor(animationNowMs / 80) % 2;
+        } else {
+          // Frames 2-7: normal animation (cols 2-3 row 0, all 4 cols row 1)
+          const normalFrame = Math.floor(animationNowMs / 110) % 6;
+          frameIndex = normalFrame + 2;
+        }
+
+        const srcCol = frameIndex % COLS;
+        const srcRow = Math.floor(frameIndex / COLS);
+
+        const facingRight = enemy.position.x <= position.x;
+
+        ctx.save();
+        ctx.translate(screenX, screenY);
+        ctx.imageSmoothingEnabled = false;
+        if (!facingRight) ctx.scale(-1, 1);
+        if (enemy.hitFlash > 0) ctx.filter = "brightness(60)";
+        ctx.drawImage(
+          sheet,
+          srcCol * frameW, srcRow * frameH, frameW, frameH,
+          Math.floor(-drawSize / 2), Math.floor(-drawSize / 2),
+          drawSize, drawSize,
+        );
+        ctx.filter = "none";
+        ctx.restore();
+      }
+
+      // Health bar
+      const barW = 120;
+      const barH = 9;
+      const barY = snapToGrid(screenY - drawSize / 2 - 24);
+      const hpPct = Math.max(0, enemy.health / enemy.maxHealth);
+
+      ctx.fillStyle = "rgba(0,0,0,0.72)";
       ctx.fillRect(snapToGrid(screenX - barW / 2 - 2), snapToGrid(barY - 2), barW + 4, barH + 4);
       ctx.fillStyle = "#400";
       ctx.fillRect(snapToGrid(screenX - barW / 2), barY, barW, barH);
@@ -2518,28 +3202,30 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
       ctx.strokeStyle = "#fff";
       ctx.lineWidth = 2;
       ctx.strokeRect(snapToGrid(screenX - barW / 2), barY, barW, barH);
-      drawBitmapText(
-      ctx,
-      "BOSS",
-      snapToGrid(screenX),
-      snapToGrid(barY - 10),
-      font,
-      fontRedImage,
-     {
-    align: "center",
-    scale: 1
-    }
-    );
+      drawBitmapText(ctx, "BOSS", snapToGrid(screenX), snapToGrid(barY - 10), font, fontRedImage, {
+        align: "center",
+        scale: 1,
+      });
       return;
     }
+
+    // Skip crow in eye layer — already drawn in drawEnemy
+    if (enemy.type === "crow") return;
 
     const enemyType: EnemySpriteType = getEnemyType(enemy);
     const eyeSprite = enemyEyeSpritesByType[enemyType];
     const size = eyeSprite.size * eyeSprite.scale;
 
-    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
-    const screenX = snapToGrid(centerX + ((enemy.position.x - position.x) * 50) / 2);
-    const screenY = snapToGrid(centerY + ((enemy.position.z - position.z) * 50) / 2);
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT,
+    );
+    const screenX = snapToGrid(
+      centerX + ((enemy.position.x - position.x) * 50) / 2,
+    );
+    const screenY = snapToGrid(
+      centerY + ((enemy.position.z - position.z) * 50) / 2,
+    );
     const facingRight = enemy.position.x <= position.x;
 
     ctx.save();
@@ -2549,43 +3235,78 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     } else if (!facingRight) {
       ctx.scale(-1, 1);
     }
-    ctx.drawImage(eyeSprite.img, Math.floor(-size / 2), Math.floor(-size / 2), Math.floor(size), Math.floor(size));
+    ctx.drawImage(
+      eyeSprite.img,
+      Math.floor(-size / 2),
+      Math.floor(-size / 2),
+      Math.floor(size),
+      Math.floor(size),
+    );
     ctx.restore();
   };
 
   const drawEnemyProjectiles = (ctx: CanvasRenderingContext2D) => {
-    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT,
+    );
     const projectileSprite = enemyEyeballProjectileSprite;
-    const hasProjectileSprite = projectileSprite.complete && projectileSprite.naturalWidth > 0 && projectileSprite.naturalHeight > 0;
+    const hasProjectileSprite =
+      projectileSprite.complete &&
+      projectileSprite.naturalWidth > 0 &&
+      projectileSprite.naturalHeight > 0;
 
     for (const projectile of enemyProjectilesRef.current) {
       // Skip enemy projectiles outside viewport
-      if (!isObjectInViewport(projectile.position.x, projectile.position.z, position.x, position.z, 120)) {
+      if (
+        !isObjectInViewport(
+          projectile.position.x,
+          projectile.position.z,
+          position.x,
+          position.z,
+          10,
+        )
+      ) {
         continue;
       }
-      
-      const screenX = snapToGrid(centerX + ((projectile.position.x - position.x) * 50) / 2);
-      const screenY = snapToGrid(centerY + ((projectile.position.z - position.z) * 50) / 2);
+
+      const screenX = snapToGrid(
+        centerX + ((projectile.position.x - position.x) * 50) / 2,
+      );
+      const screenY = snapToGrid(
+        centerY + ((projectile.position.z - position.z) * 50) / 2,
+      );
       const pixelSize = Math.max(8, projectile.size * 50 * 1.1);
 
       ctx.save();
 
       if (hasProjectileSprite) {
-        const angle = Math.atan2(projectile.velocity.z, projectile.velocity.x);
         ctx.translate(screenX, screenY);
-        ctx.rotate(angle);
-        ctx.drawImage(projectileSprite, -pixelSize / 2, -pixelSize / 2, pixelSize, pixelSize);
+        ctx.drawImage(
+          projectileSprite,
+          -pixelSize / 2,
+          -pixelSize / 2,
+          pixelSize,
+          pixelSize,
+        );
       }
       ctx.restore();
     }
   };
-  
-  const drawEnemyDeaths = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
-    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+
+  const drawEnemyDeaths = (
+    ctx: CanvasRenderingContext2D,
+    animationNowMs: number,
+  ) => {
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT,
+    );
     const sprite = enemyDeathSpritesheet;
     const totalFrames = 4;
 
-    const hasSprite = sprite.complete && sprite.naturalWidth > 0 && sprite.naturalHeight > 0;
+    const hasSprite =
+      sprite.complete && sprite.naturalWidth > 0 && sprite.naturalHeight > 0;
     const frameWidth = hasSprite ? sprite.naturalWidth / totalFrames : 0;
     const frameHeight = hasSprite ? sprite.naturalHeight : 0;
     const nextAnimations: EnemyDeathAnimation[] = [];
@@ -2600,8 +3321,12 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
 
       nextAnimations.push(animation);
 
-      const screenX = snapToGrid(centerX + ((animation.position.x - position.x) * 50) / 2);
-      const screenY = snapToGrid(centerY + ((animation.position.z - position.z) * 50) / 2);
+      const screenX = snapToGrid(
+        centerX + ((animation.position.x - position.x) * 50) / 2,
+      );
+      const screenY = snapToGrid(
+        centerY + ((animation.position.z - position.z) * 50) / 2,
+      );
       const drawScale = 2;
       const drawWidth = frameWidth * drawScale;
       const drawHeight = frameHeight * drawScale;
@@ -2628,26 +3353,45 @@ const drawPlayer = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
     enemyDeathAnimationsRef.current = nextAnimations;
   };
 
-usePlayer.setState({lastAmmoExplosive: true});
+  usePlayer.setState({ lastAmmoExplosive: true });
 
-  const drawSummons = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
+  const drawSummons = (
+    ctx: CanvasRenderingContext2D,
+    animationNowMs: number,
+  ) => {
     const summons = useSummons.getState().summons;
-    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
-    
-
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT,
+    );
 
     for (const summon of summons) {
       // Skip summons far outside viewport
-      if (!isObjectInViewport(summon.position.x, summon.position.z, position.x, position.z, 150)) {
+      if (
+        !isObjectInViewport(
+          summon.position.x,
+          summon.position.z,
+          position.x,
+          position.z,
+          150,
+        )
+      ) {
         continue;
       }
 
-      const screenX = snapToGrid(centerX + ((summon.position.x - position.x) * 50) / 2);
-      const screenY = snapToGrid(centerY + ((summon.position.z - position.z) * 50) / 2);
+      const screenX = snapToGrid(
+        centerX + ((summon.position.x - position.x) * 50) / 2,
+      );
+      const screenY = snapToGrid(
+        centerY + ((summon.position.z - position.z) * 50) / 2,
+      );
 
       if (summon.type === "ghost") {
         const sprite = SummonSprites.ghostSheet;
-        const isSheetReady = sprite.complete && sprite.naturalWidth > 0 && sprite.naturalHeight > 0;
+        const isSheetReady =
+          sprite.complete &&
+          sprite.naturalWidth > 0 &&
+          sprite.naturalHeight > 0;
         if (!isSheetReady) continue;
 
         const totalCols = 6;
@@ -2663,7 +3407,9 @@ usePlayer.setState({lastAmmoExplosive: true});
         const animFps = inShootAnim ? 5 : 10;
         const frameIndex = Math.floor(nowSeconds * animFps);
 
-        const sx = inShootAnim ? (frameIndex % shootFrames) * frameW : (frameIndex % passiveFrames) * frameW;
+        const sx = inShootAnim
+          ? (frameIndex % shootFrames) * frameW
+          : (frameIndex % passiveFrames) * frameW;
         const sy = inShootAnim ? frameH : 0;
 
         const drawScale = 2;
@@ -2676,9 +3422,18 @@ usePlayer.setState({lastAmmoExplosive: true});
         const facing = summon.facing ?? 1;
         ctx.scale(facing, 1);
 
-        ctx.drawImage(sprite, sx, sy, frameW, frameH, -drawW / 2, -drawH / 2, drawW, drawH);
+        ctx.drawImage(
+          sprite,
+          sx,
+          sy,
+          frameW,
+          frameH,
+          -drawW / 2,
+          -drawH / 2,
+          drawW,
+          drawH,
+        );
         ctx.restore();
-
       }
 
       if (summon.type === "dagger") {
@@ -2714,11 +3469,12 @@ usePlayer.setState({lastAmmoExplosive: true});
         ctx.restore();
       }
 
-      
-
       if (summon.type === "scythe") {
         const sprite = SummonSprites.scythe;
-        const canDrawScythe = sprite.complete && sprite.naturalWidth > 0 && sprite.naturalHeight > 0;
+        const canDrawScythe =
+          sprite.complete &&
+          sprite.naturalWidth > 0 &&
+          sprite.naturalHeight > 0;
 
         if (canDrawScythe) {
           const scale = 3;
@@ -2730,20 +3486,25 @@ usePlayer.setState({lastAmmoExplosive: true});
           ctx.drawImage(sprite, -w / 2, -h / 2, w, h);
           ctx.restore();
         }
-
-      } 
+      }
     }
   };
 
-usePlayer.setState({ incendiary: true});
+  usePlayer.setState({ incendiary: true });
 
-  const drawStatusEffects = (ctx: CanvasRenderingContext2D, animationNowMs: number) => {
-    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+  const drawStatusEffects = (
+    ctx: CanvasRenderingContext2D,
+    animationNowMs: number,
+  ) => {
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT,
+    );
     const { statusEffects } = useSummons.getState();
     const FIRE_EMIT_THROTTLE_MS = 50; // Emit fire particles every 50ms instead of every frame
 
-    statusEffects.forEach(effect => {
-      const enemy = enemies.find(e => e.id === effect.enemyId);
+    statusEffects.forEach((effect) => {
+      const enemy = enemies.find((e) => e.id === effect.enemyId);
       if (!enemy) return;
 
       const screenX = centerX + ((enemy.position.x - position.x) * 50) / 2;
@@ -2757,20 +3518,25 @@ usePlayer.setState({ incendiary: true});
           fireSystem.current.emit(enemy.position.x, enemy.position.z);
           fireEmissionThrottleRef.current[effect.id] = animationNowMs;
         }
-
       } else if (effect.type === "curse") {
         // Dark aura
         ctx.strokeStyle = "#9900ff";
         ctx.lineWidth = 2;
         ctx.globalAlpha = 0.6;
         ctx.beginPath();
-        ctx.arc(screenX, screenY, 20 + Math.sin(animationNowMs / 200) * 3, 0, Math.PI * 2);
+        ctx.arc(
+          screenX,
+          screenY,
+          20 + Math.sin(animationNowMs / 200) * 3,
+          0,
+          Math.PI * 2,
+        );
         ctx.stroke();
       }
     });
 
     // Cleanup throttle entries for removed effects
-    const activeEffectIds = new Set(statusEffects.map(e => e.id));
+    const activeEffectIds = new Set(statusEffects.map((e) => e.id));
     for (const id in fireEmissionThrottleRef.current) {
       if (!activeEffectIds.has(id)) {
         delete fireEmissionThrottleRef.current[id];
@@ -2780,44 +3546,31 @@ usePlayer.setState({ incendiary: true});
     ctx.globalAlpha = 1;
   };
 
-
-
-
   const drawCursor = (ctx: CanvasRenderingContext2D) => {
-  const size = 32;
-  const half = size / 2;
-const { ammo } = usePlayer.getState();
-  const x = mouseRef.current.x;
-  const y = mouseRef.current.y;
+    const size = 32;
+    const half = size / 2;
+    const { ammo } = usePlayer.getState();
+    const x = mouseRef.current.x;
+    const y = mouseRef.current.y;
 
-  ctx.imageSmoothingEnabled = false;
+    ctx.imageSmoothingEnabled = false;
 
-  ctx.drawImage(
-    cursorSprite,
-    Math.floor(x - half),
-    Math.floor(y - half),
-    size,
-    size
-  );
+    ctx.drawImage(
+      cursorSprite,
+      Math.floor(x - half),
+      Math.floor(y - half),
+      size,
+      size,
+    );
 
-  if (phase !== "playing") return;
+    if (phase !== "playing") return;
 
-  
-
-  drawBitmapText(
-    ctx,
-    `${ammo}`,
-    x + 18,
-    y + 10,
-    font,
-    fontWhiteImage,
-    {
+    drawBitmapText(ctx, `${ammo}`, x + 18, y + 10, font, fontWhiteImage, {
       align: "left",
       baseline: "middle",
       scale: 1,
-    }
-  );
-};
+    });
+  };
 
   return (
     <>
@@ -2832,60 +3585,58 @@ const { ammo } = usePlayer.getState();
           marginTop: canvasDisplay.offsetY,
         }}
       >
-      <Darkness />
-      <LevelUpScreen />
-      <GameUI />
-      
-      
-      <canvas
-        ref={canvasRef}
-        width={CANVAS_WIDTH}
-        height={CANVAS_HEIGHT}
-        className="border-2 border-gray-700"
-        style={{
-          cursor: "none",
-          position: "relative",
-          zIndex: 0,
-          width: canvasDisplay.width,
-          height: canvasDisplay.height,
-          imageRendering: "pixelated",
-        }}
-      />
-      <canvas
-        ref={eyeCanvasRef}
-        width={CANVAS_WIDTH}
-        height={CANVAS_HEIGHT}
-        style={{
-          cursor: "none",
-          position: "absolute",
-          top: 0,
-          left: 0,
-          pointerEvents: "none",
-          zIndex: 2,
-          width: canvasDisplay.width,
-          height: canvasDisplay.height,
-          imageRendering: "pixelated",
-        }}
-      />
-      <DevTools />
-      <canvas
-  ref={cursorCanvasRef}
-  width={CANVAS_WIDTH}
-  height={CANVAS_HEIGHT}
-  style={{
-    cursor: "none",
-    position: "absolute",  
-    top: canvasDisplay.offsetY,
-    left: canvasDisplay.offsetX,
-    pointerEvents: "none",
-    zIndex: 3000,        
-    width: canvasDisplay.width,
-    height: canvasDisplay.height,
-    imageRendering: "pixelated",
-  }}
-/>
+        <Darkness />
+        <LevelUpScreen />
+        <GameUI />
+
+        <canvas
+          ref={canvasRef}
+          width={CANVAS_WIDTH}
+          height={CANVAS_HEIGHT}
+          className="border-2 border-gray-700"
+          style={{
+            cursor: "none",
+            position: "relative",
+            zIndex: 0,
+            width: canvasDisplay.width,
+            height: canvasDisplay.height,
+            imageRendering: "pixelated",
+          }}
+        />
+        <canvas
+          ref={eyeCanvasRef}
+          width={CANVAS_WIDTH}
+          height={CANVAS_HEIGHT}
+          style={{
+            cursor: "none",
+            position: "absolute",
+            top: 0,
+            left: 0,
+            pointerEvents: "none",
+            zIndex: 2,
+            width: canvasDisplay.width,
+            height: canvasDisplay.height,
+            imageRendering: "pixelated",
+          }}
+        />
+        <DevTools />
+        <canvas
+          ref={cursorCanvasRef}
+          width={CANVAS_WIDTH}
+          height={CANVAS_HEIGHT}
+          style={{
+            cursor: "none",
+            position: "absolute",
+            top: canvasDisplay.offsetY,
+            left: canvasDisplay.offsetX,
+            pointerEvents: "none",
+            zIndex: 3000,
+            width: canvasDisplay.width,
+            height: canvasDisplay.height,
+            imageRendering: "pixelated",
+          }}
+        />
       </div>
     </>
   );
-
 });

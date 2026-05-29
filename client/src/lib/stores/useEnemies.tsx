@@ -64,7 +64,7 @@ export interface Enemy {
   health: number;
   maxHealth: number;
   speed: number;
-  type?: "basic" | "tank" | "eyeball" | "tree" | "boss";
+  type?: "basic" | "tank" | "eyeball" | "tree" | "boss" | "crow";
   velocity: THREE.Vector3;
   hitFlash: number;
   
@@ -74,7 +74,7 @@ export interface Enemy {
 
   // BOSSS PROPERTIES:
   isBoss?: boolean;
-  bossType?: "lazarus";
+  bossType?: "lazarus" | "octopus";
   dashCooldown?: number;
   maxDashCooldown?: number;
   windUpTimer?: number;
@@ -93,6 +93,15 @@ export interface Enemy {
   isRangedAttacking?: boolean;
   rangedShotCooldown?: number;
   spawnSessionId?: string;
+
+  // OCTOPUS BOSS PROPERTIES:
+  octopusState?: "chasing" | "dashing" | "post_dash" | "spawn_crows" | "recovering";
+  octopusDashDir?: THREE.Vector3;
+  octopusDashTimer?: number;
+  octopusDashCooldown?: number;
+  octopusPostDashTimer?: number;
+  octopusRecoverTimer?: number;
+  octopusCrowSpawnCooldown?: number;
 }
 
 export interface DamagePopup {
@@ -103,7 +112,7 @@ export interface DamagePopup {
   life: number; 
 }
 
-type SpawnSessionEnemyType = "basic" | "tank" | "eyeball" | "lazarus";
+type SpawnSessionEnemyType = "basic" | "tank" | "eyeball" | "lazarus" | "octopus";
 
 interface SpawnSession {
   id: string;
@@ -131,6 +140,8 @@ interface EnemiesState {
   updateAutoSpawn: (delta: number, playerPos: THREE.Vector3) => void;
   updateDamagePopups: (delta: number) => void;
   spawnLazarusBoss: (position: THREE.Vector3) => void;
+  spawnOctopusBoss: (position: THREE.Vector3) => void;
+  spawnCrow: (position: THREE.Vector3) => void;
 }
 
 export const useEnemies = create<EnemiesState>((set, get) => {
@@ -182,8 +193,8 @@ export const useEnemies = create<EnemiesState>((set, get) => {
     createSession("tank_3", "tank", "3:00", "30:00", 1000, 580, 5, 10),
     //boss
     createSession("lazarus_1", "lazarus", "1:00", "30:00", 2500, 1, 1, 10),
-    
-    
+    //octopus boss
+    createSession("octopus_1", "octopus", "2:30", "30:00", 3500, 1, 1, 15),
   ];
 
   let spawnSessionTimers = spawnSessions.reduce<Record<string, number>>((acc, session) => {
@@ -410,6 +421,48 @@ updateDamagePopups: (delta) => {
 
       set((state) => ({ enemies: [...state.enemies, boss] }));
     },
+
+    spawnOctopusBoss: (position) => {
+      const boss: Enemy = {
+        id: "boss_octopus_" + Date.now(),
+        position: position.clone(),
+        health: 3500,
+        maxHealth: 3500,
+        speed: 5.0,
+
+        type: "boss",
+        velocity: new THREE.Vector3(),
+        hitFlash: 0,
+
+        isBoss: true,
+        bossType: "octopus",
+
+        octopusState: "chasing",
+        octopusDashDir: new THREE.Vector3(),
+        octopusDashTimer: 0,
+        octopusDashCooldown: 4.0,
+        octopusPostDashTimer: 0,
+        octopusRecoverTimer: 0,
+        octopusCrowSpawnCooldown: 12.0,
+        rotationY: 0,
+      };
+
+      set((state) => ({ enemies: [...state.enemies, boss] }));
+    },
+
+    spawnCrow: (position) => {
+      const crow: Enemy = {
+        id: "crow_" + Date.now() + "_" + Math.random().toString(36).slice(2),
+        position: position.clone(),
+        health: 18,
+        maxHealth: 18,
+        speed: 7.5,
+        type: "crow",
+        velocity: new THREE.Vector3(),
+        hitFlash: 0,
+      };
+      set((state) => ({ enemies: [...state.enemies, crow] }));
+    },
     
     updateEnemies: (enemies) => set({ enemies }),
 
@@ -462,6 +515,20 @@ updateDamagePopups: (delta) => {
             spawnedBoss.maxHealth = session.hp;
             spawnedBoss.spawnSessionId = session.id;
             
+            set({ enemies: currentEnemies });
+            continue;
+          }
+
+          if (session.enemy === "octopus") {
+            get().spawnOctopusBoss(spawnPos);
+            const currentEnemies = get().enemies;
+            const spawnedBoss = currentEnemies[currentEnemies.length - 1];
+            if (!spawnedBoss) continue;
+
+            spawnedBoss.health = session.hp;
+            spawnedBoss.maxHealth = session.hp;
+            spawnedBoss.spawnSessionId = session.id;
+
             set({ enemies: currentEnemies });
             continue;
           }

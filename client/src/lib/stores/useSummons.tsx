@@ -528,8 +528,8 @@ export const useSummons = create<SummonState>((set, get) => ({
           updated.strikeTimer = 2.0;
 
           // Strike 2 nearest enemies within targeting range
-          const LIGHTNING_RANGE_X = 30;
-          const LIGHTNING_RANGE_Z = 10;
+          const LIGHTNING_RANGE_X = 10;
+          const LIGHTNING_RANGE_Z = 5;
           
           const sorted = enemies
             .filter(e => {
@@ -539,7 +539,7 @@ export const useSummons = create<SummonState>((set, get) => ({
             })
             .map(e => ({ enemy: e, dist: updated.position.distanceTo(e.position) }))
             .sort((a, b) => a.dist - b.dist)
-            .slice(0, 2);
+            .slice(0, 1);
 
           sorted.forEach(({ enemy }) => {
             let damage = state.lightningDamage * state.summonDamageMultiplier;

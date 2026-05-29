@@ -47,7 +47,7 @@ interface HitState {
     chainedEnemies: Set<string>,
     allEnemies: Enemy[]
   ) => void;
-  applyPlayerDamage: (damage: number, impactPos?: THREE.Vector3) => void;
+  applyPlayerDamage: (impactPos: THREE.Vector3) => void;
 }
 
 export const useHit = create<HitState>((set, get) => ({
@@ -154,7 +154,7 @@ export const useHit = create<HitState>((set, get) => ({
     return enemy.health <= 0;
   },
 
-  applyExplosiveDamage: (center, radius, damage, allEnemies, sourceColor = "#ff6600") => {
+  applyExplosiveDamage: (center, radius, damage, allEnemies) => {
     const { addExplosion, addDamageNumber } = useVisualEffects.getState();
     const { playHit } = useAudio.getState();
     const { applyStatusEffect } = useSummons.getState();
@@ -227,20 +227,20 @@ export const useHit = create<HitState>((set, get) => ({
   },
 
   applyPlayerDamage: (impactPos) => {
-    const { loseHeart, position, invincibilityTimer } = usePlayer.getState();
+    const { loseHeart, position, velocity, invincibilityTimer } = usePlayer.getState();
     if (invincibilityTimer > 0) return;
     const { playHit } = useAudio.getState();
 
     // Calculate knockback direction from impact position
-    let knockbackDir = new THREE.Vector3(0, 0, 0);
+    let dir = new THREE.Vector3(0, 0, 0);
     if (impactPos) {
-      knockbackDir = position.clone().sub(impactPos).normalize();
+      dir = position.clone().sub(impactPos).normalize();
     }
+      const knockbackDurationMs = 0.2;
+      
+      position.multiplyScalar(5 * knockbackDurationMs);
 
     loseHeart();
     playHit();
-
-    // Trigger damage flash with knockback instead of blinking
-    usePlayer.getState().triggerDamageFlash(position, knockbackDir);
   },
 }));

@@ -293,6 +293,18 @@ export const bossLaserWindupSprite = (() => {
   return img;
 })();
 
+export const octopusBossSpriteSheet = (() => {
+  const img = new Image();
+  img.src = "/sprites/enemy/octopus-boss.png";
+  return img;
+})();
+
+export const crowEnemySpriteSheet = (() => {
+  const img = new Image();
+  img.src = "/sprites/enemy/crow-enemy.png";
+  return img;
+})();
+
 export const VisualSprites = {
   impactSheet: (() => {
     const img = new Image();

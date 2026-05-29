@@ -73,7 +73,9 @@ const DEVTOOLS_STYLES = {
 export function DevTools() {
   const [isOpen, setIsOpen] = useState(false);
   const [godMode, setGodMode] = useState(false);
-  const [spawnType, setSpawnType] = useState<"basic" | "tank" | "eyeball">("basic");
+  const [spawnType, setSpawnType] = useState<"basic" | "tank" | "eyeball">(
+    "basic",
+  );
   const [spawnCount, setSpawnCount] = useState(1);
   const [xpAmount, setXpAmount] = useState(100);
   const [upgradeInput, setUpgradeInput] = useState("");
@@ -90,7 +92,7 @@ export function DevTools() {
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       if (e.key === "o" || e.key === "O") {
-        setIsOpen(prev => !prev);
+        setIsOpen((prev) => !prev);
       }
     };
     window.addEventListener("keydown", handleKeyPress);
@@ -115,13 +117,14 @@ export function DevTools() {
       const position = new THREE.Vector3(
         player.position.x + Math.cos(angle) * distance,
         0,
-        player.position.z + Math.sin(angle) * distance
+        player.position.z + Math.sin(angle) * distance,
       );
       enemies.addEnemy({
         position,
         type: spawnType,
         health: spawnType === "tank" ? 200 : spawnType === "eyeball" ? 30 : 50,
-        maxHealth: spawnType === "tank" ? 200 : spawnType === "eyeball" ? 30 : 50,
+        maxHealth:
+          spawnType === "tank" ? 200 : spawnType === "eyeball" ? 30 : 50,
       });
     }
   };
@@ -155,15 +158,15 @@ export function DevTools() {
   };
 
   const killAllEnemies = () => {
-    enemies.enemies.forEach(enemy => {
+    enemies.enemies.forEach((enemy) => {
       enemy.health = 0;
     });
   };
 
   const addUpgrade = () => {
     if (upgradeInput.trim()) {
-      usePlayer.setState(state => ({
-        takenUpgrades: new Set([...state.takenUpgrades, upgradeInput.trim()])
+      usePlayer.setState((state) => ({
+        takenUpgrades: new Set([...state.takenUpgrades, upgradeInput.trim()]),
       }));
       setUpgradeInput("");
     }
@@ -177,19 +180,22 @@ export function DevTools() {
           top: "10px",
           right: "10px",
         }}
-      >
-
-      </div>
+      ></div>
     );
   }
 
-  const fps = Math.round(1000 / (performance.now() - (window as any).lastFrameTime || performance.now()));
+  const fps = Math.round(
+    1000 /
+      (performance.now() - (window as any).lastFrameTime || performance.now()),
+  );
   (window as any).lastFrameTime = performance.now();
 
   return (
     <div style={DEVTOOLS_STYLES.container}>
       <div style={DEVTOOLS_STYLES.header}>
-        <div style={{ fontWeight: "bold", fontSize: "16px", marginBottom: "5px" }}>
+        <div
+          style={{ fontWeight: "bold", fontSize: "16px", marginBottom: "5px" }}
+        >
           DEVELOPER TOOLS (Press O to close)
         </div>
         <div style={DEVTOOLS_STYLES.row}>
@@ -200,7 +206,9 @@ export function DevTools() {
 
       {/* UPGRADE CONSOLE */}
       <div style={DEVTOOLS_STYLES.section}>
-        <div style={{ fontWeight: "bold", marginBottom: "5px" }}>Upgrade Console</div>
+        <div style={{ fontWeight: "bold", marginBottom: "5px" }}>
+          Upgrade Console
+        </div>
         <div style={DEVTOOLS_STYLES.row}>
           <input
             type="text"
@@ -210,7 +218,9 @@ export function DevTools() {
             placeholder="upgrade id"
             style={{ ...DEVTOOLS_STYLES.input, flex: 1 }}
           />
-          <button style={DEVTOOLS_STYLES.button} onClick={addUpgrade}>Add</button>
+          <button style={DEVTOOLS_STYLES.button} onClick={addUpgrade}>
+            Add
+          </button>
         </div>
         <div style={{ fontSize: "10px", color: "#888", marginTop: "4px" }}>
           Press Enter to add upgrade
@@ -219,14 +229,18 @@ export function DevTools() {
 
       {/* COUNTERS */}
       <div style={DEVTOOLS_STYLES.section}>
-        <div style={{ fontWeight: "bold", marginBottom: "5px" }}>Entity Counters</div>
+        <div style={{ fontWeight: "bold", marginBottom: "5px" }}>
+          Entity Counters
+        </div>
         <div style={DEVTOOLS_STYLES.row}>
           <span style={DEVTOOLS_STYLES.label}>Enemies: </span>
           <span style={DEVTOOLS_STYLES.value}>{enemies.enemies.length}</span>
         </div>
         <div style={DEVTOOLS_STYLES.row}>
           <span style={DEVTOOLS_STYLES.label}>Projectiles: </span>
-          <span style={DEVTOOLS_STYLES.value}>{projectiles.projectiles.length}</span>
+          <span style={DEVTOOLS_STYLES.value}>
+            {projectiles.projectiles.length}
+          </span>
         </div>
         <div style={DEVTOOLS_STYLES.row}>
           <span style={DEVTOOLS_STYLES.label}>Summons: </span>
@@ -234,11 +248,15 @@ export function DevTools() {
         </div>
         <div style={DEVTOOLS_STYLES.row}>
           <span style={DEVTOOLS_STYLES.label}>FireParticles: </span>
-          <span style={DEVTOOLS_STYLES.value}>{particles.fireParticleCount}</span>
+          <span style={DEVTOOLS_STYLES.value}>
+            {particles.fireParticleCount}
+          </span>
         </div>
         <div style={DEVTOOLS_STYLES.row}>
           <span style={DEVTOOLS_STYLES.label}>TrailParticles: </span>
-          <span style={DEVTOOLS_STYLES.value}>{particles.trailParticleCount}</span>
+          <span style={DEVTOOLS_STYLES.value}>
+            {particles.trailParticleCount}
+          </span>
         </div>
         <div style={DEVTOOLS_STYLES.row}>
           <span style={DEVTOOLS_STYLES.label}>Damage Numbers: </span>
@@ -250,21 +268,29 @@ export function DevTools() {
         </div>
         <div style={DEVTOOLS_STYLES.row}>
           <span style={DEVTOOLS_STYLES.label}>Explosion Effects: </span>
-          <span style={DEVTOOLS_STYLES.value}>{vfx.explosionEffects.length}</span>
+          <span style={DEVTOOLS_STYLES.value}>
+            {vfx.explosionEffects.length}
+          </span>
         </div>
         <div style={DEVTOOLS_STYLES.row}>
           <span style={DEVTOOLS_STYLES.label}>Lightning Effects: </span>
-          <span style={DEVTOOLS_STYLES.value}>{vfx.lightningEffects.length}</span>
+          <span style={DEVTOOLS_STYLES.value}>
+            {vfx.lightningEffects.length}
+          </span>
         </div>
         <div style={DEVTOOLS_STYLES.row}>
           <span style={DEVTOOLS_STYLES.label}>Status Effects: </span>
-          <span style={DEVTOOLS_STYLES.value}>{summons.statusEffects.length}</span>
+          <span style={DEVTOOLS_STYLES.value}>
+            {summons.statusEffects.length}
+          </span>
         </div>
       </div>
 
       {/* PLAYER STATS */}
       <div style={DEVTOOLS_STYLES.section}>
-        <div style={{ fontWeight: "bold", marginBottom: "5px" }}>Player Stats</div>
+        <div style={{ fontWeight: "bold", marginBottom: "5px" }}>
+          Player Stats
+        </div>
         <div style={DEVTOOLS_STYLES.row}>
           <span style={DEVTOOLS_STYLES.label}>Position: </span>
           <span style={DEVTOOLS_STYLES.value}>
@@ -273,7 +299,9 @@ export function DevTools() {
         </div>
         <div style={DEVTOOLS_STYLES.row}>
           <span style={DEVTOOLS_STYLES.label}>Health: </span>
-          <span style={DEVTOOLS_STYLES.value}>{player.hearts}/{player.maxHearts}</span>
+          <span style={DEVTOOLS_STYLES.value}>
+            {player.hearts}/{player.maxHearts}
+          </span>
         </div>
         <div style={DEVTOOLS_STYLES.row}>
           <span style={DEVTOOLS_STYLES.label}>Level: </span>
@@ -281,15 +309,21 @@ export function DevTools() {
         </div>
         <div style={DEVTOOLS_STYLES.row}>
           <span style={DEVTOOLS_STYLES.label}>XP: </span>
-          <span style={DEVTOOLS_STYLES.value}>{player.xp}/{player.xpToNextLevel}</span>
+          <span style={DEVTOOLS_STYLES.value}>
+            {player.xp}/{player.xpToNextLevel}
+          </span>
         </div>
         <div style={DEVTOOLS_STYLES.row}>
           <span style={DEVTOOLS_STYLES.label}>Ammo: </span>
-          <span style={DEVTOOLS_STYLES.value}>{player.ammo}/{player.maxAmmo}</span>
+          <span style={DEVTOOLS_STYLES.value}>
+            {player.ammo}/{player.maxAmmo}
+          </span>
         </div>
         <div style={DEVTOOLS_STYLES.row}>
           <span style={DEVTOOLS_STYLES.label}>Damage: </span>
-          <span style={DEVTOOLS_STYLES.value}>{player.baseDamage.toFixed(1)}</span>
+          <span style={DEVTOOLS_STYLES.value}>
+            {player.baseDamage.toFixed(1)}
+          </span>
         </div>
         <div style={DEVTOOLS_STYLES.row}>
           <span style={DEVTOOLS_STYLES.label}>Speed: </span>
@@ -297,31 +331,48 @@ export function DevTools() {
         </div>
         <div style={DEVTOOLS_STYLES.row}>
           <span style={DEVTOOLS_STYLES.label}>Fire Rate: </span>
-          <span style={DEVTOOLS_STYLES.value}>{(1 / player.firerate).toFixed(2)}/s</span>
+          <span style={DEVTOOLS_STYLES.value}>
+            {(1 / player.firerate).toFixed(2)}/s
+          </span>
         </div>
       </div>
 
       {/* TOGGLES */}
       <div style={DEVTOOLS_STYLES.section}>
-        <div style={{ fontWeight: "bold", marginBottom: "5px" }}>Toggles & Actions</div>
+        <div style={{ fontWeight: "bold", marginBottom: "5px" }}>
+          Toggles & Actions
+        </div>
         <div style={DEVTOOLS_STYLES.row}>
-          <button style={DEVTOOLS_STYLES.button} onClick={() => setGodMode(!godMode)}>
+          <button
+            style={DEVTOOLS_STYLES.button}
+            onClick={() => setGodMode(!godMode)}
+          >
             God Mode: {godMode ? "ON" : "OFF"}
           </button>
         </div>
         <div style={DEVTOOLS_STYLES.row}>
-          <button style={DEVTOOLS_STYLES.button} onClick={healPlayer}>Heal</button>
-          <button style={DEVTOOLS_STYLES.button} onClick={refillAmmo}>Refill</button>
-          <button style={DEVTOOLS_STYLES.button} onClick={teleportToCenter}>Center</button>
+          <button style={DEVTOOLS_STYLES.button} onClick={healPlayer}>
+            Heal
+          </button>
+          <button style={DEVTOOLS_STYLES.button} onClick={refillAmmo}>
+            Refill
+          </button>
+          <button style={DEVTOOLS_STYLES.button} onClick={teleportToCenter}>
+            Center
+          </button>
         </div>
         <div style={DEVTOOLS_STYLES.row}>
-          <button style={DEVTOOLS_STYLES.button} onClick={clearProjectiles}>Clear Projectiles</button>
+          <button style={DEVTOOLS_STYLES.button} onClick={clearProjectiles}>
+            Clear Projectiles
+          </button>
         </div>
       </div>
 
       {/* ENEMIES */}
       <div style={DEVTOOLS_STYLES.section}>
-        <div style={{ fontWeight: "bold", marginBottom: "5px" }}>Spawn Enemies</div>
+        <div style={{ fontWeight: "bold", marginBottom: "5px" }}>
+          Spawn Enemies
+        </div>
         <div style={DEVTOOLS_STYLES.row}>
           <select
             value={spawnType}
@@ -340,17 +391,25 @@ export function DevTools() {
             min="1"
             max="50"
           />
-          <button style={DEVTOOLS_STYLES.button} onClick={spawnEnemies}>Spawn</button>
+          <button style={DEVTOOLS_STYLES.button} onClick={spawnEnemies}>
+            Spawn
+          </button>
         </div>
         <div style={DEVTOOLS_STYLES.row}>
-          <button style={DEVTOOLS_STYLES.button} onClick={clearEnemies}>Clear</button>
-          <button style={DEVTOOLS_STYLES.button} onClick={killAllEnemies}>Kill All</button>
+          <button style={DEVTOOLS_STYLES.button} onClick={clearEnemies}>
+            Clear
+          </button>
+          <button style={DEVTOOLS_STYLES.button} onClick={killAllEnemies}>
+            Kill All
+          </button>
         </div>
       </div>
 
       {/* XP */}
       <div style={DEVTOOLS_STYLES.section}>
-        <div style={{ fontWeight: "bold", marginBottom: "5px" }}>Experience</div>
+        <div style={{ fontWeight: "bold", marginBottom: "5px" }}>
+          Experience
+        </div>
         <div style={DEVTOOLS_STYLES.row}>
           <input
             type="number"
@@ -359,16 +418,24 @@ export function DevTools() {
             style={DEVTOOLS_STYLES.input}
             min="1"
           />
-          <button style={DEVTOOLS_STYLES.button} onClick={addXP}>Add XP</button>
-          <button style={DEVTOOLS_STYLES.button} onClick={levelUp}>Level Up</button>
+          <button style={DEVTOOLS_STYLES.button} onClick={addXP}>
+            Add XP
+          </button>
+          <button style={DEVTOOLS_STYLES.button} onClick={levelUp}>
+            Level Up
+          </button>
         </div>
       </div>
 
       {/* UPGRADES */}
       <div style={DEVTOOLS_STYLES.section}>
-        <div style={{ fontWeight: "bold", marginBottom: "5px" }}>Taken Upgrades ({player.takenUpgrades.size})</div>
-        <div style={{ maxHeight: "100px", overflowY: "auto", fontSize: "10px" }}>
-          {Array.from(player.takenUpgrades).map(id => (
+        <div style={{ fontWeight: "bold", marginBottom: "5px" }}>
+          Taken Upgrades ({player.takenUpgrades.size})
+        </div>
+        <div
+          style={{ maxHeight: "100px", overflowY: "auto", fontSize: "10px" }}
+        >
+          {Array.from(player.takenUpgrades).map((id) => (
             <div key={id} style={DEVTOOLS_STYLES.row}>
               <span style={{ color: "#888" }}>{id}</span>
             </div>
