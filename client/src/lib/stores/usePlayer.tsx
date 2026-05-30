@@ -208,6 +208,140 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     },
   },
 
+regeneration: {
+  id: "regeneration",
+  name: "Regeneration",
+  description: "Heal 1 HP every 50 seconds",
+  icon: "💚",
+  category: "vitality",
+  tier: 3,
+  requires: ["vitality"],
+  apply: () => {
+    usePlayer.setState({
+      regeneration: true,
+      regenerationInterval: 50,
+    });
+  },
+},
+
+wildfire: {
+  id: "wildfire",
+  name: "Wildfire",
+  description:
+    "Summons inflict Burn. Burn duration +100%",
+  icon: "🔥",
+  category: "summon",
+  tier: 3,
+  requires: ["ghost_wizard", "electro_mastery"],
+  apply: () => {
+    usePlayer.setState({
+      burnDurationMultiplier: 2,
+    });
+
+    useSummons.setState({
+      summonBurn: true,
+    });
+  },
+},
+
+master_summoner: {
+  id: "master_summoner",
+  name: "Master Summoner",
+  description:
+    "Summon Attack Speed +50%, Bullet Damage -25%",
+  icon: "👑",
+  category: "summon",
+  tier: 4,
+  requires: ["wildfire", "blade_dance"],
+  apply: () => {
+    const player = usePlayer.getState();
+
+    usePlayer.setState({
+      baseDamage: player.baseDamage * 0.75,
+    });
+
+    useSummons.setState({
+      summonAttackSpeedMultiplier:
+        (useSummons.getState().summonAttackSpeedMultiplier || 1) * 1.5,
+    });
+  },
+},
+
+sharpened_edge: {
+  id: "sharpened_edge",
+  name: "Sharpened Edge",
+  description: "All Summon Damage +40%",
+  icon: "🗡️",
+  category: "summon",
+  tier: 2,
+  requires: ["magic_dagger"],
+  apply: () => {
+    useSummons.setState({
+      summonDamageMultiplier:
+        (useSummons.getState().summonDamageMultiplier || 1) * 1.4,
+    });
+  },
+},
+
+blade_dance: {
+  id: "blade_dance",
+  name: "Blade Dance",
+  description: "Summon 2 additional Daggers",
+  icon: "⚔️",
+  category: "summon",
+  tier: 3,
+  requires: ["sharpened_edge"],
+  apply: () => {
+    const { addSummon } = useSummons.getState();
+
+    addSummon("dagger");
+    addSummon("dagger");
+  },
+},
+
+stormcaller: {
+  id: "stormcaller",
+  name: "Stormcaller",
+  description:
+    "Every 15 seconds, all enemies in range are struck by lightning",
+  icon: "🌩️",
+  category: "summon",
+  tier: 4,
+  requires: ["electro_mastery"],
+  apply: () => {
+    useSummons.setState({
+      stormcaller: true,
+      stormcallerCooldown: 15,
+    });
+  },
+},
+
+minigun: {
+  id: "minigun",
+  name: "Minigun",
+  description:
+    "Max Ammo x3, Spread +50%, Knockback -90%, Fire Rate +50%, Bullet Damage -50%",
+  icon: "🔫",
+  category: "reload",
+  tier: 3,
+  requires: ["armed_ready", "fresh_clip"],
+  apply: () => {
+    const player = usePlayer.getState();
+
+    const newAmmo = player.maxAmmo * 3;
+
+    usePlayer.setState({
+      maxAmmo: newAmmo,
+      ammo: player.ammo + (newAmmo - player.maxAmmo),
+      accuracy: player.accuracy * 0.5,
+      knockbackMultiplier:
+        (player.knockbackMultiplier || 1) * 0.1,
+      firerate: player.firerate * 0.5,
+      baseDamage: player.baseDamage * 0.5,
+    });
+  },
+},
+
   sniper: {
     id: "sniper",
     name: "Sniper",
@@ -327,23 +461,22 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     },
   },
 
-  reaper_rounds: {
-    id: "reaper_rounds",
-    name: "Reaper Rounds",
-    description: "Damage +20%, Piercing +1, bullets pierce killed enemies",
-    icon: "☠️",
-    category: "damage",
-    tier: 3,
-    requires: ["splinter", "big_shot"],
-    apply: () => {
-      const player = usePlayer.getState();
-      usePlayer.setState({
-        baseDamage: player.baseDamage * 1.2,
-        piercing: player.piercing + 1,
-        pierceKilledEnemies: true,
-      });
-    },
+  railgun: {
+  id: "railgun",
+  name: "Railgun",
+  description:
+    "Bullets pierce killed enemies (-20% damage per death pierce)",
+  icon: "🚄",
+  category: "damage",
+  tier: 3,
+  requires: ["splinter", "big shot"],
+  apply: () => {
+    const player = usePlayer.getState();
+    usePlayer.setState({
+      railgun: true,
+    });
   },
+},
 
   // BULLET ENHANCEMENT UPGRADES
   homing_rounds: {
@@ -503,7 +636,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
   shotgun: {
   id: "shotgun",
   name: "Shotgun",
-  description: "Bullet Damage +100%, Bullet Lifetime -50%",
+  description: "Bullet Damage +100%, Bullet Lifetime -90%",
   icon: "💥",
   category: "multishot",
   tier: 3,
@@ -512,7 +645,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     const player = usePlayer.getState();
     usePlayer.setState({
       baseDamage: player.baseDamage * 2.0,
-      life: player.life * 0.5,
+      life: player.life * 0.10,
     });
   },
 },
@@ -649,7 +782,7 @@ explosive_last_round: {
   rapid_stride: {
     id: "rapid_stride",
     name: "Rapid Stride",
-    description: "Movement Speed +30% while firing",
+    description: "Movement Speed +100% while firing",
     icon: "💨",
     category: "vitality",
     tier: 2,
