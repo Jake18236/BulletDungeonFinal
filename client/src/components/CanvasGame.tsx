@@ -42,12 +42,20 @@ import {
   bossLaserWindupSprite,
   reaperBossSpriteSheet,
   crowEnemySpriteSheet,
+  crowDeathSpritesheet,
   mageEnemySpriteSheet,
   enemyLightningSpriteSheet,
 } from "./SpriteProps";
+
 import { DevTools } from "./DevTools";
 
 const font = buildFont(fontJson);
+
+const mageStaticParticleSheet = (() => {
+  const img = new Image();
+  img.src = "/sprites/mage-static-particles.png";
+  return img;
+})();
 
 const fontWhiteImage = new Image();
 fontWhiteImage.src = "/sprites/font-atlas-white.png";
@@ -161,8 +169,8 @@ function generateRoomTerrain(): TerrainObstacle[] {
   };
 
   const radialBands = [
-    { radius: 30, count: 0 },
-    { radius: 58, count: 0 },
+    { radius: 30, count: 10 },
+    { radius: 58, count: 10 },
     { radius: 88, count: 0 },
     { radius: 130, count: 0 },
   ];
@@ -464,6 +472,7 @@ export default memo(function CanvasGame() {
   const animationDeltaRef = useRef<number>(0);
   const enemyProjectilesRef = useRef<EnemyProjectile[]>([]);
   const enemyDeathAnimationsRef = useRef<EnemyDeathAnimation[]>([]);
+  const crowDeathAnimationsRef = useRef<EnemyDeathAnimation[]>([]);
   const keysPressed = useRef<Set<string>>(new Set());
   const lastTimeRef = useRef<number>(0);
   const pausedAnimationTimeRef = useRef<number>(0);
@@ -2259,13 +2268,25 @@ export default memo(function CanvasGame() {
       );
     }
 
-    addXPOrb(enemy.position.clone(), 25);
-    enemyDeathAnimationsRef.current.push({
-      id: crypto.randomUUID(),
-      position: enemy.position.clone(),
-      startedAt: gameplayElapsedMsRef.current,
-      frameDurationMs: 85,
-    });
+    if (enemy.type !== "crow") {
+      addXPOrb(enemy.position.clone(), 25);
+    }
+
+    if (enemy.type === "crow") {
+      crowDeathAnimationsRef.current.push({
+        id: crypto.randomUUID(),
+        position: enemy.position.clone(),
+        startedAt: gameplayElapsedMsRef.current,
+        frameDurationMs: 90,
+      });
+    } else {
+      enemyDeathAnimationsRef.current.push({
+        id: crypto.randomUUID(),
+        position: enemy.position.clone(),
+        startedAt: gameplayElapsedMsRef.current,
+        frameDurationMs: 85,
+      });
+    }
     removeEnemy(enemy.id);
 
     if (ps.splinterBullets) {
@@ -2924,6 +2945,20 @@ export default memo(function CanvasGame() {
         ctx.moveTo(sx + xSize, sy - xSize);
         ctx.lineTo(sx - xSize, sy + xSize);
         ctx.stroke();
+        // ── Static particle effect during cast wind-up (1 row × 4 cols, 8×8 px) ──
+        const sSheet = mageStaticParticleSheet;
+        if (sSheet.complete && sSheet.naturalWidth > 0) {
+          const sFrameW = sSheet.naturalWidth / 4;
+          const sFrameH = sSheet.naturalHeight;
+          const sFrame = atk.frame; // already cycles 0-3 in animTimer loop
+          const sDrawW = sFrameW * 4;
+          const sDrawH = sFrameH * 4;
+          ctx.globalAlpha = 0.55 + progress * 0.45;
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(sSheet, sFrame * sFrameW, 0, sFrameW, sFrameH,
+            sx - sDrawW / 2, sy - sDrawH / 2, sDrawW, sDrawH);
+        }
+
         ctx.globalAlpha = 1;
         ctx.restore();
       } else if (atk.fireTimer > 0) {
@@ -3876,6 +3911,35 @@ export default memo(function CanvasGame() {
     }
 
     enemyDeathAnimationsRef.current = nextAnimations;
+
+    // ── Crow custom death animation (1 row × 4 cols, 20×20 px) ──
+    const crowSprite = crowDeathSpritesheet;
+    const crowHasSprite = crowSprite.complete && crowSprite.naturalWidth > 0 && crowSprite.naturalHeight > 0;
+    const crowFrameW = crowHasSprite ? crowSprite.naturalWidth / 4 : 20;
+    const crowFrameH = crowHasSprite ? crowSprite.naturalHeight : 20;
+    const nextCrowAnimations: EnemyDeathAnimation[] = [];
+
+    for (const animation of crowDeathAnimationsRef.current) {
+      const elapsedMs = animationNowMs - animation.startedAt;
+      const frameIndex = Math.floor(elapsedMs / animation.frameDurationMs);
+      if (frameIndex >= 4) continue;
+      nextCrowAnimations.push(animation);
+
+      const screenX = snapToGrid(centerX + ((animation.position.x - position.x) * 50) / 2);
+      const screenY = snapToGrid(centerY + ((animation.position.z - position.z) * 50) / 2);
+      const drawW = crowFrameW * 3;
+      const drawH = crowFrameH * 3;
+
+      ctx.save();
+      ctx.translate(screenX, screenY);
+      ctx.imageSmoothingEnabled = false;
+      if (crowHasSprite) {
+        ctx.drawImage(crowSprite, frameIndex * crowFrameW, 0, crowFrameW, crowFrameH,
+          -drawW / 2, -drawH / 2, drawW, drawH);
+      }
+      ctx.restore();
+    }
+    crowDeathAnimationsRef.current = nextCrowAnimations;
   };
 
 

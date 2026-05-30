@@ -88,6 +88,7 @@ interface ProjectilesState {
     explosive?: { radius: number; damage: number };
     chainLightning?: { chains: number; range: number };
     burn?: { damage: number; duration: number };
+    railgun?: boolean
   }) => void;
 
   trimTrailHistory: () => void;
@@ -112,6 +113,8 @@ interface ProjectilesState {
         explosive?: { radius: number; damage: number };
         chainLightning?: { chains: number; range: number; chainedEnemies: Set<string> };
         burn?: { damage: number; duration: number };
+        isSummonProjectile?: boolean;
+        
         impactPos: THREE.Vector3;
       }
     ) => void,
@@ -410,7 +413,9 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
 
 
       // Remove projectile if piercing is exhausted (and no bounces left)
-      if (hitEnemy && proj.bouncesLeft === 0 && proj.piercedEnemies.size > proj.piercing) {
+      // Railgun kills don't count against the piercing limit — only living-enemy pierces do
+      const effectivePierceCount = proj.piercedEnemies.size - proj.pierceKillCount;
+      if (hitEnemy && proj.bouncesLeft === 0 && effectivePierceCount > proj.piercing) {
         continue;
       }
 

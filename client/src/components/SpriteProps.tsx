@@ -311,6 +311,12 @@ export const crowEnemySpriteSheet = (() => {
   return img;
 })();
 
+export const crowDeathSpritesheet = (() => {
+  const img = new Image();
+  img.src = "/sprites/enemy/crow-death-spritesheet.png";
+  return img;
+})();
+
 export const mageEnemySpriteSheet = (() => {
   const img = new Image();
   img.src = "/sprites/enemy/mage-enemy.png";
