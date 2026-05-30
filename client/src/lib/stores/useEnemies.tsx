@@ -215,9 +215,6 @@ export const useEnemies = create<EnemiesState>((set, get) => {
     createSession("mage_1", "mage", "1:00", "2:00", 35, 40, 1, 2),
     createSession("mage_2", "mage", "2:00", "4:00", 50, 12, 2, 8),
     createSession("mage_3", "mage", "4:00", "30:00", 80, 60, 3, 5),
-    //trees - stationary enemies with massive HP
-    createSession("tree_1", "tree", "0:15", "0:20", 10000, 8, 2, 5),
-    createSession("tree_2", "tree", "2:00", "2:05", 10000, 6, 2, 30),
   ];
 
   let spawnSessionTimers = spawnSessions.reduce<Record<string, number>>((acc, session) => {

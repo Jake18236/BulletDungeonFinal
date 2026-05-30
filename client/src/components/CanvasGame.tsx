@@ -833,6 +833,12 @@ export default memo(function CanvasGame() {
       ctx.fillStyle = "#1a1a1a";
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
+      const cameraZoom = usePlayer.getState().cameraZoom || 1;
+      ctx.save();
+      ctx.translate(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+      ctx.scale(cameraZoom, cameraZoom);
+      ctx.translate(-CANVAS_WIDTH / 2, -CANVAS_HEIGHT / 2);
+
       drawDungeon(ctx, animationNowMs);
 
       if (phase === "playing") {
@@ -1980,10 +1986,17 @@ export default memo(function CanvasGame() {
               const push = (minDist - dist) / 8;
               const nx = dx / dist;
               const nz = dz / dist;
-              e1.position.x += nx * push;
-              e1.position.z += nz * push;
-              e2.position.x -= nx * push;
-              e2.position.z -= nz * push;
+              const e1IsTree = e1.type === "tree";
+              const e2IsTree = e2.type === "tree";
+              // Trees are immovable obstacles - only push the non-tree enemy away
+              if (!e1IsTree) {
+                e1.position.x += nx * push * (e2IsTree ? 2 : 1);
+                e1.position.z += nz * push * (e2IsTree ? 2 : 1);
+              }
+              if (!e2IsTree) {
+                e2.position.x -= nx * push * (e1IsTree ? 2 : 1);
+                e2.position.z -= nz * push * (e1IsTree ? 2 : 1);
+              }
             }
           }
         }
@@ -2141,6 +2154,11 @@ export default memo(function CanvasGame() {
         eyeCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         eyeCtx.imageSmoothingEnabled = false;
 
+        eyeCtx.save();
+        eyeCtx.translate(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+        eyeCtx.scale(cameraZoom, cameraZoom);
+        eyeCtx.translate(-CANVAS_WIDTH / 2, -CANVAS_HEIGHT / 2);
+
         // Draw enemy eyes with viewport culling
         for (const enemy of enemies) {
           if (
@@ -2180,6 +2198,8 @@ export default memo(function CanvasGame() {
         drawSummons(eyeCtx, animationNowMs);
         drawSummonLightning(eyeCtx);
         drawDamageNumbers(eyeCtx);
+
+        eyeCtx.restore();
       }
       drawFootsteps(ctx);
       drawPlayer(ctx, animationNowMs);
@@ -2190,6 +2210,8 @@ export default memo(function CanvasGame() {
 
       drawReloadIndicator(ctx);
       drawWeapon(ctx, "revolver", phase !== "playing");
+
+      ctx.restore();
 
       animationFrameRef.current = requestAnimationFrame(gameLoop);
     };
@@ -3295,7 +3317,7 @@ export default memo(function CanvasGame() {
         treeEnemyEyesSprite.naturalWidth > 0 &&
         treeEnemyEyesSprite.naturalHeight > 0
       ) {
-        const frameW = treeEnemyEyesSprite.naturalWidth / 2;
+        const frameW = treeEnemyEyesSprite.naturalWidth / 3;
         const frameH = treeEnemyEyesSprite.naturalHeight;
         const eyeFrame = enemy.spriteFrame === 1 ? 0 : 1;
         const radiusPx = enemy.radius * 25;

@@ -94,7 +94,7 @@ interface PlayerState {
 
   // Burn effects
   burnDurationMultiplier: number;
-  incendiary: boolean;
+
 
   muzzleFlashTimer: number;
   muzzleFlashPosition: THREE.Vector3 | null;
@@ -104,6 +104,7 @@ interface PlayerState {
 
   // Special mechanics
   visionRange: number;
+  cameraZoom: number;
   hasDash: boolean;
   dashCooldown: number;
   maxDashCooldown: number;
@@ -252,7 +253,7 @@ wildfire: {
     });
 
     useSummons.setState({
-      summonBurn: true,
+      summonBurn: true, // Enable burn effect on summons
     });
   },
 },
@@ -282,7 +283,7 @@ master_summoner: {
 
 sharpened_edge: {
   id: "sharpened_edge",
-  name: "Sharpened Edge",
+  name: "Sharpen",
   description: "All Summon Damage +40%",
   icon: "🗡️",
   category: "summon",
@@ -324,7 +325,7 @@ stormcaller: {
   apply: () => {
     useSummons.setState({
       stormcaller: true,
-      stormcallerCooldown: 15,
+      stormcallerCooldown: 15 + Math.random(),
     });
   },
 },
@@ -346,10 +347,10 @@ minigun: {
     usePlayer.setState({
       maxAmmo: newAmmo,
       ammo: player.ammo + (newAmmo - player.maxAmmo),
-      accuracy: player.accuracy * 0.5,
+      accuracy: player.accuracy * (1 / 1.5),
       knockbackMultiplier:
         (player.knockbackMultiplier || 1) * 0.1,
-      firerate: player.firerate * 0.5,
+      firerate: player.firerate * (1 / 1.5),
       baseDamage: player.baseDamage * 0.5,
     });
   },
@@ -375,7 +376,7 @@ minigun: {
   hyper_rounds: {
   id: "hyper_rounds",
   name: "Hyper Rounds",
-  description: "Bullet Size -50%, Fire Rate -25%, Bullet Speed +50%, Bullet Damage +100%",
+  description: "Bullet Size -50%, Fire Rate -25%, Bullet Speed +25%, Bullet Damage +100%",
   icon: "⚡",
   category: "speed",
   tier: 3,
@@ -385,7 +386,7 @@ minigun: {
     usePlayer.setState({
       projectileSize: player.projectileSize * 0.5,
       firerate: player.firerate * 1.25,
-      baseProjectileSpeed: player.baseProjectileSpeed * 1.5,
+      baseProjectileSpeed: player.baseProjectileSpeed * 1.25,
       baseDamage: player.baseDamage * 2.0,
     });
   },
@@ -478,7 +479,7 @@ minigun: {
   id: "railgun",
   name: "Railgun",
   description:
-    "Bullets pierce killed enemies (-20% damage per death pierce)",
+    "-80% Spread, Bullets pierce killed enemies (-20% damage per death pierce)",
   icon: "🚄",
   category: "damage",
   tier: 3,
@@ -487,7 +488,9 @@ minigun: {
     const player = usePlayer.getState();
     usePlayer.setState({
       railgun: true,
+      accuracy: player.accuracy * 5,
     });
+    
   },
 },
 
@@ -721,7 +724,7 @@ explosive_last_round: {
     icon: "💥",
     category: "reload",
     tier: 3,
-    requires: [],
+    requires: ["incendiary", "big_shot"],
     apply: () => {
       usePlayer.setState({ lastAmmoExplosive: true });
     },
@@ -763,7 +766,10 @@ explosive_last_round: {
     tier: 1,
     apply: () => {
       const player = usePlayer.getState();
-      usePlayer.setState({ visionRange: (player.visionRange) * 1.4 });
+      usePlayer.setState({
+        visionRange: player.visionRange * 1.4,
+        cameraZoom: (player.cameraZoom || 1) / 1.4,
+      });
     },
   },
 
@@ -877,7 +883,7 @@ explosive_last_round: {
   magic_scythe: {
     id: "magic_scythe",
     name: "Magic Scythe",
-    description: "Summon a Magic Scythe that orbits and deals 40 damage on contact",
+    description: "Summon a Magic Scythe that orbits and deals 20 damage on contact",
     icon: "🗡️",
     category: "summon",
     tier: 1,
@@ -900,25 +906,26 @@ explosive_last_round: {
     },
   },
 
-  shadowblade: {
-    id: "shadowblade",
-    name: "Shadowblade",
-    description: "Scythe damage +30%. Dark energies empower each strike.",
-    icon: "⚫",
+  dual_wield: {
+    id: "duel_wield",
+    name: "Duel Wield",
+    description: "Summon another Magic Scythe, +10% Player Speed",
+    icon: "🗡️",
     category: "summon",
-    tier: 2,
-    requires: ["magic_scythe"],
+    tier: 1,
     apply: () => {
-      useSummons.setState({
-        scytheDamage: useSummons.getState().scytheDamage * 1.3,
-      });
+      const { addSummon } = useSummons.getState();
+      addSummon("scythe");
+      const player = usePlayer.getState();
+      usePlayer.setState({ speed: player.speed * 1.1 });
     },
   },
+
 
   windcutter: {
     id: "windcutter",
     name: "Windcutter",
-    description: "Move Speed +10%. Dual scythes orbit at opposite angles, scales with Move Speed",
+    description: "Move Speed +10%. Scythe speed scales with Move Speed",
     icon: "💨",
     category: "summon",
     tier: 3,
@@ -932,18 +939,18 @@ explosive_last_round: {
     },
   },
 
-  scythe_mastery: {
-    id: "scythe_mastery",
-    name: "Scythe Mastery",
-    description: "Bullet Damage +10%. Scythe damage scales with Bullet Damage",
-    icon: "⚔️",
+  stormblade: {
+    id: "shadowblade",
+    name: "Shadowblade",
+    description: "Scythe's inflict bleeding for 5 seconds",
+    icon: "⚫",
     category: "summon",
-    tier: 4,
-    requires: ["windcutter"],
+    tier: 2,
+    requires: ["magic_scythe"],
     apply: () => {
-      const player = usePlayer.getState();
-      usePlayer.setState({ baseDamage: player.baseDamage * 1.1 });
-      useSummons.setState({ scytheDamageBonus: true });
+      useSummons.setState({
+        scytheDamage: useSummons.getState().scytheDamage * 1.3,
+      });
     },
   },
 
@@ -1025,7 +1032,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   defense: 0,
 
   // Combat
-  firerate: 0.25,
+  firerate: 0.35,
   ammo: 6,
   maxAmmo: 6,
   reloadTime: 1,
@@ -1043,7 +1050,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   incendiary: false,
   piercing: 0,
   bouncing: 0,
-  accuracy: 1.0,
+  accuracy: 0.75,
   trailLength: 5,
   explosive: undefined,
   chainLightning: undefined,
@@ -1086,6 +1093,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
 
   // Special mechanics
   visionRange: 1.4,
+  cameraZoom: 1,
   hasDash: false,
   dashCooldown: 0,
   maxDashCooldown: 2,
@@ -1288,7 +1296,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     const state = get();
     if (state.ammo > 0 && !state.isReloading) {
       const isStandingStill = Date.now() - state.lastMovementTime > 500;
-      if (state.siegeMode && isStandingStill && Math.random() < 0.4) {
+      if (state.siegeMode && isStandingStill) {
         return true;
       }
       set({ ammo: state.ammo - 1 });
@@ -1437,7 +1445,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     trailLength: 1,
     explosive: undefined,
     chainLightning: undefined,
-    accuracy: 0.85,
+    accuracy: 0.75,
     knockbackMultiplier: 2.0,
     projectileSize: 12.0,
     instantKillThreshold: 0,
@@ -1464,6 +1472,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     fanFireIndex: 0,
     fanFireTimer: 0,
     visionRange: 1.4,
+    cameraZoom: 1,
     hasDash: false,
     dashCooldown: 0,
     maxDashCooldown: 2,

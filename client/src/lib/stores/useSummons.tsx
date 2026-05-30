@@ -85,6 +85,9 @@ interface SummonState {
   energized: boolean;
   electroMastery: boolean;
 
+  // Wildfire
+  summonBurn: boolean;
+
   // Stormcaller
   stormcaller: boolean;
   stormcallerCooldown: number;
@@ -142,6 +145,8 @@ export const useSummons = create<SummonState>((set, get) => ({
   energized: false,
   electroMastery: false,
 
+  summonBurn: false,
+
   stormcaller: false,
   stormcallerCooldown: 15,
   stormcallerTimer: 0,
@@ -167,9 +172,9 @@ export const useSummons = create<SummonState>((set, get) => ({
     }
     else if (type === "scythe") {
       const state = get();
-      // Check if there's already a scythe - if so, position new one opposite
+      // Check if there's already a scythe - position new one at current angle + PI
       const existingScythe = state.summons.find(s => s.type === "scythe");
-      const orbitAngle = existingScythe ? Math.PI : 0;
+      const orbitAngle = existingScythe ? existingScythe.orbitAngle + Math.PI : 0;
 
       const summon: Summon = {
         id: `scythe_${Date.now()}`,
@@ -347,6 +352,7 @@ export const useSummons = create<SummonState>((set, get) => ({
                 color: "#ff4444",
                 knockbackStrength: 6,
                 isSummonDamage: true,
+                burn: state.summonBurn ? { damage: 4, duration: 3 } : undefined,
               });
               updated.damagedEnemies![enemy.id] = now;
               let hitEnemy = true;
@@ -492,6 +498,7 @@ export const useSummons = create<SummonState>((set, get) => ({
                 color: "#ff4444",
                 knockbackStrength: 10,
                 isSummonDamage: true,
+                burn: state.summonBurn ? { damage: 4, duration: 3 } : undefined,
               });
               updated.recentTargets.push(enemy.id);
               if (updated.recentTargets.length > 2) {
@@ -709,6 +716,7 @@ export const useSummons = create<SummonState>((set, get) => ({
     scytheDamage: 40,
     scytheSpeedBonus: false,
     scytheDamageBonus: false,
+    summonBurn: false,
     stormcaller: false,
     stormcallerCooldown: 15,
     stormcallerTimer: 0,
