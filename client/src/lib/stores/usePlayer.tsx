@@ -617,7 +617,7 @@ explosive_last_round: {
     tier: 1,
     apply: () => {
       const player = usePlayer.getState();
-      usePlayer.setState({ visionRange: (player.visionRange || 1) * 1.4 });
+      usePlayer.setState({ visionRange: (player.visionRange) * 1.4 });
     },
   },
 
@@ -930,7 +930,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   fanFireTimer: 0,
 
   // Special mechanics
-  visionRange: 1,
+  visionRange: 1.4,
   hasDash: false,
   dashCooldown: 0,
   maxDashCooldown: 2,
@@ -1289,7 +1289,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     fanFireActive: false,
     fanFireIndex: 0,
     fanFireTimer: 0,
-    visionRange: 1,
+    visionRange: 1.4,
     hasDash: false,
     dashCooldown: 0,
     maxDashCooldown: 2,

@@ -43,6 +43,7 @@ import {
   reaperBossSpriteSheet,
   crowEnemySpriteSheet,
   mageEnemySpriteSheet,
+  enemyLightningSpriteSheet,
 } from "./SpriteProps";
 import { DevTools } from "./DevTools";
 
@@ -135,6 +136,16 @@ interface TreeLightningAttack {
   animTimer: number;
   damageTimer: number;
   releasedTrees: boolean;
+}
+
+interface MageLightningAttack {
+  targetX: number;
+  targetZ: number;
+  warningTimer: number;
+  fireTimer: number;
+  fired: boolean;
+  frame: number;
+  animTimer: number;
 }
 
 const { addSummon } = useSummons.getState();
@@ -471,6 +482,7 @@ export default memo(function CanvasGame() {
   const fireEmissionThrottleRef = useRef<Record<string, number>>({});
   const spriteReady = useRef(false);
   const reaperActiveLasersRef = useRef<Array<{ originX: number; originZ: number; angle: number; life: number }>>([]);
+  const mageLightningRef = useRef<MageLightningAttack[]>([]);
   const lightningSpriteSheet = useRef<HTMLImageElement>(new Image());
   const lightningReady = useRef(false);
 
@@ -623,6 +635,7 @@ export default memo(function CanvasGame() {
     terrainRef.current = generateRoomTerrain();
     treeLightningRef.current = [];
     treeLightningSpawnTimerRef.current = 0;
+    mageLightningRef.current = [];
     footstepMarksRef.current = [];
     footstepSpawnTimerRef.current = 0;
     projectileTrailLastPosRef.current.clear();
@@ -771,14 +784,6 @@ export default memo(function CanvasGame() {
     });
   };
 
-  const REAPER_LASER_OFFSETS = [
-    { x: -1, z: -1 },
-    { x: 1, z: 1 },
-    { x: 2, z: -1 },
-  ] as const;
-  const REAPER_BEAM_LENGTH_WORLD = 16;
-  const REAPER_BEAM_HALF_WIDTH = 0.8;
-  const REAPER_BEAM_PX = 320;
 
   useEffect(() => {
     const gameLoop = (currentTime: number) => {
@@ -1470,17 +1475,13 @@ export default memo(function CanvasGame() {
           if (enemy.isBoss && enemy.bossType === "reaper") {
             const updated = { ...enemy };
 
-            const dirToPlayer = new THREE.Vector3(
-              position.x - updated.position.x,
-              0,
-              position.z - updated.position.z,
-            );
-            const distToPlayer = dirToPlayer.length();
-            const safeDir = distToPlayer > 0.001
-              ? dirToPlayer.clone().normalize()
-              : new THREE.Vector3(1, 0, 0);
+            const dx = position.x - updated.position.x;
+            const dz = position.z - updated.position.z;
+            const distToPlayer = Math.hypot(dx, dz);
+            const safeDirX = distToPlayer > 0.001 ? dx / distToPlayer : 1;
+            const safeDirZ = distToPlayer > 0.001 ? dz / distToPlayer : 0;
 
-            // Teleport if player is too far away
+            // Teleport if too far away
             if (distToPlayer > 130) {
               const ang = Math.random() * Math.PI * 2;
               updated.position.set(
@@ -1490,102 +1491,115 @@ export default memo(function CanvasGame() {
               );
             }
 
-            const rState = updated.reaperState ?? "moving";
+            const rState = updated.reaperState ?? "floating";
+            const IDEAL_DIST = 10;
 
-            if (rState === "moving") {
-              const blend = Math.min(1, 7 * delta);
-              updated.velocity.x += (safeDir.x * updated.speed - updated.velocity.x) * blend;
-              updated.velocity.z += (safeDir.z * updated.speed - updated.velocity.z) * blend;
-              const vs = Math.hypot(updated.velocity.x, updated.velocity.z);
-              if (vs > updated.speed) {
-                updated.velocity.x = (updated.velocity.x / vs) * updated.speed;
-                updated.velocity.z = (updated.velocity.z / vs) * updated.speed;
+            if (rState === "floating") {
+              // Low-level constant velocity: maintain set distance from player
+              const blend = Math.min(1, 2 * delta);
+              if (distToPlayer > IDEAL_DIST + 1) {
+                updated.velocity.x += (safeDirX * updated.speed - updated.velocity.x) * blend;
+                updated.velocity.z += (safeDirZ * updated.speed - updated.velocity.z) * blend;
+              } else if (distToPlayer < IDEAL_DIST - 2) {
+                updated.velocity.x += (-safeDirX * updated.speed * 0.5 - updated.velocity.x) * blend;
+                updated.velocity.z += (-safeDirZ * updated.speed * 0.5 - updated.velocity.z) * blend;
+              } else {
+                // Orbit slowly with perpendicular drift
+                const perpX = -safeDirZ;
+                const perpZ = safeDirX;
+                updated.velocity.x += (perpX * updated.speed * 0.4 - updated.velocity.x) * blend;
+                updated.velocity.z += (perpZ * updated.speed * 0.4 - updated.velocity.z) * blend;
               }
               updated.position.x += updated.velocity.x * delta;
               updated.position.z += updated.velocity.z * delta;
-              updated.rotationY = Math.atan2(safeDir.z, safeDir.x);
+              updated.rotationY = Math.atan2(safeDirZ, safeDirX);
 
-              updated.reaperMoveCooldown = (updated.reaperMoveCooldown ?? 3) - delta;
+              updated.reaperMoveCooldown = (updated.reaperMoveCooldown ?? 4) - delta;
               if ((updated.reaperMoveCooldown ?? 0) <= 0) {
                 updated.reaperState = "charging";
                 updated.reaperChargeTimer = 1.0;
-                updated.dashDirection = safeDir.clone();
-                updated.velocity.set(0, 0, 0);
+                updated.dashDirection = new THREE.Vector3(safeDirX, 0, safeDirZ);
               }
             } else if (rState === "charging") {
+              // Wind-up: stop and face player, lock direction each frame until release
               updated.velocity.multiplyScalar(Math.max(0, 1 - 12 * delta));
-              updated.rotationY = Math.atan2(safeDir.z, safeDir.x);
-              updated.dashDirection = safeDir.clone();
+              updated.position.x += updated.velocity.x * delta;
+              updated.position.z += updated.velocity.z * delta;
+              updated.rotationY = Math.atan2(safeDirZ, safeDirX);
+              updated.dashDirection = new THREE.Vector3(safeDirX, 0, safeDirZ);
+
               updated.reaperChargeTimer = (updated.reaperChargeTimer ?? 1) - delta;
               if ((updated.reaperChargeTimer ?? 0) <= 0) {
-                const dashDir = updated.dashDirection ?? safeDir;
-                updated.velocity.set(dashDir.x * 32, 0, dashDir.z * 32);
+                const dir = updated.dashDirection!;
+                updated.velocity.set(dir.x * 30, 0, dir.z * 30);
                 updated.reaperState = "dashing";
                 updated.reaperDashTimer = 0;
               }
             } else if (rState === "dashing") {
-              const DRAG = 5.5;
+              const DRAG = 3.5;
               updated.velocity.x *= Math.max(0, 1 - DRAG * delta);
               updated.velocity.z *= Math.max(0, 1 - DRAG * delta);
               updated.position.x += updated.velocity.x * delta;
               updated.position.z += updated.velocity.z * delta;
               updated.reaperDashTimer = (updated.reaperDashTimer ?? 0) + delta;
               const spd = Math.hypot(updated.velocity.x, updated.velocity.z);
-              if (spd < 2.5 || (updated.reaperDashTimer ?? 0) > 1.4) {
-                updated.reaperState = "laser_warning";
-                updated.reaperLaserIndex = 0;
-                const toPlayerAngle = Math.atan2(
-                  position.z - updated.position.z,
-                  position.x - updated.position.x,
-                );
-                updated.reaperLaserDir = toPlayerAngle + (Math.random() - 0.5) * (Math.PI / 2);
-                updated.reaperLaserTimer = 1.0;
+              if (spd < 3 || (updated.reaperDashTimer ?? 0) > 1.4) {
+                updated.reaperState = "summoning";
+                updated.reaperSummonTimer = 0;
+                updated.reaperSummonWave = 0;
                 updated.velocity.set(0, 0, 0);
               }
-            } else if (rState === "laser_warning") {
-              updated.reaperLaserTimer = (updated.reaperLaserTimer ?? 1) - delta;
-              if ((updated.reaperLaserTimer ?? 0) <= 0) {
-                const laserIdx = updated.reaperLaserIndex ?? 0;
-                const off = REAPER_LASER_OFFSETS[laserIdx % 3];
-                const originX = updated.position.x + off.x;
-                const originZ = updated.position.z + off.z;
-                const laserAngle = updated.reaperLaserDir ?? 0;
-                const dX = Math.cos(laserAngle);
-                const dZ = Math.sin(laserAngle);
-                const tpX = position.x - originX;
-                const tpZ = position.z - originZ;
-                const along = tpX * dX + tpZ * dZ;
-                const latX = tpX - dX * along;
-                const latZ = tpZ - dZ * along;
-                const lat = Math.sqrt(latX * latX + latZ * latZ);
-                if (along >= 0 && along <= REAPER_BEAM_LENGTH_WORLD && lat <= REAPER_BEAM_HALF_WIDTH) {
-                  if (!damagedThisFrameRef.current) {
-                    applyPlayerDamage(new THREE.Vector3(originX + dX * along, 0, originZ + dZ * along));
-                    damagedThisFrameRef.current = true;
-                  }
-                }
-                reaperActiveLasersRef.current.push({ originX, originZ, angle: laserAngle, life: 0.35 });
+            } else if (rState === "summoning") {
+              updated.reaperSummonTimer = (updated.reaperSummonTimer ?? 0) + delta;
+              const t = updated.reaperSummonTimer ?? 0;
+              const sc = useEnemies.getState().spawnCrow;
 
-                const nextIdx = laserIdx + 1;
-                if (nextIdx >= 10) {
-                  updated.reaperState = "recovering";
-                  updated.reaperRecoverTimer = 1.5;
-                } else {
-                  updated.reaperLaserIndex = nextIdx;
-                  const nextAngle = Math.atan2(
-                    position.z - updated.position.z,
-                    position.x - updated.position.x,
+              // Wave 1 at t=0.3s
+              if ((updated.reaperSummonWave ?? 0) === 0 && t >= 0.3) {
+                updated.reaperSummonWave = 1;
+                for (let ci = 0; ci < 3; ci++) {
+                  const ang = (ci / 3) * Math.PI * 2;
+                  sc(
+                    new THREE.Vector3(
+                      updated.position.x + Math.cos(ang) * 2,
+                      0,
+                      updated.position.z + Math.sin(ang) * 2,
+                    ),
+                    new THREE.Vector3(Math.cos(ang) * 5, 0, Math.sin(ang) * 4),
                   );
-                  updated.reaperLaserDir = nextAngle + (Math.random() - 0.5) * (Math.PI / 2);
-                  updated.reaperLaserTimer = 1.0;
                 }
               }
-            } else if (rState === "recovering") {
-              updated.velocity.multiplyScalar(Math.max(0, 1 - 8 * delta));
-              updated.reaperRecoverTimer = (updated.reaperRecoverTimer ?? 1.5) - delta;
-              if ((updated.reaperRecoverTimer ?? 0) <= 0) {
-                updated.reaperState = "moving";
-                updated.reaperMoveCooldown = 3.5 + Math.random() * 2;
+              // Wave 2 at t=0.65s
+              if ((updated.reaperSummonWave ?? 0) === 1 && t >= 0.65) {
+                updated.reaperSummonWave = 2;
+                for (let ci = 0; ci < 3; ci++) {
+                  const ang = (ci / 3) * Math.PI * 2 + Math.PI / 3;
+                  sc(
+                    new THREE.Vector3(
+                      updated.position.x + Math.cos(ang) * 2,
+                      0,
+                      updated.position.z + Math.sin(ang) * 2,
+                    ),
+                    new THREE.Vector3(Math.cos(ang) * 6, 0, Math.sin(ang) * 5),
+                  );
+                }
+              }
+              // End summon at t=0.9s → glide backward
+              if (t >= 0.9) {
+                updated.reaperState = "gliding";
+                updated.velocity.set(-safeDirX * 3, 0, -safeDirZ * 3);
+              }
+            } else if (rState === "gliding") {
+              // Friction-damped glide back to float
+              const DRAG = 3.0;
+              updated.velocity.x *= Math.max(0, 1 - DRAG * delta);
+              updated.velocity.z *= Math.max(0, 1 - DRAG * delta);
+              updated.position.x += updated.velocity.x * delta;
+              updated.position.z += updated.velocity.z * delta;
+              const spd = Math.hypot(updated.velocity.x, updated.velocity.z);
+              if (spd < 0.5) {
+                updated.reaperState = "floating";
+                updated.reaperMoveCooldown = 4.0 + Math.random() * 2;
               }
             }
 
@@ -1595,6 +1609,12 @@ export default memo(function CanvasGame() {
           // CROW ENEMY LOGIC
           if (enemy.type === "crow") {
             if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
+
+            // Decay spawn timer
+            if ((enemy.spawnTimer ?? 0) > 0) {
+              enemy.spawnTimer = Math.max(0, (enemy.spawnTimer ?? 0) - delta);
+            }
+
             const dx = position.x - enemy.position.x;
             const dz = position.z - enemy.position.z;
             const dist = Math.sqrt(dx * dx + dz * dz);
@@ -1612,6 +1632,17 @@ export default memo(function CanvasGame() {
               enemy.velocity.x *= Math.max(0, 1 - 8 * delta);
               enemy.velocity.z *= Math.max(0, 1 - 8 * delta);
             }
+
+            // Apply knockback acceleration
+            if (enemy.knockbackAcceleration && enemy.knockbackDuration && enemy.knockbackDuration > 0) {
+              enemy.velocity.add(enemy.knockbackAcceleration.clone().multiplyScalar(delta));
+              enemy.knockbackDuration -= delta;
+              if (enemy.knockbackDuration <= 0) {
+                enemy.knockbackAcceleration = undefined;
+                enemy.knockbackDuration = undefined;
+              }
+            }
+
             enemy.position.x += enemy.velocity.x * delta;
             enemy.position.z += enemy.velocity.z * delta;
             enemy.velocity.multiplyScalar(Math.pow(0.92, delta * 60 + Math.random()));
@@ -1620,6 +1651,7 @@ export default memo(function CanvasGame() {
 
           // MAGE ENEMY LOGIC
           if (enemy.type === "mage") {
+            if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
             const ENGAGE_DIST = 11;
             const dx = position.x - enemy.position.x;
             const dz = position.z - enemy.position.z;
@@ -1630,7 +1662,6 @@ export default memo(function CanvasGame() {
 
             if (mState === "moving") {
               if (dist > ENGAGE_DIST) {
-                if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
                 const blend = Math.min(1, 12 * delta);
                 enemy.velocity.x += ((dx / dist) * enemy.speed - enemy.velocity.x) * blend;
                 enemy.velocity.z += ((dz / dist) * enemy.speed - enemy.velocity.z) * blend;
@@ -1639,16 +1670,13 @@ export default memo(function CanvasGame() {
                   enemy.velocity.x = (enemy.velocity.x / vs) * enemy.speed;
                   enemy.velocity.z = (enemy.velocity.z / vs) * enemy.speed;
                 }
-                enemy.position.x += enemy.velocity.x * delta;
-                enemy.position.z += enemy.velocity.z * delta;
-                enemy.velocity.multiplyScalar(Math.pow(0.92, delta * 60));
               } else {
-                // Pick action via value system
-                let summonW = 0.5;
-                let healW = 0.5;
+                // Decelerate and pick action via value system
+                enemy.velocity.multiplyScalar(Math.max(0, 1 - 10 * delta));
 
+                let lightningW = 0.6;
+                let healW = 0.4;
                 if (enemy.health < enemy.maxHealth * 0.6) healW += 0.35;
-
                 const nearbyHurt = enemies.filter(e => {
                   if (e.id === enemy.id || e.type === "crow") return false;
                   const ex = e.position.x - enemy.position.x;
@@ -1657,28 +1685,29 @@ export default memo(function CanvasGame() {
                 }).length;
                 healW += nearbyHurt * 0.15;
 
-                enemy.mageAction = healW > summonW ? "heal" : "summon";
+                enemy.mageAction = healW > lightningW ? "heal" : "lightning";
                 enemy.mageState = "casting";
                 enemy.mageCastTimer = 0.9;
+
+                if (enemy.mageAction === "lightning") {
+                  mageLightningRef.current.push({
+                    targetX: position.x + (Math.random() - 0.5) * 3,
+                    targetZ: position.z + (Math.random() - 0.5) * 3,
+                    warningTimer: 0,
+                    fireTimer: 0,
+                    fired: false,
+                    frame: 0,
+                    animTimer: 0,
+                  });
+                }
               }
             } else if (mState === "casting") {
+              enemy.velocity.multiplyScalar(Math.max(0, 1 - 8 * delta));
               enemy.mageCastTimer = (enemy.mageCastTimer ?? 0) - delta;
               if ((enemy.mageCastTimer ?? 0) <= 0) {
-                if (enemy.mageAction === "summon") {
-                  const sc = useEnemies.getState().spawnCrow;
-                  for (let ci = 0; ci < 3; ci++) {
-                    const ang = (ci / 3) * Math.PI * 2 + Math.random() * 0.4;
-                    sc(new THREE.Vector3(
-                      enemy.position.x + Math.cos(ang) * 3,
-                      0,
-                      enemy.position.z + Math.sin(ang) * 3,
-                    ));
-                  }
-                } else {
-                  // Heal self
+                if (enemy.mageAction === "heal") {
                   const healAmt = enemy.maxHealth * 0.2;
                   enemy.health = Math.min(enemy.maxHealth, enemy.health + healAmt);
-                  // Heal nearby allies
                   for (const ally of enemies) {
                     if (ally.id === enemy.id) continue;
                     const ax = ally.position.x - enemy.position.x;
@@ -1692,12 +1721,27 @@ export default memo(function CanvasGame() {
                 enemy.mageCastCooldown = 6.0;
               }
             } else if (mState === "recovering") {
+              enemy.velocity.multiplyScalar(Math.max(0, 1 - 6 * delta));
               enemy.mageCastCooldown = (enemy.mageCastCooldown ?? 0) - delta;
               if ((enemy.mageCastCooldown ?? 0) <= 0) {
                 enemy.mageState = "moving";
               }
             }
 
+            // Apply knockback acceleration
+            if (enemy.knockbackAcceleration && enemy.knockbackDuration && enemy.knockbackDuration > 0) {
+              enemy.velocity.add(enemy.knockbackAcceleration.clone().multiplyScalar(delta));
+              enemy.knockbackDuration -= delta;
+              if (enemy.knockbackDuration <= 0) {
+                enemy.knockbackAcceleration = undefined;
+                enemy.knockbackDuration = undefined;
+              }
+            }
+
+            // Apply velocity to position
+            enemy.position.x += enemy.velocity.x * delta;
+            enemy.position.z += enemy.velocity.z * delta;
+            enemy.velocity.multiplyScalar(Math.pow(0.92, delta * 60));
             return enemy;
           }
 
@@ -1789,9 +1833,12 @@ export default memo(function CanvasGame() {
         const MAX_SEP_DIST = 7.5;
         for (let i = 0; i < updatedEnemies.length; i++) {
           const e1 = updatedEnemies[i];
+          // Reaper boss skips all enemy-enemy collisions
+          if (e1.isBoss && e1.bossType === "reaper") continue;
           const isCrow1 = e1.type === "crow";
           for (let j = i + 1; j < updatedEnemies.length; j++) {
             const e2 = updatedEnemies[j];
+            if (e2.isBoss && e2.bossType === "reaper") continue;
             // Crows only collide with other crows
             if (isCrow1 !== (e2.type === "crow")) continue;
             // Axis-aligned early exit (avoids expensive hypot for most pairs)
@@ -1894,6 +1941,30 @@ export default memo(function CanvasGame() {
           .map(l => ({ ...l, life: l.life - delta }))
           .filter(l => l.life > 0);
 
+        // Update mage lightning attacks
+        for (const atk of mageLightningRef.current) {
+          atk.animTimer += delta;
+          if (atk.animTimer >= 0.09) { atk.animTimer = 0; atk.frame = (atk.frame + 1) % 4; }
+          if (!atk.fired) {
+            atk.warningTimer += delta;
+            if (atk.warningTimer >= 2.0) {
+              atk.fired = true;
+              atk.fireTimer = 0.5;
+              const tpDx = position.x - atk.targetX;
+              const tpDz = position.z - atk.targetZ;
+              if (Math.hypot(tpDx, tpDz) <= 2.0 && invincibilityTimer <= 0 && !damagedThisFrameRef.current) {
+                applyPlayerDamage(new THREE.Vector3(atk.targetX, 0, atk.targetZ));
+                damagedThisFrameRef.current = true;
+              }
+            }
+          } else {
+            atk.fireTimer -= delta;
+          }
+        }
+        mageLightningRef.current = mageLightningRef.current.filter(
+          atk => !atk.fired || atk.fireTimer > 0
+        );
+
         useEnemies.getState().updateAutoSpawn(delta, position);
         footstepMarksRef.current = footstepMarksRef.current
           .map((mark) => ({ ...mark, life: mark.life + delta }))
@@ -1973,6 +2044,7 @@ export default memo(function CanvasGame() {
         }
 
         drawTreeLightning(eyeCtx, gameplayElapsedMsRef.current);
+        drawMageLightning(eyeCtx);
         drawEnemyProjectiles(eyeCtx);
         drawExplosionEffects(eyeCtx);
         drawProjectilesAndTrails(eyeCtx, phase !== "playing", position);
@@ -2710,6 +2782,75 @@ export default memo(function CanvasGame() {
     ctx.restore();
   };
 
+  const drawMageLightning = (ctx: CanvasRenderingContext2D) => {
+    if (mageLightningRef.current.length === 0) return;
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    for (const atk of mageLightningRef.current) {
+      const sx = snapToGrid(centerX + ((atk.targetX - position.x) * 50) / 2);
+      const sy = snapToGrid(centerY + ((atk.targetZ - position.z) * 50) / 2);
+
+      if (!atk.fired) {
+        // Warning: pulsing red X and circle at target position
+        const progress = Math.min(1, atk.warningTimer / 2.0);
+        const pulse = 0.5 + Math.sin(atk.warningTimer * Math.PI * 5) * 0.45;
+        const radius = snapToGrid(18 + progress * 18);
+
+        ctx.save();
+        ctx.globalAlpha = Math.max(0.25, Math.abs(pulse)) * (0.45 + progress * 0.55);
+        ctx.strokeStyle = "#ff2020";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(sx, sy, radius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        const xSize = snapToGrid(7 + progress * 7);
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(sx - xSize, sy - xSize);
+        ctx.lineTo(sx + xSize, sy + xSize);
+        ctx.moveTo(sx + xSize, sy - xSize);
+        ctx.lineTo(sx - xSize, sy + xSize);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      } else if (atk.fireTimer > 0) {
+        // Strike flash: draw enemy lightning sprite at target
+        const alpha = Math.min(1, atk.fireTimer / 0.4);
+        const lSheet = enemyLightningSpriteSheet;
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.imageSmoothingEnabled = false;
+
+        if (lSheet.complete && lSheet.naturalWidth > 0) {
+          const drawW = snapToGrid(Math.round(lSheet.naturalWidth * 0.55));
+          const drawH = snapToGrid(Math.round(lSheet.naturalHeight * 0.55));
+          ctx.drawImage(lSheet, sx - drawW / 2, sy - drawH, drawW, drawH);
+        } else {
+          // Fallback red bolt
+          ctx.strokeStyle = "#ff2020";
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(sx - 4, sy - 70);
+          ctx.lineTo(sx + 6, sy - 35);
+          ctx.lineTo(sx - 4, sy - 15);
+          ctx.lineTo(sx + 4, sy);
+          ctx.stroke();
+        }
+
+        // Ground impact glow
+        ctx.globalAlpha = alpha * 0.55;
+        ctx.fillStyle = "#ff4422";
+        ctx.beginPath();
+        ctx.arc(sx, sy, 14, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      }
+    }
+  };
+
   const drawTreeLightning = (ctx: CanvasRenderingContext2D, nowMs: number) => {
     if (treeLightningRef.current.length === 0) return;
 
@@ -2907,11 +3048,11 @@ export default memo(function CanvasGame() {
 
       // Casting glow
       if (isCasting) {
-        const action = enemy.mageAction ?? "summon";
+        const action = enemy.mageAction ?? "lightning";
         ctx.save();
         ctx.translate(screenX, screenY);
         ctx.globalAlpha = 0.35 + Math.sin(performance.now() / 80) * 0.15;
-        ctx.fillStyle = action === "heal" ? "#44ff88" : "#aa44ff";
+        ctx.fillStyle = action === "heal" ? "#44ff88" : "#ff3333";
         ctx.beginPath();
         ctx.arc(0, 0, 28, 0, Math.PI * 2);
         ctx.fill();
@@ -3280,25 +3421,36 @@ export default memo(function CanvasGame() {
 
       const sheet = reaperBossSpriteSheet;
       const hasSheet = sheet.complete && sheet.naturalWidth > 0 && sheet.naturalHeight > 0;
-      const COLS = 6;
-      const drawSize = 192;
-      const rState = enemy.reaperState ?? "moving";
+      // 2 rows × 4 cols spritesheet, each frame 128×128
+      const COLS = 4;
+      const ROWS = 2;
+      const drawSize = 200;
+      const rState = enemy.reaperState ?? "floating";
       const isDashing = rState === "dashing";
       const isCharging = rState === "charging";
+      const isSummoning = rState === "summoning";
 
-      let animFrame: number;
-      if (isDashing) {
-        animFrame = Math.floor(animationNowMs / 65) % COLS;
+      // Frames 0-5 = normal (row0: 0-3, row1: 0-1), Frames 6-7 = summon (row1: 2-3)
+      let animFrameIdx: number;
+      if (isSummoning) {
+        animFrameIdx = 6 + (Math.floor(animationNowMs / 180) % 2);
+      } else if (isDashing) {
+        animFrameIdx = Math.floor(animationNowMs / 70) % 6;
       } else if (isCharging) {
-        animFrame = Math.floor(animationNowMs / 350) % COLS;
+        animFrameIdx = 0;
       } else {
-        animFrame = Math.floor(animationNowMs / 130) % COLS;
+        animFrameIdx = Math.floor(animationNowMs / 150) % 6;
       }
 
-      const frameW = hasSheet ? sheet.naturalWidth / COLS : 48;
-      const frameH = hasSheet ? sheet.naturalHeight : 48;
+      const frameW = hasSheet ? sheet.naturalWidth / COLS : 128;
+      const frameH = hasSheet ? sheet.naturalHeight / ROWS : 128;
+      const srcCol = animFrameIdx % COLS;
+      const srcRow = Math.floor(animFrameIdx / COLS);
+      const srcX = srcCol * frameW;
+      const srcY = srcRow * frameH;
+
       const facingRight = enemy.position.x <= position.x;
-      const vibrateX = isCharging ? Math.sin(animationNowMs * 0.05) * 4 : 0;
+      const vibrateX = isCharging ? Math.sin(animationNowMs / 80) * 5 : 0;
 
       // Motion blur ghost copies during dash
       if (isDashing && hasSheet) {
@@ -3308,15 +3460,29 @@ export default memo(function CanvasGame() {
           const ndz = -(enemy.velocity?.z ?? 0) / vLen;
           for (let g = 1; g <= 5; g++) {
             ctx.save();
-            ctx.globalAlpha = Math.max(0, 0.28 - g * 0.04);
+            ctx.globalAlpha = Math.max(0, 0.26 - g * 0.04);
             ctx.translate(screenX + ndx * g * 14, screenY + ndz * g * 14);
             ctx.imageSmoothingEnabled = false;
             if (!facingRight) ctx.scale(-1, 1);
-            ctx.drawImage(sheet, animFrame * frameW, 0, frameW, frameH,
+            ctx.drawImage(sheet, srcX, srcY, frameW, frameH,
               Math.floor(-drawSize / 2), Math.floor(-drawSize / 2), drawSize, drawSize);
             ctx.restore();
           }
         }
+      }
+
+      // Summon glow ring
+      if (isSummoning) {
+        const pulse = 0.4 + Math.sin(animationNowMs / 100) * 0.3;
+        ctx.save();
+        ctx.globalAlpha = pulse;
+        ctx.strokeStyle = "#aa22ff";
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, drawSize * 0.55, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        ctx.restore();
       }
 
       // Main sprite
@@ -3326,69 +3492,9 @@ export default memo(function CanvasGame() {
         ctx.imageSmoothingEnabled = false;
         if (!facingRight) ctx.scale(-1, 1);
         if (enemy.hitFlash > 0) ctx.filter = "brightness(60)";
-        ctx.drawImage(sheet, animFrame * frameW, 0, frameW, frameH,
+        ctx.drawImage(sheet, srcX, srcY, frameW, frameH,
           Math.floor(-drawSize / 2), Math.floor(-drawSize / 2), drawSize, drawSize);
         ctx.filter = "none";
-        ctx.restore();
-      }
-
-      // Laser warning line
-      if (rState === "laser_warning") {
-        const laserIdx = enemy.reaperLaserIndex ?? 0;
-        const off = REAPER_LASER_OFFSETS[laserIdx % 3];
-        const ox = screenX + off.x * 25;
-        const oy = screenY + off.z * 25;
-        const laserAngle = enemy.reaperLaserDir ?? 0;
-        const windupSheet = bossLaserWindupSprite;
-        const hasWindup = windupSheet.complete && windupSheet.naturalWidth > 0;
-        const pulse = Math.max(0.5, Math.min(1, 0.75 + Math.sin(animationNowMs / 75) * 0.25));
-        if (hasWindup) {
-          ctx.save();
-          ctx.globalAlpha = pulse;
-          ctx.translate(ox, oy);
-          ctx.rotate(laserAngle + Math.PI / 2);
-          ctx.imageSmoothingEnabled = false;
-          ctx.drawImage(
-            windupSheet,
-            0, 0, windupSheet.naturalWidth, windupSheet.naturalHeight,
-            -12, -REAPER_BEAM_PX, 24, REAPER_BEAM_PX,
-          );
-          ctx.globalAlpha = 1;
-          ctx.restore();
-        } else {
-          ctx.save();
-          ctx.globalAlpha = pulse;
-          ctx.strokeStyle = "rgba(255,60,60,0.85)";
-          ctx.lineWidth = 3;
-          ctx.beginPath();
-          ctx.moveTo(ox, oy);
-          ctx.lineTo(ox + Math.cos(laserAngle) * REAPER_BEAM_PX, oy + Math.sin(laserAngle) * REAPER_BEAM_PX);
-          ctx.stroke();
-          ctx.globalAlpha = 1;
-          ctx.restore();
-        }
-      }
-
-      // Active firing lasers
-      for (const laser of reaperActiveLasersRef.current) {
-        const lox = centerX + ((laser.originX - position.x) * 50) / 2;
-        const loy = centerY + ((laser.originZ - position.z) * 50) / 2;
-        const alpha = Math.max(0, laser.life / 0.35);
-        ctx.save();
-        ctx.translate(lox, loy);
-        ctx.rotate(laser.angle);
-        ctx.globalAlpha = alpha * 0.5;
-        ctx.strokeStyle = "rgba(255,40,40,1)";
-        ctx.lineWidth = 18;
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(REAPER_BEAM_PX, 0);
-        ctx.stroke();
-        ctx.globalAlpha = alpha;
-        ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = 4;
-        ctx.stroke();
-        ctx.globalAlpha = 1;
         ctx.restore();
       }
 
@@ -3427,7 +3533,9 @@ export default memo(function CanvasGame() {
       const cols = 4;
       const frameW = hasSheet ? sheet.naturalWidth / cols : 20;
       const frameH = hasSheet ? sheet.naturalHeight : 20;
-      const animFrame = Math.floor(animationNowMs / 120) % cols;
+      const animFrame = (enemy.spawnTimer ?? 0) > 0
+        ? 0
+        : Math.floor(animationNowMs / 120) % cols;
       const drawSize = 40;
       const facingRight = enemy.position.x <= position.x;
       ctx.save();

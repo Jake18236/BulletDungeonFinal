@@ -299,6 +299,12 @@ export const reaperBossSpriteSheet = (() => {
   return img;
 })();
 
+export const enemyLightningSpriteSheet = (() => {
+  const img = new Image();
+  img.src = "/sprites/enemy/enemy-lightning.png";
+  return img;
+})();
+
 export const crowEnemySpriteSheet = (() => {
   const img = new Image();
   img.src = "/sprites/enemy/crow-enemy.png";

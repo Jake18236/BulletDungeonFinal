@@ -98,20 +98,21 @@ export interface Enemy {
   spawnSessionId?: string;
 
   // REAPER BOSS PROPERTIES:
-  reaperState?: "moving" | "charging" | "dashing" | "laser_warning" | "recovering";
+  reaperState?: "floating" | "charging" | "dashing" | "summoning" | "gliding";
   reaperMoveCooldown?: number;
   reaperChargeTimer?: number;
   reaperDashTimer?: number;
-  reaperLaserIndex?: number;
-  reaperLaserTimer?: number;
-  reaperLaserDir?: number;
-  reaperRecoverTimer?: number;
+  reaperSummonTimer?: number;
+  reaperSummonWave?: number;
 
   // MAGE PROPERTIES:
   mageState?: "moving" | "casting" | "recovering";
-  mageAction?: "summon" | "heal";
+  mageAction?: "lightning" | "heal";
   mageCastTimer?: number;
   mageCastCooldown?: number;
+
+  // CROW / SPAWN PROPERTIES:
+  spawnTimer?: number;
 }
 
 export interface DamagePopup {
@@ -151,7 +152,7 @@ interface EnemiesState {
   updateDamagePopups: (delta: number) => void;
   spawnLazarusBoss: (position: THREE.Vector3) => void;
   spawnReaperBoss: (position: THREE.Vector3) => void;
-  spawnCrow: (position: THREE.Vector3) => void;
+  spawnCrow: (position: THREE.Vector3, impulse?: THREE.Vector3) => void;
 }
 
 export const useEnemies = create<EnemiesState>((set, get) => {
@@ -189,24 +190,24 @@ export const useEnemies = create<EnemiesState>((set, get) => {
   };
 
   const spawnSessions: SpawnSession[] = [
-    createSession("basic_1", "basic", "0:00", "0:30", 24, 20, 4, 3),
-    createSession("basic_2", "basic", "0:30", "1:00", 24, 50, 10, 4),
-    createSession("basic_3", "basic", "1:00", "3:00", 30, 200, 7, 4),
-    createSession("basic_4", "basic", "3:00", "30:00", 80, 400, 8, 1),
-    //eyes
-    createSession("eyeball_1", "eyeball", "0:30", "2:00", 30, 2, 2, 10),
-    createSession("eyeball_2", "eyeball", "2:00", "3:00", 50, 20, 5, 2),
-    createSession("eyeball_3", "eyeball", "3:01", "30:00", 80, 200, 1, 1),
-    //tanks
-    createSession("tank_1", "tank", "1:00", "2:00", 200, 4, 1, 5),
-    createSession("tank_2", "tank", "2:00", "3:00", 200, 6, 2, 2),
-    createSession("tank_3", "tank", "3:00", "30:00", 1000, 580, 5, 10),
-    //boss
-    createSession("lazarus_1", "lazarus", "1:00", "30:00", 2500, 1, 1, 10),
+    // createSession("basic_1", "basic", "0:00", "0:30", 24, 20, 4, 3),
+    // createSession("basic_2", "basic", "0:30", "1:00", 24, 50, 10, 4),
+    // createSession("basic_3", "basic", "1:00", "3:00", 30, 200, 7, 4),
+    // createSession("basic_4", "basic", "3:00", "30:00", 80, 400, 8, 1),
+    // //eyes
+    // createSession("eyeball_1", "eyeball", "0:30", "2:00", 30, 2, 2, 10),
+    // createSession("eyeball_2", "eyeball", "2:00", "3:00", 50, 20, 5, 2),
+    // createSession("eyeball_3", "eyeball", "3:01", "30:00", 80, 200, 1, 1),
+    // //tanks
+    // createSession("tank_1", "tank", "1:00", "2:00", 200, 4, 1, 5),
+    // createSession("tank_2", "tank", "2:00", "3:00", 200, 6, 2, 2),
+    // createSession("tank_3", "tank", "3:00", "30:00", 1000, 580, 5, 10),
+    // //boss
+    // createSession("lazarus_1", "lazarus", "1:00", "30:00", 2500, 1, 1, 10),
     //reaper boss
-    createSession("reaper_1", "reaper", "6:30", "30:00", 4500, 1, 1, 20),
+    createSession("reaper_1", "reaper", "0:00", "30:00", 4500, 1, 1, 2),
     //mage
-    createSession("mage_1", "mage", "0:00", "2:00", 35, 40, 1, 2),
+    createSession("mage_1", "mage", "1:00", "2:00", 35, 40, 1, 2),
     createSession("mage_2", "mage", "2:00", "4:00", 50, 12, 2, 8),
     createSession("mage_3", "mage", "4:00", "30:00", 80, 60, 3, 5),
   ];
@@ -479,21 +480,19 @@ updateDamagePopups: (delta) => {
         isBoss: true,
         bossType: "reaper",
 
-        reaperState: "moving",
+        reaperState: "floating",
         reaperMoveCooldown: 3.0 + Math.random() * 2,
         reaperChargeTimer: 0,
         reaperDashTimer: 0,
-        reaperLaserIndex: 0,
-        reaperLaserTimer: 0,
-        reaperLaserDir: 0,
-        reaperRecoverTimer: 0,
+        reaperSummonTimer: 0,
+        reaperSummonWave: 0,
         rotationY: 0,
       };
 
       set((state) => ({ enemies: [...state.enemies, boss] }));
     },
 
-    spawnCrow: (position) => {
+    spawnCrow: (position, impulse?: THREE.Vector3) => {
       const crow: Enemy = {
         id: "crow_" + Date.now() + "_" + Math.random().toString(36).slice(2),
         position: position.clone(),
@@ -501,8 +500,9 @@ updateDamagePopups: (delta) => {
         maxHealth: 18,
         speed: 8.5,
         type: "crow",
-        velocity: new THREE.Vector3(),
+        velocity: impulse ? impulse.clone() : new THREE.Vector3(),
         hitFlash: 0,
+        spawnTimer: 0.5,
       };
       set((state) => ({ enemies: [...state.enemies, crow] }));
     },
