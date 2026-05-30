@@ -1531,67 +1531,190 @@ export default memo(function CanvasGame() {
               updated.reaperChargeTimer = (updated.reaperChargeTimer ?? 1) - delta;
               if ((updated.reaperChargeTimer ?? 0) <= 0) {
                 const dir = updated.dashDirection!;
-                updated.velocity.set(dir.x * 30, 0, dir.z * 30);
+                updated.velocity.set(dir.x * 10, 0, dir.z * 10);
                 updated.reaperState = "dashing";
                 updated.reaperDashTimer = 0;
+                }
+              } else if (rState === "dashing") {
+                const ACCELERATION = 20;
+                const TURN_RATE = 2.8;
+                const DRAG = 0.001;
+                const MAX_SPEED = 48;
+
+                // Desired direction to player
+                const targetDir = new THREE.Vector3(
+                  safeDirX,
+                  0,
+                  safeDirZ
+                );
+
+                if (!updated.dashDirection) {
+                  updated.dashDirection = targetDir.clone();
+                }
+
+                updated.dashDirection.lerp(
+                  targetDir,
+                  TURN_RATE * delta
+                ).normalize();
+
+                updated.velocity.x +=
+                  updated.dashDirection.x *
+                  ACCELERATION *
+                  delta;
+
+                updated.velocity.z +=
+                  updated.dashDirection.z *
+                  ACCELERATION *
+                  delta;
+
+                // Light drag (ice feel)
+                updated.velocity.x *= Math.max(0, 1 - DRAG * delta);
+                updated.velocity.z *= Math.max(0, 1 - DRAG * delta);
+
+                // Clamp speed
+                const speed = Math.hypot(
+                  updated.velocity.x,
+                  updated.velocity.z
+                );
+
+                if (speed > MAX_SPEED) {
+                  const scale = MAX_SPEED / speed;
+                  updated.velocity.x *= scale;
+                  updated.velocity.z *= scale;
+                }
+
+                // Move
+                updated.position.x += updated.velocity.x * delta;
+                updated.position.z += updated.velocity.z * delta;
+
+                // Face movement direction
+                updated.rotationY = Math.atan2(
+                  updated.velocity.z,
+                  updated.velocity.x
+                );
+
+                updated.reaperDashTimer =
+                  (updated.reaperDashTimer ?? 0) + delta;
+
+              updated.reaperPassedPlayer ??= false;
+              if (
+                !updated.reaperPassedPlayer &&
+                distToPlayer < 4
+              ) {
+                updated.reaperPassedPlayer = true;
               }
-            } else if (rState === "dashing") {
-              const DRAG = 3.5;
-              updated.velocity.x *= Math.max(0, 1 - DRAG * delta);
-              updated.velocity.z *= Math.max(0, 1 - DRAG * delta);
-              updated.position.x += updated.velocity.x * delta;
-              updated.position.z += updated.velocity.z * delta;
-              updated.reaperDashTimer = (updated.reaperDashTimer ?? 0) + delta;
-              const spd = Math.hypot(updated.velocity.x, updated.velocity.z);
-              if (spd < 3 || (updated.reaperDashTimer ?? 0) > 1.4) {
+                // End dash
+              if ((updated.reaperDashTimer ?? 0) > 3.4 || updated.reaperPassedPlayer === true) {
                 updated.reaperState = "summoning";
                 updated.reaperSummonTimer = 0;
                 updated.reaperSummonWave = 0;
-                updated.velocity.set(0, 0, 0);
               }
             } else if (rState === "summoning") {
-              updated.reaperSummonTimer = (updated.reaperSummonTimer ?? 0) + delta;
+              updated.reaperSummonTimer =
+                (updated.reaperSummonTimer ?? 0) + delta;
+
               const t = updated.reaperSummonTimer ?? 0;
+
+              // Keep drifting while summoning
+              const DRAG = 0.01;
+
+              updated.velocity.x *= Math.max(
+                0,
+                1 - DRAG * delta
+              );
+              updated.velocity.z *= Math.max(
+                0,
+                1 - DRAG * delta
+              );
+
+              updated.position.x +=
+                updated.velocity.x * delta;
+
+              updated.position.z +=
+                updated.velocity.z * delta;
+
+              // Face movement direction while sliding
+              const speed = Math.hypot(
+                updated.velocity.x,
+                updated.velocity.z
+              );
+
+              if (speed > 0.1) {
+                updated.rotationY = Math.atan2(
+                  updated.velocity.z,
+                  updated.velocity.x
+                );
+              }
+
               const sc = useEnemies.getState().spawnCrow;
 
-              // Wave 1 at t=0.3s
-              if ((updated.reaperSummonWave ?? 0) === 0 && t >= 0.3) {
+              // Wave 1
+              if (
+                (updated.reaperSummonWave ?? 0) === 0 &&
+                t >= 0.3
+              ) {
                 updated.reaperSummonWave = 1;
+
                 for (let ci = 0; ci < 3; ci++) {
                   const ang = (ci / 3) * Math.PI * 2;
+
                   sc(
                     new THREE.Vector3(
-                      updated.position.x + Math.cos(ang) * 2,
+                      updated.position.x +
+                        Math.cos(ang) * 2,
                       0,
-                      updated.position.z + Math.sin(ang) * 2,
+                      updated.position.z +
+                        Math.sin(ang) * 2
                     ),
-                    new THREE.Vector3(Math.cos(ang) * 5, 0, Math.sin(ang) * 4),
+                    new THREE.Vector3(
+                      Math.cos(ang) * 5,
+                      0,
+                      Math.sin(ang) * 4
+                    )
                   );
                 }
               }
-              // Wave 2 at t=0.65s
-              if ((updated.reaperSummonWave ?? 0) === 1 && t >= 0.65) {
+
+              // Wave 2
+              if (
+                (updated.reaperSummonWave ?? 0) === 1 &&
+                t >= 0.65
+              ) {
                 updated.reaperSummonWave = 2;
+
                 for (let ci = 0; ci < 3; ci++) {
-                  const ang = (ci / 3) * Math.PI * 2 + Math.PI / 3;
+                  const ang =
+                    (ci / 3) * Math.PI * 2 +
+                    Math.PI / 3;
+
                   sc(
                     new THREE.Vector3(
-                      updated.position.x + Math.cos(ang) * 2,
+                      updated.position.x +
+                        Math.cos(ang) * 2,
                       0,
-                      updated.position.z + Math.sin(ang) * 2,
+                      updated.position.z +
+                        Math.sin(ang) * 2
                     ),
-                    new THREE.Vector3(Math.cos(ang) * 6, 0, Math.sin(ang) * 5),
+                    new THREE.Vector3(
+                      Math.cos(ang) * 6,
+                      0,
+                      Math.sin(ang) * 5
+                    )
                   );
                 }
               }
-              // End summon at t=0.9s → glide backward
+
+              // Finish summon
               if (t >= 0.9) {
-                updated.reaperState = "gliding";
-                updated.velocity.set(-safeDirX * 3, 0, -safeDirZ * 3);
+                updated.reaperState = "floating";
+                updated.reaperMoveCooldown =
+                  2 + Math.random() * 1.5;
               }
-            } else if (rState === "gliding") {
+            }
+            
+            else if (rState === "gliding") {
               // Friction-damped glide back to float
-              const DRAG = 3.0;
+              const DRAG = 0.04;
               updated.velocity.x *= Math.max(0, 1 - DRAG * delta);
               updated.velocity.z *= Math.max(0, 1 - DRAG * delta);
               updated.position.x += updated.velocity.x * delta;
@@ -2744,7 +2867,117 @@ export default memo(function CanvasGame() {
       ctx.restore();
     }
   };
+  
+  const drawMageLightning = (ctx: CanvasRenderingContext2D) => {
+    if (mageLightningRef.current.length === 0) return;
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
 
+    for (const atk of mageLightningRef.current) {
+      const sx = snapToGrid(centerX + ((atk.targetX - position.x) * 50) / 2);
+      const sy = snapToGrid(centerY + ((atk.targetZ - position.z) * 50) / 2);
+
+      if (!atk.fired) {
+        // Warning: pulsing red X and circle at target position
+        const progress = Math.min(1, atk.warningTimer / 2.0);
+        const pulse = 0.5 + Math.sin(atk.warningTimer * Math.PI * 5) * 0.45;
+        const radius = snapToGrid(18 + progress * 18);
+
+        ctx.save();
+        ctx.globalAlpha = Math.max(0.25, Math.abs(pulse)) * (0.45 + progress * 0.55);
+        ctx.strokeStyle = "#ff2020";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(sx, sy, radius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        const xSize = snapToGrid(7 + progress * 7);
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(sx - xSize, sy - xSize);
+        ctx.lineTo(sx + xSize, sy + xSize);
+        ctx.moveTo(sx + xSize, sy - xSize);
+        ctx.lineTo(sx - xSize, sy + xSize);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      } else if (atk.fireTimer > 0) {
+        const MAX_FIRE_TIME = 0.4;
+
+        // Normalize animation progress
+        const progress =
+          1 - atk.fireTimer / MAX_FIRE_TIME;
+
+        const lSheet = enemyLightningSpriteSheet;
+
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+
+        const frameW = 32;
+        const frameH = 450;
+
+        // Match summon lightning animation
+        const totalFrames = 5;
+        const frameIndex = Math.min(
+          totalFrames - 1,
+          Math.floor(progress * totalFrames)
+        );
+
+        const alpha = Math.min(
+          1,
+          atk.fireTimer / MAX_FIRE_TIME
+        );
+
+
+        if (
+          lSheet.complete &&
+          lSheet.naturalWidth > 0
+        ) {
+          ctx.save();
+
+          ctx.translate(sx, sy);
+
+          const drawW = frameW * 2;
+          const drawH = frameH * 2;
+
+          ctx.drawImage(
+            lSheet,
+            frameIndex * frameW,
+            0,
+            frameW,
+            frameH,
+            -drawW,
+            -drawH,
+            drawW,
+            drawH,
+          );
+
+          ctx.restore();
+        } else {
+          // Fallback red bolt
+          ctx.strokeStyle = "#ff2020";
+          ctx.lineWidth = 4;
+
+          ctx.beginPath();
+          ctx.moveTo(sx - 4, sy - 70);
+          ctx.lineTo(sx + 6, sy - 35);
+          ctx.lineTo(sx - 4, sy - 15);
+          ctx.lineTo(sx + 4, sy);
+          ctx.stroke();
+        }
+
+        // Ground impact glow
+        ctx.globalAlpha = alpha * 0.55;
+        ctx.fillStyle = "#ff4422";
+
+        ctx.beginPath();
+        ctx.arc(sx, sy, 14, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+      }
+    }
+  };
+  
   const drawDamageNumbers = (ctx: CanvasRenderingContext2D) => {
     const damageNumbers = useVisualEffects.getState().damageNumbers;
     const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(
@@ -2782,74 +3015,7 @@ export default memo(function CanvasGame() {
     ctx.restore();
   };
 
-  const drawMageLightning = (ctx: CanvasRenderingContext2D) => {
-    if (mageLightningRef.current.length === 0) return;
-    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
-
-    for (const atk of mageLightningRef.current) {
-      const sx = snapToGrid(centerX + ((atk.targetX - position.x) * 50) / 2);
-      const sy = snapToGrid(centerY + ((atk.targetZ - position.z) * 50) / 2);
-
-      if (!atk.fired) {
-        // Warning: pulsing red X and circle at target position
-        const progress = Math.min(1, atk.warningTimer / 2.0);
-        const pulse = 0.5 + Math.sin(atk.warningTimer * Math.PI * 5) * 0.45;
-        const radius = snapToGrid(18 + progress * 18);
-
-        ctx.save();
-        ctx.globalAlpha = Math.max(0.25, Math.abs(pulse)) * (0.45 + progress * 0.55);
-        ctx.strokeStyle = "#ff2020";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(sx, sy, radius, 0, Math.PI * 2);
-        ctx.stroke();
-
-        const xSize = snapToGrid(7 + progress * 7);
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(sx - xSize, sy - xSize);
-        ctx.lineTo(sx + xSize, sy + xSize);
-        ctx.moveTo(sx + xSize, sy - xSize);
-        ctx.lineTo(sx - xSize, sy + xSize);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-        ctx.restore();
-      } else if (atk.fireTimer > 0) {
-        // Strike flash: draw enemy lightning sprite at target
-        const alpha = Math.min(1, atk.fireTimer / 0.4);
-        const lSheet = enemyLightningSpriteSheet;
-
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        ctx.imageSmoothingEnabled = false;
-
-        if (lSheet.complete && lSheet.naturalWidth > 0) {
-          const drawW = snapToGrid(Math.round(lSheet.naturalWidth * 0.55));
-          const drawH = snapToGrid(Math.round(lSheet.naturalHeight * 0.55));
-          ctx.drawImage(lSheet, sx - drawW / 2, sy - drawH, drawW, drawH);
-        } else {
-          // Fallback red bolt
-          ctx.strokeStyle = "#ff2020";
-          ctx.lineWidth = 4;
-          ctx.beginPath();
-          ctx.moveTo(sx - 4, sy - 70);
-          ctx.lineTo(sx + 6, sy - 35);
-          ctx.lineTo(sx - 4, sy - 15);
-          ctx.lineTo(sx + 4, sy);
-          ctx.stroke();
-        }
-
-        // Ground impact glow
-        ctx.globalAlpha = alpha * 0.55;
-        ctx.fillStyle = "#ff4422";
-        ctx.beginPath();
-        ctx.arc(sx, sy, 14, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-        ctx.restore();
-      }
-    }
-  };
+  
 
   const drawTreeLightning = (ctx: CanvasRenderingContext2D, nowMs: number) => {
     if (treeLightningRef.current.length === 0) return;
@@ -3460,8 +3626,8 @@ export default memo(function CanvasGame() {
           const ndz = -(enemy.velocity?.z ?? 0) / vLen;
           for (let g = 1; g <= 5; g++) {
             ctx.save();
-            ctx.globalAlpha = Math.max(0, 0.26 - g * 0.04);
-            ctx.translate(screenX + ndx * g * 14, screenY + ndz * g * 14);
+            ctx.globalAlpha = Math.max(1, 0.26 - g * 0.04);
+            ctx.translate(screenX + ndx * g, screenY + ndz * g);
             ctx.imageSmoothingEnabled = false;
             if (!facingRight) ctx.scale(-1, 1);
             ctx.drawImage(sheet, srcX, srcY, frameW, frameH,
@@ -3693,7 +3859,6 @@ export default memo(function CanvasGame() {
     enemyDeathAnimationsRef.current = nextAnimations;
   };
 
-  usePlayer.setState({ lastAmmoExplosive: true });
 
   const drawSummons = (
     ctx: CanvasRenderingContext2D,
