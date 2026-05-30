@@ -15,7 +15,7 @@ export interface EnemyTypeBehaviorConfig {
   projectileFireInterval?: number;
 }
 
-export const ENEMY_TYPE_CONFIG: Record<"basic" | "tank" | "eyeball", EnemyTypeBehaviorConfig> = {
+export const ENEMY_TYPE_CONFIG: Record<"basic" | "tank" | "eyeball" | "tree", EnemyTypeBehaviorConfig> = {
   basic: {
     bodyHitRadius: 1.2,
     collisionRadius: 0.95,
@@ -33,6 +33,10 @@ export const ENEMY_TYPE_CONFIG: Record<"basic" | "tank" | "eyeball", EnemyTypeBe
     projectileLife: 8,
     projectileSize: 1,
     projectileFireInterval: 4.0,
+  },
+  tree: {
+    bodyHitRadius: 3.5,
+    collisionRadius: 4.0,
   },
 };
 
@@ -124,7 +128,7 @@ export interface DamagePopup {
   life: number; 
 }
 
-type SpawnSessionEnemyType = "basic" | "tank" | "eyeball" | "lazarus" | "reaper" | "mage";
+type SpawnSessionEnemyType = "basic" | "tank" | "eyeball" | "lazarus" | "reaper" | "mage" | "tree";
 
 interface SpawnSession {
   id: string;
@@ -211,6 +215,9 @@ export const useEnemies = create<EnemiesState>((set, get) => {
     createSession("mage_1", "mage", "1:00", "2:00", 35, 40, 1, 2),
     createSession("mage_2", "mage", "2:00", "4:00", 50, 12, 2, 8),
     createSession("mage_3", "mage", "4:00", "30:00", 80, 60, 3, 5),
+    //trees - stationary enemies with massive HP
+    createSession("tree_1", "tree", "0:15", "0:20", 10000, 8, 2, 5),
+    createSession("tree_2", "tree", "2:00", "2:05", 10000, 6, 2, 30),
   ];
 
   let spawnSessionTimers = spawnSessions.reduce<Record<string, number>>((acc, session) => {
@@ -507,6 +514,20 @@ updateDamagePopups: (delta) => {
       };
       set((state) => ({ enemies: [...state.enemies, crow] }));
     },
+
+    spawnTree: (position) => {
+      const tree: Enemy = {
+        id: "tree_" + Date.now() + "_" + Math.random().toString(36).slice(2),
+        position: position.clone(),
+        health: 10000,
+        maxHealth: 10000,
+        speed: 0, // Trees don't move
+        type: "tree",
+        velocity: new THREE.Vector3(),
+        hitFlash: 0,
+      };
+      set((state) => ({ enemies: [...state.enemies, tree] }));
+    },
     
     updateEnemies: (enemies) =>
       set((state) => {
@@ -584,6 +605,18 @@ updateDamagePopups: (delta) => {
             spawnedBoss.health = session.hp;
             spawnedBoss.maxHealth = session.hp;
             spawnedBoss.spawnSessionId = session.id;
+
+            set({ enemies: currentEnemies });
+            continue;
+          }
+
+          if (session.enemy === "tree") {
+            get().spawnTree(spawnPos);
+            const currentEnemies = get().enemies;
+            const spawnedTree = currentEnemies[currentEnemies.length - 1];
+            if (!spawnedTree) continue;
+
+            spawnedTree.spawnSessionId = session.id;
 
             set({ enemies: currentEnemies });
             continue;

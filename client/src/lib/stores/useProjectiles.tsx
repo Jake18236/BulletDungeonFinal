@@ -57,6 +57,8 @@ export interface Projectile {
   piercedEnemies: Set<string>;
   bouncing: number;
   bouncesLeft: number;
+  railgun: boolean;
+  pierceKillCount: number;
   explosive?: { radius: number; damage: number };
   chainLightning?: { chains: number; range: number; chainedEnemies: Set<string> };
 
@@ -136,6 +138,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
     homing: boolean;
     piercing: number;
     bouncing: number;
+    railgun?: boolean;
 
     explosive?: { radius: number; damage: number };
     chainLightning?: { chains: number; range: number };
@@ -168,6 +171,8 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       piercedEnemies: new Set(),
       bouncing: config.bouncing,
       bouncesLeft: config.bouncing,
+      railgun: config.railgun ?? false,
+      pierceKillCount: 0,
 
       explosive: config.explosive,
       chainLightning: config.chainLightning
@@ -346,14 +351,20 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
           // Compute exact impact point on enemy surface
           const impactPos = proj.position.clone();
 
+          // Calculate damage - apply railgun penalty if active
+          let finalDamage = proj.damage;
+          if (proj.railgun && proj.pierceKillCount > 0) {
+            finalDamage = proj.damage * Math.pow(0.8, proj.pierceKillCount);
+          }
+
           // Deal damage & trigger effects
           const knockbackBase = 1;
           const knockbackFromSpeed = proj.speed / 20;
           const knockbackMagnitude = knockbackBase + knockbackFromSpeed;
-          
+
           onHit(
             enemy.id,
-            proj.damage,
+            finalDamage,
             proj.velocity.clone().normalize().multiplyScalar(knockbackMagnitude),
             {
               color: proj.color,
@@ -363,6 +374,18 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
               impactPos,
             }
           );
+
+          // ===================== RAILGUN KILL CHECK =====================
+          // Check if enemy was killed by this hit
+          if (proj.railgun) {
+            const enemyAfter = enemies.find(e => e.id === enemy.id);
+            if (enemyAfter && enemyAfter.health <= 0) {
+              proj.pierceKillCount++;
+              // Continue piercing through killed enemy
+              proj.piercedEnemies.add(enemy.id);
+              continue;
+            }
+          }
 
           // ===================== BOUNCE LOGIC =====================
           if (proj.bouncesLeft > 0) {

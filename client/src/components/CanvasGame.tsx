@@ -309,8 +309,8 @@ function moveWithTerrainSlide(
   return resolveTerrainPenetration(currentPos, obstacles, radius);
 }
 
-function getEnemyType(enemy: { type?: string }): "basic" | "tank" | "eyeball" {
-  if (enemy.type === "tank" || enemy.type === "eyeball") return enemy.type;
+function getEnemyType(enemy: { type?: string }): "basic" | "tank" | "eyeball" | "tree" {
+  if (enemy.type === "tank" || enemy.type === "eyeball" || enemy.type === "tree") return enemy.type;
   return "basic";
 }
 
@@ -323,6 +323,7 @@ function getEnemyBodyHitRadius(enemy: {
   if (enemy.isBoss && enemy.bossType === "reaper") return 3.2;
   if (enemy.type === "crow") return 0.6;
   if (enemy.type === "mage") return 1.6;
+  if (enemy.type === "tree") return ENEMY_TYPE_CONFIG.tree.bodyHitRadius;
   return ENEMY_TYPE_CONFIG[getEnemyType(enemy)].bodyHitRadius;
 }
 
@@ -330,6 +331,7 @@ function getEnemyCollisionRadius(enemy: { type?: string; isBoss?: boolean; bossT
   if (enemy.isBoss && enemy.bossType === "reaper") return 3.5;
   if (enemy.type === "crow") return 0.5;
   if (enemy.type === "mage") return 0.9;
+  if (enemy.type === "tree") return ENEMY_TYPE_CONFIG.tree.collisionRadius;
   return ENEMY_TYPE_CONFIG[getEnemyType(enemy)].collisionRadius;
 }
 
@@ -528,6 +530,7 @@ export default memo(function CanvasGame() {
   const reloadTime = usePlayer((state) => state.reloadTime);
   const updateReload = usePlayer((state) => state.updateReload);
   const updateInvincibility = usePlayer((state) => state.updateInvincibility);
+  const updateRegeneration = usePlayer((state) => state.updateRegeneration);
   const updateMuzzleFlash = usePlayer((state) => state.updateMuzzleFlash);
   const muzzleFlashTimer = usePlayer((state) => state.muzzleFlashTimer);
   const muzzleFlashPosition = usePlayer((state) => state.muzzleFlashPosition);
@@ -838,6 +841,7 @@ export default memo(function CanvasGame() {
         const ps = usePlayer.getState();
         updateReload(delta);
         updateInvincibility(delta);
+        updateRegeneration(delta);
         updateDash(delta);
         updateDamageFlash(delta);
         updateMuzzleFlash();
@@ -1115,6 +1119,7 @@ export default memo(function CanvasGame() {
                 homing: stats.homing,
                 piercing: stats.piercing,
                 bouncing: stats.bouncing,
+                railgun: ps.railgun,
                 explosive: projectileExplosive,
                 chainLightning: stats.chainLightning,
                 trailLength: stats.trailLength,

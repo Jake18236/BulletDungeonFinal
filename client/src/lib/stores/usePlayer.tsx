@@ -76,6 +76,7 @@ interface PlayerState {
   instantKillThreshold: number;
   splinterBullets: boolean;
   pierceKilledEnemies: boolean;
+  railgun: boolean;
   siegeMode: boolean;
   fanFire: boolean;
   splitFire: boolean;
@@ -85,6 +86,15 @@ interface PlayerState {
   killClip: boolean;
   killClipStacks: number;
   speedFiringBonus: number;
+
+  // Regeneration
+  regeneration: boolean;
+  regenerationInterval: number;
+  regenerationTimer: number;
+
+  // Burn effects
+  burnDurationMultiplier: number;
+  incendiary: boolean;
 
   muzzleFlashTimer: number;
   muzzleFlashPosition: THREE.Vector3 | null;
@@ -157,6 +167,9 @@ interface PlayerState {
   // Actions - Damage feedback
   triggerDamageFlash: (position: THREE.Vector3, knockback: THREE.Vector3) => void;
   updateDamageFlash: (delta: number) => void;
+
+  // Actions - Regeneration
+  updateRegeneration: (delta: number) => void;
 
   // Reset
   reset: () => void;
@@ -1045,6 +1058,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   instantKillThreshold: 0,
   splinterBullets: false,
   pierceKilledEnemies: false,
+  railgun: false,
   siegeMode: false,
   fanFire: false,
   splitFire: false,
@@ -1055,6 +1069,14 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   killClip: false,
   killClipStacks: 0,
   speedFiringBonus: 0,
+
+  // Regeneration
+  regeneration: false,
+  regenerationInterval: 50,
+  regenerationTimer: 0,
+
+  // Burn effects
+  burnDurationMultiplier: 1,
 
   muzzleFlashTimer: 0,
   muzzleFlashPosition: null,
@@ -1372,6 +1394,20 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     return { invincibilityTimer: Math.max(state.invincibilityTimer - delta, 0) };
   }),
 
+  updateRegeneration: (delta) => set((state) => {
+    if (!state.regeneration) return {};
+
+    const newTimer = state.regenerationTimer + delta;
+    if (newTimer >= state.regenerationInterval) {
+      const healed = Math.min(state.hearts + 1, state.maxHearts);
+      return {
+        regenerationTimer: 0,
+        hearts: healed,
+      };
+    }
+    return { regenerationTimer: newTimer };
+  }),
+
   reset: () => set({
     position: new THREE.Vector3(),
     velocity: new THREE.Vector3(),
@@ -1407,6 +1443,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     instantKillThreshold: 0,
     splinterBullets: false,
     pierceKilledEnemies: false,
+    railgun: false,
     siegeMode: false,
     fanFire: false,
     splitFire: false,
@@ -1416,6 +1453,10 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     lastAmmoExplosive: false,
     killClip: false,
     killClipStacks: 0,
+    regeneration: false,
+    regenerationInterval: 50,
+    regenerationTimer: 0,
+    burnDurationMultiplier: 1,
     lastMovementTime: 0,
     muzzleFlashTimer: 0,
     muzzleFlashPosition: null,

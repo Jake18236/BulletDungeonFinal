@@ -80,20 +80,25 @@ export const useHit = create<HitState>((set, get) => ({
       if (dir.lengthSq() > 0.1) {
         const ps = usePlayer.getState();
         let finalKnockback = knockbackStrength * (ps.knockbackMultiplier);
-        
-        if (enemy.type === "tank") {
+
+        // Trees are stationary and cannot be knocked back
+        if (enemy.type === "tree") {
+          finalKnockback = 0;
+        } else if (enemy.type === "tank") {
           finalKnockback *= 0.4;
         }
-        
-        dir.normalize();
-        
-        // Apply knockback gradually over time (0.15 seconds) for smoother acceleration
-        const knockbackDurationMs = 0.1;
-        if (!enemy.knockbackAcceleration) {
-          enemy.knockbackAcceleration = new THREE.Vector3();
+
+        if (finalKnockback > 0) {
+          dir.normalize();
+
+          // Apply knockback gradually over time (0.15 seconds) for smoother acceleration
+          const knockbackDurationMs = 0.1;
+          if (!enemy.knockbackAcceleration) {
+            enemy.knockbackAcceleration = new THREE.Vector3();
+          }
+          enemy.knockbackAcceleration = dir.multiplyScalar(finalKnockback / knockbackDurationMs);
+          enemy.knockbackDuration = knockbackDurationMs;
         }
-        enemy.knockbackAcceleration = dir.multiplyScalar(finalKnockback / knockbackDurationMs);
-        enemy.knockbackDuration = knockbackDurationMs;
       }
     }
 

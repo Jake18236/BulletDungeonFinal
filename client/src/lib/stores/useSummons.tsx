@@ -85,6 +85,11 @@ interface SummonState {
   energized: boolean;
   electroMastery: boolean;
 
+  // Stormcaller
+  stormcaller: boolean;
+  stormcallerCooldown: number;
+  stormcallerTimer: number;
+
   // Actions
   addSummon: (type: Summon["type"]) => void;
   updateSummons: (
@@ -136,6 +141,10 @@ export const useSummons = create<SummonState>((set, get) => ({
   electroShotCounter: 0,
   energized: false,
   electroMastery: false,
+
+  stormcaller: false,
+  stormcallerCooldown: 15,
+  stormcallerTimer: 0,
 
   addSummon: (type) => {
     const playerPos = usePlayer.getState().position;
@@ -561,6 +570,38 @@ export const useSummons = create<SummonState>((set, get) => ({
       return updated;
     });
 
+    // Stormcaller: strike all enemies in range every 15 seconds
+    const stormcallerState = get();
+    if (stormcallerState.stormcaller) {
+      const newTimer = stormcallerState.stormcallerTimer + delta;
+      if (newTimer >= stormcallerState.stormcallerCooldown) {
+        set({ stormcallerTimer: 0 });
+        const { applyHit } = useHit.getState();
+        const { addLightning } = useVisualEffects.getState();
+
+        // Strike all enemies within range
+        const STORMCALLER_RANGE = 30;
+        enemies.forEach(enemy => {
+          if (enemy.health <= 0) return;
+          const dist = enemy.position.distanceTo(playerPos);
+          if (dist <= STORMCALLER_RANGE) {
+            const damage = 15 * stormcallerState.summonDamageMultiplier;
+            enemy.health -= damage;
+            const angle = THREE.MathUtils.degToRad(45 - Math.random() * 90);
+            addLightning(enemy.position.x, enemy.position.z, angle);
+            applyHit({
+              enemy,
+              damage,
+              impactPos: enemy.position.clone(),
+              isSummonDamage: true,
+            }, enemies);
+          }
+        });
+      } else {
+        set({ stormcallerTimer: newTimer });
+      }
+    }
+
     set({ summons: updatedSummons });
   },
 
@@ -597,12 +638,17 @@ export const useSummons = create<SummonState>((set, get) => ({
         e => e.enemyId === enemyId && e.type === type
       );
 
+      // Apply burn duration multiplier
+      const finalDuration = type === "burn"
+        ? duration * (usePlayer.getState().burnDurationMultiplier || 1)
+        : duration;
+
       if (existingEffectIndex !== -1) {
         // Refresh the existing effect's duration instead of stacking
         const updated = [...state.statusEffects];
         updated[existingEffectIndex] = {
           ...updated[existingEffectIndex],
-          duration,
+          duration: finalDuration,
           elapsed: 0,
           damage: Math.max(updated[existingEffectIndex].damage, damage),
         };
@@ -615,7 +661,7 @@ export const useSummons = create<SummonState>((set, get) => ({
         enemyId,
         type,
         damage,
-        duration,
+        duration: finalDuration,
         elapsed: 0,
         tickRate: type === "burn" ? 1 : 999,
         lastTick: 0,
@@ -663,6 +709,9 @@ export const useSummons = create<SummonState>((set, get) => ({
     scytheDamage: 40,
     scytheSpeedBonus: false,
     scytheDamageBonus: false,
+    stormcaller: false,
+    stormcallerCooldown: 15,
+    stormcallerTimer: 0,
     pulsingSummons: false,
     pulseTimer: 0,
     feedTheBeasts: false,
