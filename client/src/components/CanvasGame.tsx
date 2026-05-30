@@ -2877,7 +2877,6 @@ export default memo(function CanvasGame() {
       const sy = snapToGrid(centerY + ((atk.targetZ - position.z) * 50) / 2);
 
       if (!atk.fired) {
-        // Warning: pulsing red X and circle at target position
         const progress = Math.min(1, atk.warningTimer / 2.0);
         const pulse = 0.5 + Math.sin(atk.warningTimer * Math.PI * 5) * 0.45;
         const radius = snapToGrid(18 + progress * 18);
@@ -2922,11 +2921,6 @@ export default memo(function CanvasGame() {
           Math.floor(progress * totalFrames)
         );
 
-        const alpha = Math.min(
-          1,
-          atk.fireTimer / MAX_FIRE_TIME
-        );
-
 
         if (
           lSheet.complete &&
@@ -2965,8 +2959,6 @@ export default memo(function CanvasGame() {
           ctx.stroke();
         }
 
-        // Ground impact glow
-        ctx.globalAlpha = alpha * 0.55;
         ctx.fillStyle = "#ff4422";
 
         ctx.beginPath();
