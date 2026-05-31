@@ -1811,7 +1811,7 @@ export default memo(function CanvasGame() {
           // MAGE ENEMY LOGIC
           if (enemy.type === "mage") {
             if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
-            const ENGAGE_DIST = 11;
+            const ENGAGE_DIST = 13;
             const dx = position.x - enemy.position.x;
             const dz = position.z - enemy.position.z;
             const dist = Math.sqrt(dx * dx + dz * dz);
@@ -1881,10 +1881,10 @@ export default memo(function CanvasGame() {
                   }
                 }
                 enemy.mageState = "recovering";
-                enemy.mageCastCooldown = 6.0;
+                enemy.mageCastCooldown = 3.0;
               }
             } else if (mState === "recovering") {
-              enemy.velocity.multiplyScalar(Math.max(0, 1 - 6 * delta));
+              
               enemy.mageCastCooldown = (enemy.mageCastCooldown ?? 0) - delta;
               if ((enemy.mageCastCooldown ?? 0) <= 0) {
                 enemy.mageState = "moving";
@@ -2096,18 +2096,12 @@ export default memo(function CanvasGame() {
 
         if (damagedThisFrameRef.current) {
           if (phase === "playing")
-            cameraRef.current.shake({ strength: 100, durationMs: 100 });
+            cameraRef.current.shake({ strength: 1000, durationMs: 100 });
         }
         enemyProjectilesRef.current = updatedEnemyProjectiles;
 
         updateXPOrbs(delta, position);
         updateEnemies(aliveEnemies);
-
-        // Decay reaper active laser beams
-        reaperActiveLasersRef.current = reaperActiveLasersRef.current
-          .map(l => ({ ...l, life: l.life - delta }))
-          .filter(l => l.life > 0);
-
         // Update mage lightning attacks
         for (const atk of mageLightningRef.current) {
           atk.animTimer += delta;
@@ -2119,19 +2113,20 @@ export default memo(function CanvasGame() {
             atk.particleSpawnTimer = (atk.particleSpawnTimer ?? 0) + delta;
             if (atk.particleSpawnTimer >= 0.06) {
               atk.particleSpawnTimer = 0;
-              const spread = 0.5;
+              const spread = 1;
               atk.particles.push({
                 x: atk.mageX + (Math.random() - 0.5) * spread,
-                z: atk.mageZ + (Math.random() - 0.5) * spread,
-                vy: 18 + Math.random() * 14,
+                z: atk.mageZ + (Math.random()) * 3,
+                vy: 0,
                 age: 0,
                 maxAge: 0.55 + Math.random() * 0.25,
-                frame: Math.floor(Math.random() * 4),
+                frame: 0,
               });
             }
-            // Age particles
+            // Age particles — also advance vertical offset for rising effect
             atk.particles = atk.particles.filter(p => {
               p.age += delta;
+              p.vy += delta * 1.4;
               return p.age < p.maxAge;
             });
 
@@ -2155,9 +2150,8 @@ export default memo(function CanvasGame() {
         );
 
         useEnemies.getState().updateAutoSpawn(delta, position);
-        footstepMarksRef.current = footstepMarksRef.current
-          .map((mark) => ({ ...mark, life: mark.life + delta }))
-          .filter((mark) => mark.life < mark.maxLife);
+        for (const mark of footstepMarksRef.current) mark.life += delta;
+        footstepMarksRef.current = footstepMarksRef.current.filter((mark) => mark.life < mark.maxLife);
         if (hearts <= 0) end();
       }
 
@@ -2260,6 +2254,22 @@ export default memo(function CanvasGame() {
       drawWeapon(ctx, "revolver", phase !== "playing");
 
       ctx.restore();
+
+      // ── Red edge vignette when player takes damage ──
+      const { damageFlashTimer } = usePlayer.getState();
+      if (damageFlashTimer > 0) {
+        const intensity = Math.min(1, damageFlashTimer / 0.25) * 0.72;
+        const grad = ctx.createRadialGradient(
+          CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, CANVAS_HEIGHT * 0.2,
+          CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, CANVAS_HEIGHT * 0.82,
+        );
+        grad.addColorStop(0, "rgba(200,0,0,0)");
+        grad.addColorStop(1, `rgba(200,0,0,${intensity.toFixed(3)})`);
+        ctx.save();
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        ctx.restore();
+      }
 
       animationFrameRef.current = requestAnimationFrame(gameLoop);
     };
@@ -2970,26 +2980,30 @@ export default memo(function CanvasGame() {
         ctx.save();
         ctx.imageSmoothingEnabled = false;
 
-        // ── Pentagram indicator image ──
+        // ── Pentagram indicator image (spins) ──
         const indImg = mageLightningIndicator;
         if (indImg.complete && indImg.naturalWidth > 0) {
-          const indSize = snapToGrid(28 + progress * 16);
-          ctx.globalAlpha = Math.max(0.3, pulse) * (0.5 + progress * 0.5);
-          ctx.drawImage(indImg, sx - indSize / 2, sy - indSize / 2, indSize, indSize);
+          const indSize = snapToGrid(56 + progress * 16);
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.rotate(atk.warningTimer * 2.8);
+          ctx.globalAlpha = Math.max(0.9, pulse) * (0.5 + progress * 0.5);
+          ctx.drawImage(indImg, -indSize / 2, -indSize / 2, indSize, indSize);
+          ctx.restore();
         }
 
-        // ── Floating static particles rising from cast zone ──
+        // ── Floating static particles rising from mage ──
         const sSheet = mageStaticParticleSheet;
         if (sSheet.complete && sSheet.naturalWidth > 0) {
           const sFrameW = sSheet.naturalWidth / 4;
           const sFrameH = sSheet.naturalHeight;
-          const sDrawW = sFrameW * 3;
-          const sDrawH = sFrameH * 3;
+          const sDrawW = sFrameW;
+          const sDrawH = sFrameH;
           for (const p of atk.particles) {
-            const t = p.age / p.maxAge;
+            const fade = 1 - p.age / p.maxAge;
             const pScreenX = snapToGrid(centerX + ((p.x - position.x) * 50) / 2);
-            const pScreenY = snapToGrid(sy - p.vy * p.age);
-            ctx.globalAlpha = Math.max(0, 1 - t) * 0.85;
+            const pScreenY = snapToGrid(centerY + ((p.z - p.vy - position.z) * 50) / 2);
+            ctx.globalAlpha = fade * 0.9;
             ctx.drawImage(sSheet, p.frame * sFrameW, 0, sFrameW, sFrameH,
               pScreenX - sDrawW / 2, pScreenY - sDrawH / 2, sDrawW, sDrawH);
           }
@@ -3037,27 +3051,16 @@ export default memo(function CanvasGame() {
             0,
             frameW,
             frameH,
-            -drawW,
+            -drawW / 2,
             -drawH,
             drawW,
             drawH,
           );
 
           ctx.restore();
-        } else {
-          // Fallback red bolt
-          ctx.strokeStyle = "#ff2020";
-          ctx.lineWidth = 4;
-
-          ctx.beginPath();
-          ctx.moveTo(sx - 4, sy - 70);
-          ctx.lineTo(sx + 6, sy - 35);
-          ctx.lineTo(sx - 4, sy - 15);
-          ctx.lineTo(sx + 4, sy);
-          ctx.stroke();
         }
 
-        ctx.fillStyle = "#ff4422";
+        ctx.fillStyle = "#fd5161";
 
         ctx.beginPath();
         ctx.arc(sx, sy, 14, 0, Math.PI * 2);
@@ -3227,7 +3230,7 @@ export default memo(function CanvasGame() {
     ctx.save();
     ctx.translate(centerX, centerY);
 
-    // Damage flash effect (brightness filter instead of blinking)
+    // Damage flash effect (brightness filter — player sprite only)
     if (playerState.damageFlashTimer > 0) {
       const flashIntensity = Math.min(1, playerState.damageFlashTimer / 0.15);
       ctx.filter = `brightness(${1 + flashIntensity * 1.5}) saturate(${1 - flashIntensity * 0.5})`;
@@ -3257,7 +3260,6 @@ export default memo(function CanvasGame() {
         PLAYER_SPRITE_RENDER_SIZE,
       );
     }
-    ctx.filter = "none";
 
     ctx.restore();
   };
@@ -3333,7 +3335,6 @@ export default memo(function CanvasGame() {
         ctx.fillStyle = "#aa44ff";
         ctx.fillRect(-drawW / 2, -drawH / 2, drawW, drawH);
       }
-      ctx.filter = "none";
       ctx.restore();
       return;
     }
@@ -3364,7 +3365,6 @@ export default memo(function CanvasGame() {
       Math.floor(size),
       Math.floor(size),
     );
-    ctx.filter = "none";
 
     ctx.restore();
   };
@@ -3490,7 +3490,6 @@ export default memo(function CanvasGame() {
           drawSize,
           drawSize,
         );
-        ctx.filter = "none";
         ctx.restore();
       }
 
@@ -3746,7 +3745,6 @@ export default memo(function CanvasGame() {
         if (enemy.hitFlash > 0) ctx.filter = "brightness(60)";
         ctx.drawImage(sheet, srcX, srcY, frameW, frameH,
           Math.floor(-drawSize / 2), Math.floor(-drawSize / 2), drawSize, drawSize);
-        ctx.filter = "none";
         ctx.restore();
       }
 
@@ -3799,7 +3797,6 @@ export default memo(function CanvasGame() {
         ctx.drawImage(sheet, animFrame * frameW, 0, frameW, frameH,
           Math.floor(-drawSize / 2), Math.floor(-drawSize / 2), drawSize, drawSize);
       }
-      ctx.filter = "none";
       ctx.restore();
       return;
     }
