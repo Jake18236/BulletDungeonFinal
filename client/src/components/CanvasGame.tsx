@@ -164,6 +164,8 @@ interface MageLightningParticle {
 interface MageLightningAttack {
   targetX: number;
   targetZ: number;
+  mageX: number;
+  mageZ: number;
   warningTimer: number;
   fireTimer: number;
   fired: boolean;
@@ -1850,6 +1852,8 @@ export default memo(function CanvasGame() {
                   mageLightningRef.current.push({
                     targetX: position.x + (Math.random() - 0.5) * 3,
                     targetZ: position.z + (Math.random() - 0.5) * 3,
+                    mageX: enemy.position.x,
+                    mageZ: enemy.position.z,
                     warningTimer: 0,
                     fireTimer: 0,
                     fired: false,
@@ -2115,10 +2119,10 @@ export default memo(function CanvasGame() {
             atk.particleSpawnTimer = (atk.particleSpawnTimer ?? 0) + delta;
             if (atk.particleSpawnTimer >= 0.06) {
               atk.particleSpawnTimer = 0;
-              const spread = 0.6;
+              const spread = 0.5;
               atk.particles.push({
-                x: atk.targetX + (Math.random() - 0.5) * spread,
-                z: atk.targetZ + (Math.random() - 0.5) * spread,
+                x: atk.mageX + (Math.random() - 0.5) * spread,
+                z: atk.mageZ + (Math.random() - 0.5) * spread,
                 vy: 18 + Math.random() * 14,
                 age: 0,
                 maxAge: 0.55 + Math.random() * 0.25,
@@ -3310,6 +3314,7 @@ export default memo(function CanvasGame() {
         ctx.fill();
         ctx.globalAlpha = 1;
         ctx.restore();
+        
       }
 
       ctx.save();
@@ -3339,7 +3344,7 @@ export default memo(function CanvasGame() {
     const enemyType: EnemySpriteType = getEnemyType(enemy);
     const bodySprite = enemySpritesByType[enemyType];
     const size = bodySprite.size * bodySprite.scale;
-    const facingRight = enemy.position.x <= position.x;
+    const bodyFacingRight = enemy.position.x <= position.x;
 
     ctx.save();
     ctx.translate(screenX, screenY);
@@ -3347,7 +3352,7 @@ export default memo(function CanvasGame() {
 
     if (enemyType === "eyeball") {
       ctx.rotate(enemy.rotationY ?? 0);
-    } else if (!facingRight) {
+    } else if (!bodyFacingRight) {
       ctx.scale(-1, 1);
     }
 
