@@ -767,8 +767,8 @@ explosive_last_round: {
     apply: () => {
       const player = usePlayer.getState();
       usePlayer.setState({
-        visionRange: player.visionRange * 1.4,
-        cameraZoom: (player.cameraZoom || 1) / 1.4,
+        visionRange: player.visionRange * 1.1,
+        cameraZoom: (player.cameraZoom || 1) / 1.1,
       });
     },
   },

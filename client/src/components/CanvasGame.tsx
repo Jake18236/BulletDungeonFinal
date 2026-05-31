@@ -57,6 +57,12 @@ const mageStaticParticleSheet = (() => {
   return img;
 })();
 
+const mageLightningIndicator = (() => {
+  const img = new Image();
+  img.src = "/sprites/mage-lightning-indicator.png";
+  return img;
+})();
+
 const fontWhiteImage = new Image();
 fontWhiteImage.src = "/sprites/font-atlas-white.png";
 
@@ -146,6 +152,15 @@ interface TreeLightningAttack {
   releasedTrees: boolean;
 }
 
+interface MageLightningParticle {
+  x: number; // world x
+  z: number; // world z
+  vy: number; // upward drift in screen px/s
+  age: number;
+  maxAge: number;
+  frame: number;
+}
+
 interface MageLightningAttack {
   targetX: number;
   targetZ: number;
@@ -154,9 +169,14 @@ interface MageLightningAttack {
   fired: boolean;
   frame: number;
   animTimer: number;
+  particles: MageLightningParticle[];
+  particleSpawnTimer: number;
 }
 
 const { addSummon } = useSummons.getState();
+
+// Reusable temp vector to avoid per-frame allocations
+const _tmpVec = new THREE.Vector3();
 
 
 function generateRoomTerrain(): TerrainObstacle[] {
@@ -488,7 +508,7 @@ export default memo(function CanvasGame() {
 
   const footstepSideRef = useRef<1 | -1>(1);
   const playerFacingRef = useRef<1 | -1>(1);
-  const fireSystem = useRef(new FireParticleSystem(15000));
+  const fireSystem = useRef(new FireParticleSystem(3000));
   const fireSprite = useRef<HTMLImageElement>(new Image());
   const fireEmissionThrottleRef = useRef<Record<string, number>>({});
   const spriteReady = useRef(false);
@@ -909,12 +929,6 @@ export default memo(function CanvasGame() {
           playHit();
         });
         fireSystem.current.update();
-
-        // Update fire particle count in store
-        const activeFireParticles = fireSystem.current.particles.filter(
-          (p) => p.active,
-        ).length;
-        useParticles.setState({ fireParticleCount: activeFireParticles });
 
         updateStatusEffects(delta, enemies, (enemyId, damage) => {
           const enemy = enemies.find((e) => e.id === enemyId);
@@ -1778,7 +1792,7 @@ export default memo(function CanvasGame() {
 
             // Apply knockback acceleration
             if (enemy.knockbackAcceleration && enemy.knockbackDuration && enemy.knockbackDuration > 0) {
-              enemy.velocity.add(enemy.knockbackAcceleration.clone().multiplyScalar(delta));
+              enemy.velocity.addScaledVector(enemy.knockbackAcceleration, delta);
               enemy.knockbackDuration -= delta;
               if (enemy.knockbackDuration <= 0) {
                 enemy.knockbackAcceleration = undefined;
@@ -1841,6 +1855,8 @@ export default memo(function CanvasGame() {
                     fired: false,
                     frame: 0,
                     animTimer: 0,
+                    particles: [],
+                    particleSpawnTimer: 0,
                   });
                 }
               }
@@ -1873,7 +1889,7 @@ export default memo(function CanvasGame() {
 
             // Apply knockback acceleration
             if (enemy.knockbackAcceleration && enemy.knockbackDuration && enemy.knockbackDuration > 0) {
-              enemy.velocity.add(enemy.knockbackAcceleration.clone().multiplyScalar(delta));
+              enemy.velocity.addScaledVector(enemy.knockbackAcceleration, delta);
               enemy.knockbackDuration -= delta;
               if (enemy.knockbackDuration <= 0) {
                 enemy.knockbackAcceleration = undefined;
@@ -1945,8 +1961,7 @@ export default memo(function CanvasGame() {
 
           // Apply knockback acceleration on top of movement velocity
           if (enemy.knockbackAcceleration && enemy.knockbackDuration && enemy.knockbackDuration > 0) {
-            const accelToApply = enemy.knockbackAcceleration.clone().multiplyScalar(delta);
-            enemy.velocity.add(accelToApply);
+            enemy.velocity.addScaledVector(enemy.knockbackAcceleration, delta);
             enemy.knockbackDuration -= delta;
             if (enemy.knockbackDuration <= 0) {
               enemy.knockbackAcceleration = undefined;
@@ -1957,7 +1972,7 @@ export default memo(function CanvasGame() {
           // Apply combined velocity
           const velMovedPos = moveWithTerrainSlide(
             enemy.position,
-            enemy.velocity.clone().multiplyScalar(delta),
+            _tmpVec.copy(enemy.velocity).multiplyScalar(delta),
             terrainRef.current,
             enemyCollisionRadius,
           );
@@ -2047,9 +2062,7 @@ export default memo(function CanvasGame() {
           projectile.life -= delta;
           if (projectile.life <= 0) continue;
 
-          projectile.position.add(
-            projectile.velocity.clone().multiplyScalar(delta),
-          );
+          projectile.position.addScaledVector(projectile.velocity, delta);
 
           const toPlayerX = projectile.position.x - position.x;
           const toPlayerZ = projectile.position.z - position.z;
@@ -2097,9 +2110,31 @@ export default memo(function CanvasGame() {
           if (atk.animTimer >= 0.09) { atk.animTimer = 0; atk.frame = (atk.frame + 1) % 4; }
           if (!atk.fired) {
             atk.warningTimer += delta;
-            if (atk.warningTimer >= 2.0) {
+
+            // Spawn floating particles every 0.06s during cast
+            atk.particleSpawnTimer = (atk.particleSpawnTimer ?? 0) + delta;
+            if (atk.particleSpawnTimer >= 0.06) {
+              atk.particleSpawnTimer = 0;
+              const spread = 0.6;
+              atk.particles.push({
+                x: atk.targetX + (Math.random() - 0.5) * spread,
+                z: atk.targetZ + (Math.random() - 0.5) * spread,
+                vy: 18 + Math.random() * 14,
+                age: 0,
+                maxAge: 0.55 + Math.random() * 0.25,
+                frame: Math.floor(Math.random() * 4),
+              });
+            }
+            // Age particles
+            atk.particles = atk.particles.filter(p => {
+              p.age += delta;
+              return p.age < p.maxAge;
+            });
+
+            if (atk.warningTimer >= 1.2) {
               atk.fired = true;
               atk.fireTimer = 0.5;
+              atk.particles = [];
               const tpDx = position.x - atk.targetX;
               const tpDz = position.z - atk.targetZ;
               if (Math.hypot(tpDx, tpDz) <= 2.0 && invincibilityTimer <= 0 && !damagedThisFrameRef.current) {
@@ -2925,38 +2960,35 @@ export default memo(function CanvasGame() {
       const sy = snapToGrid(centerY + ((atk.targetZ - position.z) * 50) / 2);
 
       if (!atk.fired) {
-        const progress = Math.min(1, atk.warningTimer / 2.0);
-        const pulse = 0.5 + Math.sin(atk.warningTimer * Math.PI * 5) * 0.45;
-        const radius = snapToGrid(18 + progress * 18);
+        const progress = Math.min(1, atk.warningTimer / 1.2);
+        const pulse = 0.6 + Math.sin(atk.warningTimer * Math.PI * 6) * 0.4;
 
         ctx.save();
-        ctx.globalAlpha = Math.max(0.25, Math.abs(pulse)) * (0.45 + progress * 0.55);
-        ctx.strokeStyle = "#ff2020";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(sx, sy, radius, 0, Math.PI * 2);
-        ctx.stroke();
+        ctx.imageSmoothingEnabled = false;
 
-        const xSize = snapToGrid(7 + progress * 7);
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(sx - xSize, sy - xSize);
-        ctx.lineTo(sx + xSize, sy + xSize);
-        ctx.moveTo(sx + xSize, sy - xSize);
-        ctx.lineTo(sx - xSize, sy + xSize);
-        ctx.stroke();
-        // ── Static particle effect during cast wind-up (1 row × 4 cols, 8×8 px) ──
+        // ── Pentagram indicator image ──
+        const indImg = mageLightningIndicator;
+        if (indImg.complete && indImg.naturalWidth > 0) {
+          const indSize = snapToGrid(28 + progress * 16);
+          ctx.globalAlpha = Math.max(0.3, pulse) * (0.5 + progress * 0.5);
+          ctx.drawImage(indImg, sx - indSize / 2, sy - indSize / 2, indSize, indSize);
+        }
+
+        // ── Floating static particles rising from cast zone ──
         const sSheet = mageStaticParticleSheet;
         if (sSheet.complete && sSheet.naturalWidth > 0) {
           const sFrameW = sSheet.naturalWidth / 4;
           const sFrameH = sSheet.naturalHeight;
-          const sFrame = atk.frame; // already cycles 0-3 in animTimer loop
-          const sDrawW = sFrameW * 4;
-          const sDrawH = sFrameH * 4;
-          ctx.globalAlpha = 0.55 + progress * 0.45;
-          ctx.imageSmoothingEnabled = false;
-          ctx.drawImage(sSheet, sFrame * sFrameW, 0, sFrameW, sFrameH,
-            sx - sDrawW / 2, sy - sDrawH / 2, sDrawW, sDrawH);
+          const sDrawW = sFrameW * 3;
+          const sDrawH = sFrameH * 3;
+          for (const p of atk.particles) {
+            const t = p.age / p.maxAge;
+            const pScreenX = snapToGrid(centerX + ((p.x - position.x) * 50) / 2);
+            const pScreenY = snapToGrid(sy - p.vy * p.age);
+            ctx.globalAlpha = Math.max(0, 1 - t) * 0.85;
+            ctx.drawImage(sSheet, p.frame * sFrameW, 0, sFrameW, sFrameH,
+              pScreenX - sDrawW / 2, pScreenY - sDrawH / 2, sDrawW, sDrawH);
+          }
         }
 
         ctx.globalAlpha = 1;
@@ -3342,20 +3374,15 @@ export default memo(function CanvasGame() {
     if (enemy.type === "tree") {
       if (enemy.spriteFrame === 0) return;
 
-      const { x: centerX, y: centerY } =
-        cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+      const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
       const screenX = snapToGrid(centerX + ((enemy.x - position.x) * 50) / 2);
       const screenY = snapToGrid(centerY + ((enemy.z - position.z) * 50) / 2);
 
-      if (
-        treeEnemyEyesSprite.complete &&
-        treeEnemyEyesSprite.naturalWidth > 0 &&
-        treeEnemyEyesSprite.naturalHeight > 0
-      ) {
-        const frameW = treeEnemyEyesSprite.naturalWidth / 3;
+      if (treeEnemyEyesSprite.complete && treeEnemyEyesSprite.naturalWidth > 0 && treeEnemyEyesSprite.naturalHeight > 0) {
+        const frameW = treeEnemyEyesSprite.naturalWidth / 2;
         const frameH = treeEnemyEyesSprite.naturalHeight;
         const eyeFrame = enemy.spriteFrame === 1 ? 0 : 1;
-        const radiusPx = enemy.radius * 25;
+        const radiusPx = enemy.radius * (25);
         const scale = 2;
         const drawW = frameW * scale;
         const drawH = frameH * scale;
@@ -3824,7 +3851,7 @@ export default memo(function CanvasGame() {
           projectile.position.z,
           position.x,
           position.z,
-          10,
+          40,
         )
       ) {
         continue;
