@@ -125,6 +125,8 @@ interface ProjectilesState {
   reset: () => void;
 }
 
+let _nextProjectileStoreId = 0;
+
 export const useProjectiles = create<ProjectilesState>((set, get) => ({
   projectiles: [],
 
@@ -151,7 +153,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
     triggerOnHit?: boolean;
   }) => {
     const projectile: Projectile = {
-      id: crypto.randomUUID(),
+      id: String(_nextProjectileStoreId++),
       position: config.position.clone(),
       previousPosition: config.position.clone(),
       velocity: config.direction.clone().normalize().multiplyScalar(config.speed),

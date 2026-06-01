@@ -180,6 +180,20 @@ const { addSummon } = useSummons.getState();
 
 // Reusable temp vector to avoid per-frame allocations
 const _tmpVec = new THREE.Vector3();
+// Lazarus boss update pools
+const _laz1 = new THREE.Vector3(); // dirToPlayer
+const _laz2 = new THREE.Vector3(); // safeDirection
+const _laz3 = new THREE.Vector3(); // orbitDirection
+const _laz4 = new THREE.Vector3(); // moveDirection / lockedDirection / scratch
+const _laz5 = new THREE.Vector3(); // beamDirection
+const _laz6 = new THREE.Vector3(); // beamOrigin / damage position
+const _laz7 = new THREE.Vector3(); // toPlayer
+// Reaper boss update pool
+const _rep1 = new THREE.Vector3(); // targetDir
+// Incrementing IDs for canvas-local effects (avoids crypto.randomUUID GC pressure)
+let _nextImpactId = 0;
+let _nextProjectileId = 0;
+let _nextFootstepId = 0;
 
 
 function generateRoomTerrain(): TerrainObstacle[] {
@@ -807,7 +821,7 @@ export default memo(function CanvasGame() {
       position.z - enemy.position.z,
     ).normalize();
     enemyProjectilesRef.current.push({
-      id: crypto.randomUUID(),
+      id: String(_nextProjectileId++),
       position: enemy.position.clone(),
       velocity: direction.multiplyScalar(
         ENEMY_TYPE_CONFIG.eyeball.projectileSpeed ?? 9,
@@ -1271,7 +1285,7 @@ export default memo(function CanvasGame() {
               moveDir.x,
             ).multiplyScalar(0.35 * side);
             footstepMarksRef.current.push({
-              id: crypto.randomUUID(),
+              id: String(_nextFootstepId++),
               position: bounced.position
                 .clone()
                 .sub(moveDir.clone().multiplyScalar(0.35))
@@ -1315,147 +1329,90 @@ export default memo(function CanvasGame() {
           phase !== "playing",
         );
 
-        const updatedEnemies = enemies.map((enemy) => {
+        for (const enemy of enemies) {
           // BOSS LOGIC
           enemy.hitFlash = Math.max(enemy.hitFlash - delta, 0);
 
           // #########################################################################
           if (enemy.isBoss && enemy.bossType === "lazarus") {
-            const updated = { ...enemy };
-
-            if (
-              !updated.isEnraged &&
-              updated.health < updated.maxHealth * 0.45
-            ) {
-              updated.isEnraged = true;
-              updated.maxProjectileCooldown = 1;
-              updated.maxWindUpTime = 0.8;
-              updated.speed *= 1.15;
+            if (!enemy.isEnraged && enemy.health < enemy.maxHealth * 0.45) {
+              enemy.isEnraged = true;
+              enemy.maxProjectileCooldown = 1;
+              enemy.maxWindUpTime = 0.8;
+              enemy.speed *= 1.15;
             }
 
-            const dirToPlayer = new THREE.Vector3().subVectors(
-              position,
-              updated.position,
-            );
-            const distanceToPlayer = dirToPlayer.length();
-            const safeDirection =
-              distanceToPlayer > 0.001
-                ? dirToPlayer.clone().normalize()
-                : new THREE.Vector3(1, 0, 0);
-            const orbitDirection = new THREE.Vector3(
-              -safeDirection.z,
-              0,
-              safeDirection.x,
-            );
+            _laz1.subVectors(position, enemy.position);
+            const distanceToPlayer = _laz1.length();
+            if (distanceToPlayer > 0.001) {
+              _laz2.copy(_laz1).normalize();
+            } else {
+              _laz2.set(1, 0, 0);
+            }
+            _laz3.set(-_laz2.z, 0, _laz2.x);
 
             const canAdvance = distanceToPlayer > SHOGGOTH_CONFIG.idealDistance;
             const canRetreat = distanceToPlayer < SHOGGOTH_CONFIG.minDistance;
 
-            if (updated.attackState === "chasing") {
-              let moveDirection = new THREE.Vector3();
+            if (enemy.attackState === "chasing") {
+              _laz4.set(0, 0, 0);
               if (canAdvance) {
-                moveDirection.copy(safeDirection);
+                _laz4.copy(_laz2);
               } else if (canRetreat) {
-                moveDirection.copy(safeDirection).multiplyScalar(-0.65);
+                _laz4.copy(_laz2).multiplyScalar(-0.65);
               }
-
-              if (moveDirection.lengthSq() > 0) {
-                updated.position.add(
-                  moveDirection
-                    .normalize()
-                    .multiplyScalar(updated.speed * delta),
-                );
+              if (_laz4.lengthSq() > 0) {
+                enemy.position.addScaledVector(_laz4.normalize(), enemy.speed * delta);
               }
-
-              updated.rotationY = Math.atan2(safeDirection.z, safeDirection.x);
-              updated.projectileCooldown =
-                (updated.projectileCooldown ?? 0) - delta;
-              if (
-                updated.projectileCooldown <= 0 &&
-                distanceToPlayer <= SHOGGOTH_CONFIG.maxDistance
-              ) {
-                updated.attackState = "laser_windup";
-
-                updated.windUpTimer = 0;
-                updated.clawWindUp = 0;
-                updated.clawGlowIntensity = 0;
-                updated.dashDirection = safeDirection.clone();
+              enemy.rotationY = Math.atan2(_laz2.z, _laz2.x);
+              enemy.projectileCooldown = (enemy.projectileCooldown ?? 0) - delta;
+              if (enemy.projectileCooldown <= 0 && distanceToPlayer <= SHOGGOTH_CONFIG.maxDistance) {
+                enemy.attackState = "laser_windup";
+                enemy.windUpTimer = 0;
+                enemy.clawWindUp = 0;
+                enemy.clawGlowIntensity = 0;
+                if (!enemy.dashDirection) enemy.dashDirection = new THREE.Vector3();
+                enemy.dashDirection.copy(_laz2);
               }
-            } else if (updated.attackState === "laser_windup") {
-              updated.windUpTimer = (updated.windUpTimer ?? 0) + delta;
-              const windupProgress = Math.min(
-                updated.windUpTimer / (updated.maxWindUpTime ?? 1),
-                1,
-              );
+            } else if (enemy.attackState === "laser_windup") {
+              enemy.windUpTimer = (enemy.windUpTimer ?? 0) + delta;
+              const windupProgress = Math.min(enemy.windUpTimer / (enemy.maxWindUpTime ?? 1), 1);
               const lockedDirection =
-                updated.dashDirection && updated.dashDirection.lengthSq() > 0
-                  ? updated.dashDirection.clone().normalize()
-                  : safeDirection;
-
-              updated.rotationY = Math.atan2(
-                lockedDirection.z,
-                lockedDirection.x,
-              );
-              updated.clawWindUp = windupProgress;
-              updated.clawGlowIntensity = windupProgress;
-              updated.velocity.multiplyScalar(0.82);
-
-              if (updated.windUpTimer >= (updated.maxWindUpTime ?? 1)) {
-                updated.attackState = "laser_firing";
-
-                updated.windUpTimer = 0;
-                updated.laserBaseRotation =
-                  updated.rotationY ??
-                  Math.atan2(lockedDirection.z, lockedDirection.x);
-                updated.projectileCooldown = SHOGGOTH_CONFIG.beamDamageInterval;
+                enemy.dashDirection && enemy.dashDirection.lengthSq() > 0
+                  ? _laz4.copy(enemy.dashDirection).normalize()
+                  : _laz2;
+              enemy.rotationY = Math.atan2(lockedDirection.z, lockedDirection.x);
+              enemy.clawWindUp = windupProgress;
+              enemy.clawGlowIntensity = windupProgress;
+              enemy.velocity.multiplyScalar(0.82);
+              if (enemy.windUpTimer >= (enemy.maxWindUpTime ?? 1)) {
+                enemy.attackState = "laser_firing";
+                enemy.windUpTimer = 0;
+                enemy.laserBaseRotation = enemy.rotationY ?? Math.atan2(lockedDirection.z, lockedDirection.x);
+                enemy.projectileCooldown = SHOGGOTH_CONFIG.beamDamageInterval;
                 playHit();
               }
-            } else if (updated.attackState === "laser_firing") {
+            } else if (enemy.attackState === "laser_firing") {
               if (phase === "playing")
                 cameraRef.current.shake({ strength: 5, durationMs: 1000 });
-              updated.windUpTimer = (updated.windUpTimer ?? 0) + delta;
+              enemy.windUpTimer = (enemy.windUpTimer ?? 0) + delta;
               const fireDuration = SHOGGOTH_CONFIG.fireDuration;
-              const spinAmount =
-                (updated.windUpTimer ?? 0) * SHOGGOTH_CONFIG.rotationSpeed;
-              const baseRotation =
-                updated.laserBaseRotation ?? updated.rotationY ?? 0;
+              const spinAmount = (enemy.windUpTimer ?? 0) * SHOGGOTH_CONFIG.rotationSpeed;
+              const baseRotation = enemy.laserBaseRotation ?? enemy.rotationY ?? 0;
               const currentRotation = baseRotation + spinAmount;
-              updated.rotationY = currentRotation;
-
-              const circleStrafe = orbitDirection
-                .clone()
-                .multiplyScalar(updated.speed * 0.42 * delta);
-              updated.position.add(circleStrafe);
-
-              updated.projectileCooldown =
-                (updated.projectileCooldown ?? 0) - delta;
-              if (updated.projectileCooldown <= 0) {
-                const beamOriginOffsetWorld =
-                  SHOGGOTH_CONFIG.beamOriginOffsetPx / 25;
+              enemy.rotationY = currentRotation;
+              enemy.position.addScaledVector(_laz3, enemy.speed * 0.42 * delta);
+              enemy.projectileCooldown = (enemy.projectileCooldown ?? 0) - delta;
+              if (enemy.projectileCooldown <= 0) {
+                const beamOriginOffsetWorld = SHOGGOTH_CONFIG.beamOriginOffsetPx / 25;
                 for (const beamOffset of SHOGGOTH_CONFIG.beamAngles) {
                   const beamAngle = currentRotation + beamOffset;
-                  const beamDirection = new THREE.Vector3(
-                    Math.cos(beamAngle),
-                    0,
-                    Math.sin(beamAngle),
-                  );
-                  const beamOrigin = updated.position
-                    .clone()
-                    .add(
-                      beamDirection
-                        .clone()
-                        .multiplyScalar(beamOriginOffsetWorld),
-                    );
-                  const toPlayer = new THREE.Vector3().subVectors(
-                    position,
-                    beamOrigin,
-                  );
-                  const along = toPlayer.dot(beamDirection);
-                  const lateral = toPlayer
-                    .clone()
-                    .sub(beamDirection.clone().multiplyScalar(along))
-                    .length();
-
+                  _laz5.set(Math.cos(beamAngle), 0, Math.sin(beamAngle));
+                  _laz6.copy(enemy.position).addScaledVector(_laz5, beamOriginOffsetWorld);
+                  _laz7.subVectors(position, _laz6);
+                  const along = _laz7.dot(_laz5);
+                  const latSq = _laz7.lengthSq() - along * along;
+                  const lateral = latSq > 0 ? Math.sqrt(latSq) : 0;
                   if (
                     along >= 0.35 &&
                     along <= LAZARUS_BEAM_LENGTH_WORLD &&
@@ -1463,307 +1420,186 @@ export default memo(function CanvasGame() {
                     invincibilityTimer <= 0 &&
                     !damagedThisFrameRef.current
                   ) {
-                    applyPlayerDamage(
-                      beamOrigin
-                        .clone()
-                        .add(
-                          beamDirection
-                            .clone()
-                            .multiplyScalar(
-                              Math.min(along, LAZARUS_BEAM_LENGTH_WORLD),
-                            ),
-                        ),
-                    );
+                    _laz6.addScaledVector(_laz5, Math.min(along, LAZARUS_BEAM_LENGTH_WORLD));
+                    applyPlayerDamage(_laz6);
                     damagedThisFrameRef.current = true;
                   }
                 }
-
-                updated.projectileCooldown = SHOGGOTH_CONFIG.beamDamageInterval;
+                enemy.projectileCooldown = SHOGGOTH_CONFIG.beamDamageInterval;
               }
-
-              if (updated.windUpTimer >= fireDuration) {
-                updated.attackState = "recovering";
-                updated.windUpTimer = updated.isEnraged ? 0.35 : 0.5;
-                updated.projectileCooldown =
-                  updated.maxProjectileCooldown ?? 3.8;
-                updated.laserBaseRotation = updated.rotationY;
+              if (enemy.windUpTimer >= fireDuration) {
+                enemy.attackState = "recovering";
+                enemy.windUpTimer = enemy.isEnraged ? 0.35 : 0.5;
+                enemy.projectileCooldown = enemy.maxProjectileCooldown ?? 3.8;
+                enemy.laserBaseRotation = enemy.rotationY;
               }
-            } else if (updated.attackState === "recovering") {
-              updated.windUpTimer = (updated.windUpTimer ?? 0) - delta;
-              updated.clawGlowIntensity = Math.max(
-                (updated.clawGlowIntensity ?? 0) - delta * 2.8,
-                0,
-              );
-              updated.clawWindUp = Math.max(
-                (updated.clawWindUp ?? 0) - delta * 2.8,
-                0,
-              );
-
-              if (updated.windUpTimer <= 0) {
-                updated.attackState = "chasing";
+            } else if (enemy.attackState === "recovering") {
+              enemy.windUpTimer = (enemy.windUpTimer ?? 0) - delta;
+              enemy.clawGlowIntensity = Math.max((enemy.clawGlowIntensity ?? 0) - delta * 2.8, 0);
+              enemy.clawWindUp = Math.max((enemy.clawWindUp ?? 0) - delta * 2.8, 0);
+              if (enemy.windUpTimer <= 0) {
+                enemy.attackState = "chasing";
               }
             }
 
-            return updated;
+            continue;
           }
 
           // #########################################################################
           // REAPER BOSS LOGIC
           if (enemy.isBoss && enemy.bossType === "reaper") {
-            const updated = { ...enemy };
-
-            const dx = position.x - updated.position.x;
-            const dz = position.z - updated.position.z;
-            const distToPlayer = Math.hypot(dx, dz);
+            const dx = position.x - enemy.position.x;
+            const dz = position.z - enemy.position.z;
+            const distToPlayerSq = dx * dx + dz * dz;
+            const distToPlayer = Math.sqrt(distToPlayerSq);
             const safeDirX = distToPlayer > 0.001 ? dx / distToPlayer : 1;
             const safeDirZ = distToPlayer > 0.001 ? dz / distToPlayer : 0;
 
             // Teleport if too far away
             if (distToPlayer > 130) {
               const ang = Math.random() * Math.PI * 2;
-              updated.position.set(
+              enemy.position.set(
                 position.x + Math.cos(ang) * 15,
                 0,
                 position.z + Math.sin(ang) * 15,
               );
             }
 
-            const rState = updated.reaperState ?? "floating";
+            const rState = enemy.reaperState ?? "floating";
             const IDEAL_DIST = 10;
 
             if (rState === "floating") {
-              // Low-level constant velocity: maintain set distance from player
               const blend = Math.min(1, 2 * delta);
               if (distToPlayer > IDEAL_DIST + 1) {
-                updated.velocity.x += (safeDirX * updated.speed - updated.velocity.x) * blend;
-                updated.velocity.z += (safeDirZ * updated.speed - updated.velocity.z) * blend;
+                enemy.velocity.x += (safeDirX * enemy.speed - enemy.velocity.x) * blend;
+                enemy.velocity.z += (safeDirZ * enemy.speed - enemy.velocity.z) * blend;
               } else if (distToPlayer < IDEAL_DIST - 2) {
-                updated.velocity.x += (-safeDirX * updated.speed * 0.5 - updated.velocity.x) * blend;
-                updated.velocity.z += (-safeDirZ * updated.speed * 0.5 - updated.velocity.z) * blend;
+                enemy.velocity.x += (-safeDirX * enemy.speed * 0.5 - enemy.velocity.x) * blend;
+                enemy.velocity.z += (-safeDirZ * enemy.speed * 0.5 - enemy.velocity.z) * blend;
               } else {
-                // Orbit slowly with perpendicular drift
                 const perpX = -safeDirZ;
                 const perpZ = safeDirX;
-                updated.velocity.x += (perpX * updated.speed * 0.4 - updated.velocity.x) * blend;
-                updated.velocity.z += (perpZ * updated.speed * 0.4 - updated.velocity.z) * blend;
+                enemy.velocity.x += (perpX * enemy.speed * 0.4 - enemy.velocity.x) * blend;
+                enemy.velocity.z += (perpZ * enemy.speed * 0.4 - enemy.velocity.z) * blend;
               }
-              updated.position.x += updated.velocity.x * delta;
-              updated.position.z += updated.velocity.z * delta;
-              updated.rotationY = Math.atan2(safeDirZ, safeDirX);
+              enemy.position.x += enemy.velocity.x * delta;
+              enemy.position.z += enemy.velocity.z * delta;
+              enemy.rotationY = Math.atan2(safeDirZ, safeDirX);
 
-              updated.reaperMoveCooldown = (updated.reaperMoveCooldown ?? 4) - delta;
-              if ((updated.reaperMoveCooldown ?? 0) <= 0) {
-                updated.reaperState = "charging";
-                updated.reaperChargeTimer = 1.0;
-                updated.dashDirection = new THREE.Vector3(safeDirX, 0, safeDirZ);
+              enemy.reaperMoveCooldown = (enemy.reaperMoveCooldown ?? 4) - delta;
+              if ((enemy.reaperMoveCooldown ?? 0) <= 0) {
+                enemy.reaperState = "charging";
+                enemy.reaperChargeTimer = 1.0;
+                if (!enemy.dashDirection) enemy.dashDirection = new THREE.Vector3();
+                enemy.dashDirection.set(safeDirX, 0, safeDirZ);
               }
             } else if (rState === "charging") {
-              // Wind-up: stop and face player, lock direction each frame until release
-              updated.velocity.multiplyScalar(Math.max(0, 1 - 12 * delta));
-              updated.position.x += updated.velocity.x * delta;
-              updated.position.z += updated.velocity.z * delta;
-              updated.rotationY = Math.atan2(safeDirZ, safeDirX);
-              updated.dashDirection = new THREE.Vector3(safeDirX, 0, safeDirZ);
+              enemy.velocity.multiplyScalar(Math.max(0, 1 - 12 * delta));
+              enemy.position.x += enemy.velocity.x * delta;
+              enemy.position.z += enemy.velocity.z * delta;
+              enemy.rotationY = Math.atan2(safeDirZ, safeDirX);
+              if (!enemy.dashDirection) enemy.dashDirection = new THREE.Vector3();
+              enemy.dashDirection.set(safeDirX, 0, safeDirZ);
 
-              updated.reaperChargeTimer = (updated.reaperChargeTimer ?? 1) - delta;
-              if ((updated.reaperChargeTimer ?? 0) <= 0) {
-                const dir = updated.dashDirection!;
-                updated.velocity.set(dir.x * 10, 0, dir.z * 10);
-                updated.reaperState = "dashing";
-                updated.reaperDashTimer = 0;
-                }
-              } else if (rState === "dashing") {
-                const ACCELERATION = 20;
-                const TURN_RATE = 2.8;
-                const DRAG = 0.001;
-                const MAX_SPEED = 48;
-
-                // Desired direction to player
-                const targetDir = new THREE.Vector3(
-                  safeDirX,
-                  0,
-                  safeDirZ
-                );
-
-                if (!updated.dashDirection) {
-                  updated.dashDirection = targetDir.clone();
-                }
-
-                updated.dashDirection.lerp(
-                  targetDir,
-                  TURN_RATE * delta
-                ).normalize();
-
-                updated.velocity.x +=
-                  updated.dashDirection.x *
-                  ACCELERATION *
-                  delta;
-
-                updated.velocity.z +=
-                  updated.dashDirection.z *
-                  ACCELERATION *
-                  delta;
-
-                // Light drag (ice feel)
-                updated.velocity.x *= Math.max(0, 1 - DRAG * delta);
-                updated.velocity.z *= Math.max(0, 1 - DRAG * delta);
-
-                // Clamp speed
-                const speed = Math.hypot(
-                  updated.velocity.x,
-                  updated.velocity.z
-                );
-
-                if (speed > MAX_SPEED) {
-                  const scale = MAX_SPEED / speed;
-                  updated.velocity.x *= scale;
-                  updated.velocity.z *= scale;
-                }
-
-                // Move
-                updated.position.x += updated.velocity.x * delta;
-                updated.position.z += updated.velocity.z * delta;
-
-                // Face movement direction
-                updated.rotationY = Math.atan2(
-                  updated.velocity.z,
-                  updated.velocity.x
-                );
-
-                updated.reaperDashTimer =
-                  (updated.reaperDashTimer ?? 0) + delta;
-
-              updated.reaperPassedPlayer ??= false;
-              if (
-                !updated.reaperPassedPlayer &&
-                distToPlayer < 4
-              ) {
-                updated.reaperPassedPlayer = true;
+              enemy.reaperChargeTimer = (enemy.reaperChargeTimer ?? 1) - delta;
+              if ((enemy.reaperChargeTimer ?? 0) <= 0) {
+                const dir = enemy.dashDirection!;
+                enemy.velocity.set(dir.x * 10, 0, dir.z * 10);
+                enemy.reaperState = "dashing";
+                enemy.reaperDashTimer = 0;
               }
-                // End dash
-              if ((updated.reaperDashTimer ?? 0) > 3.4 || updated.reaperPassedPlayer === true) {
-                updated.reaperState = "summoning";
-                updated.reaperSummonTimer = 0;
-                updated.reaperSummonWave = 0;
+            } else if (rState === "dashing") {
+              const ACCELERATION = 20;
+              const TURN_RATE = 2.8;
+              const DRAG = 0.001;
+              const MAX_SPEED = 48;
+
+              _rep1.set(safeDirX, 0, safeDirZ);
+              if (!enemy.dashDirection) enemy.dashDirection = new THREE.Vector3().copy(_rep1);
+              enemy.dashDirection.lerp(_rep1, TURN_RATE * delta).normalize();
+
+              enemy.velocity.x += enemy.dashDirection.x * ACCELERATION * delta;
+              enemy.velocity.z += enemy.dashDirection.z * ACCELERATION * delta;
+
+              enemy.velocity.x *= Math.max(0, 1 - DRAG * delta);
+              enemy.velocity.z *= Math.max(0, 1 - DRAG * delta);
+
+              const speedSq = enemy.velocity.x * enemy.velocity.x + enemy.velocity.z * enemy.velocity.z;
+              if (speedSq > MAX_SPEED * MAX_SPEED) {
+                const scale = MAX_SPEED / Math.sqrt(speedSq);
+                enemy.velocity.x *= scale;
+                enemy.velocity.z *= scale;
+              }
+
+              enemy.position.x += enemy.velocity.x * delta;
+              enemy.position.z += enemy.velocity.z * delta;
+              enemy.rotationY = Math.atan2(enemy.velocity.z, enemy.velocity.x);
+              enemy.reaperDashTimer = (enemy.reaperDashTimer ?? 0) + delta;
+
+              enemy.reaperPassedPlayer ??= false;
+              if (!enemy.reaperPassedPlayer && distToPlayer < 4) {
+                enemy.reaperPassedPlayer = true;
+              }
+              if ((enemy.reaperDashTimer ?? 0) > 3.4 || enemy.reaperPassedPlayer === true) {
+                enemy.reaperState = "summoning";
+                enemy.reaperSummonTimer = 0;
+                enemy.reaperSummonWave = 0;
               }
             } else if (rState === "summoning") {
-              updated.reaperSummonTimer =
-                (updated.reaperSummonTimer ?? 0) + delta;
-
-              const t = updated.reaperSummonTimer ?? 0;
-
-              // Keep drifting while summoning
+              enemy.reaperSummonTimer = (enemy.reaperSummonTimer ?? 0) + delta;
+              const t = enemy.reaperSummonTimer ?? 0;
               const DRAG = 0.01;
+              enemy.velocity.x *= Math.max(0, 1 - DRAG * delta);
+              enemy.velocity.z *= Math.max(0, 1 - DRAG * delta);
+              enemy.position.x += enemy.velocity.x * delta;
+              enemy.position.z += enemy.velocity.z * delta;
 
-              updated.velocity.x *= Math.max(
-                0,
-                1 - DRAG * delta
-              );
-              updated.velocity.z *= Math.max(
-                0,
-                1 - DRAG * delta
-              );
-
-              updated.position.x +=
-                updated.velocity.x * delta;
-
-              updated.position.z +=
-                updated.velocity.z * delta;
-
-              // Face movement direction while sliding
-              const speed = Math.hypot(
-                updated.velocity.x,
-                updated.velocity.z
-              );
-
-              if (speed > 0.1) {
-                updated.rotationY = Math.atan2(
-                  updated.velocity.z,
-                  updated.velocity.x
-                );
+              if (enemy.velocity.x * enemy.velocity.x + enemy.velocity.z * enemy.velocity.z > 0.01) {
+                enemy.rotationY = Math.atan2(enemy.velocity.z, enemy.velocity.x);
               }
 
               const sc = useEnemies.getState().spawnCrow;
 
-              // Wave 1
-              if (
-                (updated.reaperSummonWave ?? 0) === 0 &&
-                t >= 0.3
-              ) {
-                updated.reaperSummonWave = 1;
-
+              if ((enemy.reaperSummonWave ?? 0) === 0 && t >= 0.3) {
+                enemy.reaperSummonWave = 1;
                 for (let ci = 0; ci < 3; ci++) {
                   const ang = (ci / 3) * Math.PI * 2;
-
                   sc(
-                    new THREE.Vector3(
-                      updated.position.x +
-                        Math.cos(ang) * 2,
-                      0,
-                      updated.position.z +
-                        Math.sin(ang) * 2
-                    ),
-                    new THREE.Vector3(
-                      Math.cos(ang) * 5,
-                      0,
-                      Math.sin(ang) * 4
-                    )
+                    new THREE.Vector3(enemy.position.x + Math.cos(ang) * 2, 0, enemy.position.z + Math.sin(ang) * 2),
+                    new THREE.Vector3(Math.cos(ang) * 5, 0, Math.sin(ang) * 4)
                   );
                 }
               }
 
-              // Wave 2
-              if (
-                (updated.reaperSummonWave ?? 0) === 1 &&
-                t >= 0.65
-              ) {
-                updated.reaperSummonWave = 2;
-
+              if ((enemy.reaperSummonWave ?? 0) === 1 && t >= 0.65) {
+                enemy.reaperSummonWave = 2;
                 for (let ci = 0; ci < 3; ci++) {
-                  const ang =
-                    (ci / 3) * Math.PI * 2 +
-                    Math.PI / 3;
-
+                  const ang = (ci / 3) * Math.PI * 2 + Math.PI / 3;
                   sc(
-                    new THREE.Vector3(
-                      updated.position.x +
-                        Math.cos(ang) * 2,
-                      0,
-                      updated.position.z +
-                        Math.sin(ang) * 2
-                    ),
-                    new THREE.Vector3(
-                      Math.cos(ang) * 6,
-                      0,
-                      Math.sin(ang) * 5
-                    )
+                    new THREE.Vector3(enemy.position.x + Math.cos(ang) * 2, 0, enemy.position.z + Math.sin(ang) * 2),
+                    new THREE.Vector3(Math.cos(ang) * 6, 0, Math.sin(ang) * 5)
                   );
                 }
               }
 
-              // Finish summon
               if (t >= 0.9) {
-                updated.reaperState = "floating";
-                updated.reaperMoveCooldown =
-                  2 + Math.random() * 1.5;
+                enemy.reaperState = "floating";
+                enemy.reaperMoveCooldown = 2 + Math.random() * 1.5;
               }
-            }
-            
-            else if (rState === "gliding") {
-              // Friction-damped glide back to float
+            } else if (rState === "gliding") {
               const DRAG = 0.04;
-              updated.velocity.x *= Math.max(0, 1 - DRAG * delta);
-              updated.velocity.z *= Math.max(0, 1 - DRAG * delta);
-              updated.position.x += updated.velocity.x * delta;
-              updated.position.z += updated.velocity.z * delta;
-              const spd = Math.hypot(updated.velocity.x, updated.velocity.z);
-              if (spd < 0.5) {
-                updated.reaperState = "floating";
-                updated.reaperMoveCooldown = 4.0 + Math.random() * 2;
+              enemy.velocity.x *= Math.max(0, 1 - DRAG * delta);
+              enemy.velocity.z *= Math.max(0, 1 - DRAG * delta);
+              enemy.position.x += enemy.velocity.x * delta;
+              enemy.position.z += enemy.velocity.z * delta;
+              const spdSq = enemy.velocity.x * enemy.velocity.x + enemy.velocity.z * enemy.velocity.z;
+              if (spdSq < 0.25) {
+                enemy.reaperState = "floating";
+                enemy.reaperMoveCooldown = 4.0 + Math.random() * 2;
               }
             }
 
-            return updated;
+            continue;
           }
 
           // CROW ENEMY LOGIC
@@ -1781,10 +1617,15 @@ export default memo(function CanvasGame() {
             if (dist > 0.5) {
               enemy.rotationY = Math.atan2(dz, dx);
               const blend = Math.min(1, 14 * delta);
-              enemy.velocity.x += ((dx / dist) * enemy.speed - enemy.velocity.x) * blend + Math.random();
-              enemy.velocity.z += ((dz / dist) * enemy.speed - enemy.velocity.z) * blend + Math.random();
-              const vs = Math.hypot(enemy.velocity.x, enemy.velocity.z);
-              if (vs > enemy.speed) {
+              const crowSeed = parseInt(enemy.id, 10) || 0;
+              const t = gameplayElapsedMsRef.current * 0.001;
+              const wobbleX = Math.sin(crowSeed * 2.618 + t * 8.3) * 0.5;
+              const wobbleZ = Math.cos(crowSeed * 1.414 + t * 6.7) * 0.5;
+              enemy.velocity.x += ((dx / dist) * enemy.speed - enemy.velocity.x) * blend + wobbleX;
+              enemy.velocity.z += ((dz / dist) * enemy.speed - enemy.velocity.z) * blend + wobbleZ;
+              const vsSq = enemy.velocity.x * enemy.velocity.x + enemy.velocity.z * enemy.velocity.z;
+              if (vsSq > enemy.speed * enemy.speed) {
+                const vs = Math.sqrt(vsSq);
                 enemy.velocity.x = (enemy.velocity.x / vs) * enemy.speed;
                 enemy.velocity.z = (enemy.velocity.z / vs) * enemy.speed;
               }
@@ -1805,8 +1646,8 @@ export default memo(function CanvasGame() {
 
             enemy.position.x += enemy.velocity.x * delta;
             enemy.position.z += enemy.velocity.z * delta;
-            enemy.velocity.multiplyScalar(Math.pow(0.92, delta * 60 + Math.random()));
-            return enemy;
+            enemy.velocity.multiplyScalar(Math.pow(0.92, delta * 60));
+            continue;
           }
 
           // MAGE ENEMY LOGIC
@@ -1837,12 +1678,13 @@ export default memo(function CanvasGame() {
                 let lightningW = 0.6;
                 let healW = 0.4;
                 if (enemy.health < enemy.maxHealth * 0.6) healW += 0.35;
-                const nearbyHurt = enemies.filter(e => {
-                  if (e.id === enemy.id || e.type === "crow") return false;
+                let nearbyHurt = 0;
+                for (const e of enemies) {
+                  if (e.id === enemy.id || e.type === "crow") continue;
                   const ex = e.position.x - enemy.position.x;
                   const ez = e.position.z - enemy.position.z;
-                  return Math.sqrt(ex * ex + ez * ez) < 10 && e.health < e.maxHealth * 0.7;
-                }).length;
+                  if ((ex * ex + ez * ez) < 100 && e.health < e.maxHealth * 0.7) nearbyHurt++;
+                }
                 healW += nearbyHurt * 0.15;
 
                 enemy.mageAction = healW > lightningW ? "heal" : "lightning";
@@ -1876,7 +1718,7 @@ export default memo(function CanvasGame() {
                     if (ally.id === enemy.id) continue;
                     const ax = ally.position.x - enemy.position.x;
                     const az = ally.position.z - enemy.position.z;
-                    if (Math.sqrt(ax * ax + az * az) < 9) {
+                    if ((ax * ax + az * az) < 81) {
                       ally.health = Math.min(ally.maxHealth, ally.health + ally.maxHealth * 0.2);
                     }
                   }
@@ -1906,7 +1748,7 @@ export default memo(function CanvasGame() {
             enemy.position.x += enemy.velocity.x * delta;
             enemy.position.z += enemy.velocity.z * delta;
             enemy.velocity.multiplyScalar(Math.pow(0.92, delta * 60));
-            return enemy;
+            continue;
           }
 
           if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
@@ -1957,9 +1799,9 @@ export default memo(function CanvasGame() {
           }
 
           // Cap velocity at enemy speed (before knockback)
-          const vspd = Math.hypot(enemy.velocity.x, enemy.velocity.z);
-          if (vspd > enemy.speed) {
-            const scale = enemy.speed / vspd;
+          const vspdSq = enemy.velocity.x * enemy.velocity.x + enemy.velocity.z * enemy.velocity.z;
+          if (vspdSq > enemy.speed * enemy.speed) {
+            const scale = enemy.speed / Math.sqrt(vspdSq);
             enemy.velocity.x *= scale;
             enemy.velocity.z *= scale;
           }
@@ -1990,28 +1832,35 @@ export default memo(function CanvasGame() {
 
           // Velocity dampening
           enemy.velocity.multiplyScalar(Math.pow(0.92, delta * 60));
-          return enemy;
-        });
+        }
+
+        const updatedEnemies = enemies;
 
         const MAX_SEP_DIST = 7.5;
+        const PLAYER_CULL_SQ = 12100; // 110^2 — skip separation for off-screen enemies
         for (let i = 0; i < updatedEnemies.length; i++) {
           const e1 = updatedEnemies[i];
           // Reaper boss skips all enemy-enemy collisions
           if (e1.isBoss && e1.bossType === "reaper") continue;
+          // Broad-phase: skip outer enemy if far from player
+          const e1px = e1.position.x - position.x;
+          const e1pz = e1.position.z - position.z;
+          if (e1px * e1px + e1pz * e1pz > PLAYER_CULL_SQ) continue;
           const isCrow1 = e1.type === "crow";
           for (let j = i + 1; j < updatedEnemies.length; j++) {
             const e2 = updatedEnemies[j];
             if (e2.isBoss && e2.bossType === "reaper") continue;
             // Crows only collide with other crows
             if (isCrow1 !== (e2.type === "crow")) continue;
-            // Axis-aligned early exit (avoids expensive hypot for most pairs)
+            // Axis-aligned early exit (avoids expensive sqrt for most pairs)
             const dx = e1.position.x - e2.position.x;
             if (dx > MAX_SEP_DIST || dx < -MAX_SEP_DIST) continue;
             const dz = e1.position.z - e2.position.z;
             if (dz > MAX_SEP_DIST || dz < -MAX_SEP_DIST) continue;
-            const dist = Math.hypot(dx, dz);
             const minDist = getEnemyCollisionRadius(e1) + getEnemyCollisionRadius(e2);
-            if (dist > 0 && dist < minDist) {
+            const distSq = dx * dx + dz * dz;
+            if (distSq > 0 && distSq < minDist * minDist) {
+              const dist = Math.sqrt(distSq);
               const push = (minDist - dist) / 8;
               const nx = dx / dist;
               const nz = dz / dist;
@@ -2125,14 +1974,16 @@ export default memo(function CanvasGame() {
                 frame: 0,
               });
             }
-            // Age particles — also advance vertical offset for rising effect
-            atk.particles = atk.particles.filter(p => {
+            // Age particles — write-index compaction avoids filter() allocation
+            let _pWrite = 0;
+            for (let _pi = 0; _pi < atk.particles.length; _pi++) {
+              const p = atk.particles[_pi];
               p.age += delta;
               p.vy += delta * 1.4;
               p.vx += (Math.random() - 0.5) * 0.1;
-              
-              return p.age < p.maxAge;
-            });
+              if (p.age < p.maxAge) atk.particles[_pWrite++] = p;
+            }
+            atk.particles.length = _pWrite;
 
             if (atk.warningTimer >= 1.2) {
               atk.fired = true;
@@ -2309,6 +2160,7 @@ export default memo(function CanvasGame() {
 
   function handleEnemyDeath(enemy: Enemy) {
     const ps = usePlayer.getState();
+    removeEnemy(enemy.id);
 
     // Boss explosion on death
     if (enemy.isBoss) {
@@ -2327,20 +2179,20 @@ export default memo(function CanvasGame() {
 
     if (enemy.type === "crow") {
       crowDeathAnimationsRef.current.push({
-        id: crypto.randomUUID(),
+        id: String(_nextImpactId++),
         position: enemy.position.clone(),
         startedAt: gameplayElapsedMsRef.current,
         frameDurationMs: 90,
       });
     } else {
       enemyDeathAnimationsRef.current.push({
-        id: crypto.randomUUID(),
+        id: String(_nextImpactId++),
         position: enemy.position.clone(),
         startedAt: gameplayElapsedMsRef.current,
         frameDurationMs: 85,
       });
     }
-    removeEnemy(enemy.id);
+    
 
     if (ps.splinterBullets) {
       const stats = ps.getProjectileStats();
@@ -3133,7 +2985,7 @@ export default memo(function CanvasGame() {
         fontWhiteImage,
         {
           align: "center",
-          scale: dmg.scale, // IMPORTANT: use integers
+          scale: dmg.scale, 
         },
       );
     });
@@ -3305,7 +3157,6 @@ export default memo(function CanvasGame() {
       return;
     }
 
-    // Reaper boss is rendered via drawEnemyEyes
     if (enemy.isBoss && enemy.bossType === "reaper") {
       return;
     }
@@ -3779,7 +3630,6 @@ export default memo(function CanvasGame() {
         ctx.restore();
       }
 
-      // Health bar
       const barW = 120;
       const barH = 9;
       const barY = snapToGrid(screenY - drawSize / 2 - 24);

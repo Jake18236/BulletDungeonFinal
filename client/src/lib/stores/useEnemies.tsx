@@ -165,7 +165,10 @@ export const useEnemies = create<EnemiesState>((set, get) => {
     const [minutes, seconds] = time.split(":").map((part) => Number(part));
     return minutes * 60 + seconds;
   };
-
+  let nextEnemyId = 0;
+  let nextPopupId = 0;
+  let nextOrbId = 0;
+  
   const createSession = (
     id: string,
     enemy: SpawnSessionEnemyType,
@@ -238,7 +241,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
   enemy.health -= dmg;
 
   const newPopup = {
-    id: crypto.randomUUID(),
+    id: String(nextPopupId++),
     x: enemy.position.x,
     y: enemy.position.z,
     value: dmg,
@@ -264,7 +267,7 @@ addXPOrb: (position, value) => {
     }
 
     orbs.push({
-      id: Math.random().toString(36).substring(2, 11),
+      id: String(nextOrbId++),
       position: position.clone(),
       value,
       velocity: new THREE.Vector3(
@@ -311,9 +314,9 @@ addXPOrb: (position, value) => {
             if (!orb.magnetized) {
               // First frame entering magnet range: kick outward
               orb.magnetized = true;
-              orb.kickTimer = 0.18;
-              orb.velocity.x = -(dx / mag) * 7;
-              orb.velocity.z = -(dz / mag) * 7;
+              orb.kickTimer = 0.08;
+              orb.velocity.x = -(dx / mag) * 15;
+              orb.velocity.z = -(dz / mag) * 15;
             } else if (orb.kickTimer > 0) {
               // Kick phase: decelerate
               orb.kickTimer -= delta;
@@ -372,7 +375,7 @@ updateDamagePopups: (delta) => {
 },
 
     addEnemy: (enemyData) => {
-      const MAX_ENEMIES = 1000;
+      const MAX_ENEMIES = 500;
 
       set(state => {
         if (state.enemies.length >= MAX_ENEMIES) {
@@ -416,7 +419,7 @@ updateDamagePopups: (delta) => {
         const defaultPosition = new THREE.Vector3(0, 0, 0);
 
         const enemy: Enemy = {
-          id: Math.random().toString(36),
+          id: String(nextEnemyId++),
           position: enemyData.position ?? defaultPosition,
           health: enemyData.health ?? baseStats.health!,
           maxHealth: enemyData.maxHealth ?? baseStats.maxHealth!,
@@ -429,12 +432,32 @@ updateDamagePopups: (delta) => {
           ...enemyData,
         };
 
-        return { enemies: [...state.enemies, enemy] };
+        set(state => {
+          if (state.enemies.length >= MAX_ENEMIES) {
+            return {};
+          }
+
+          state.enemies.push(enemy);
+
+          return {
+            enemies: state.enemies,
+          };
+        });
       });
     },
 
     removeEnemy: (id) =>
-      set((state) => ({ enemies: state.enemies.filter((e) => e.id !== id) })),
+      set(state => {
+        const enemies = state.enemies;
+        const idx = enemies.findIndex(e => e.id === id);
+
+        if (idx === -1) return {};
+
+        enemies[idx] = enemies[enemies.length - 1];
+        enemies.pop();
+
+        return { enemies };
+      }),
 
     spawnLazarusBoss: (position) => {
       const boss: Enemy = {
@@ -499,7 +522,7 @@ updateDamagePopups: (delta) => {
 
     spawnCrow: (position, impulse?: THREE.Vector3) => {
       const crow: Enemy = {
-        id: "crow_" + Date.now() + "_" + Math.random().toString(36).slice(2),
+        id: String(nextEnemyId++),
         position: position.clone(),
         health: 5,
         maxHealth: 18,
@@ -514,7 +537,7 @@ updateDamagePopups: (delta) => {
 
     spawnTree: (position) => {
       const tree: Enemy = {
-        id: "tree_" + Date.now() + "_" + Math.random().toString(36).slice(2),
+        id: String(nextEnemyId++),
         position: position.clone(),
         health: 10000,
         maxHealth: 10000,

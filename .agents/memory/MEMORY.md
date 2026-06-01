@@ -1,0 +1,1 @@
+- [Enemy loop perf](enemy-loop-perf.md) — map→for+in-place mutation, pooled Vec3 (_laz1-7, _rep1), squared-dist guards, write-index compaction for particles, incrementing IDs everywhere.
