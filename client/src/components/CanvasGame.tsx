@@ -156,6 +156,7 @@ interface MageLightningParticle {
   x: number; // world x
   z: number; // world z
   vy: number; // upward drift in screen px/s
+  vx: number;
   age: number;
   maxAge: number;
   frame: number;
@@ -192,9 +193,9 @@ function generateRoomTerrain(): TerrainObstacle[] {
 
   const radialBands = [
     { radius: 30, count: 10 },
-    { radius: 58, count: 10 },
-    { radius: 88, count: 0 },
-    { radius: 130, count: 0 },
+    { radius: 58, count: 30 },
+    { radius: 88, count: 60 },
+    { radius: 130, count: 100 },
   ];
 
   radialBands.forEach((band, bandIndex) => {
@@ -2111,15 +2112,16 @@ export default memo(function CanvasGame() {
 
             // Spawn floating particles every 0.06s during cast
             atk.particleSpawnTimer = (atk.particleSpawnTimer ?? 0) + delta;
-            if (atk.particleSpawnTimer >= 0.06) {
+            if (atk.particleSpawnTimer >= 0.001) {
               atk.particleSpawnTimer = 0;
               const spread = 1;
               atk.particles.push({
                 x: atk.mageX + (Math.random() - 0.5) * spread,
-                z: atk.mageZ + (Math.random()) * 3,
+                z: atk.mageZ - (Math.random() - 0.5) * 2,
+                vx: 0,
                 vy: 0,
                 age: 0,
-                maxAge: 0.55 + Math.random() * 0.25,
+                maxAge: 0.35,
                 frame: 0,
               });
             }
@@ -2127,6 +2129,8 @@ export default memo(function CanvasGame() {
             atk.particles = atk.particles.filter(p => {
               p.age += delta;
               p.vy += delta * 1.4;
+              p.vx += (Math.random() - 0.5) * 0.1;
+              
               return p.age < p.maxAge;
             });
 
@@ -2983,31 +2987,60 @@ export default memo(function CanvasGame() {
         // ── Pentagram indicator image (spins) ──
         const indImg = mageLightningIndicator;
         if (indImg.complete && indImg.naturalWidth > 0) {
-          const indSize = snapToGrid(56 + progress * 16);
+          const indSize = snapToGrid(56);
           ctx.save();
           ctx.translate(sx, sy);
-          ctx.rotate(atk.warningTimer * 2.8);
-          ctx.globalAlpha = Math.max(0.9, pulse) * (0.5 + progress * 0.5);
+          ctx.rotate(atk.warningTimer * 10.8);
+          ctx.globalAlpha = Math.max(0.5, pulse) * (0.5 + progress * 0.5);
           ctx.drawImage(indImg, -indSize / 2, -indSize / 2, indSize, indSize);
           ctx.restore();
         }
 
         // ── Floating static particles rising from mage ──
-        const sSheet = mageStaticParticleSheet;
-        if (sSheet.complete && sSheet.naturalWidth > 0) {
-          const sFrameW = sSheet.naturalWidth / 4;
-          const sFrameH = sSheet.naturalHeight;
-          const sDrawW = sFrameW;
-          const sDrawH = sFrameH;
-          for (const p of atk.particles) {
-            const fade = 1 - p.age / p.maxAge;
-            const pScreenX = snapToGrid(centerX + ((p.x - position.x) * 50) / 2);
-            const pScreenY = snapToGrid(centerY + ((p.z - p.vy - position.z) * 50) / 2);
-            ctx.globalAlpha = fade * 0.9;
-            ctx.drawImage(sSheet, p.frame * sFrameW, 0, sFrameW, sFrameH,
-              pScreenX - sDrawW / 2, pScreenY - sDrawH / 2, sDrawW, sDrawH);
-          }
-        }
+  const sSheet = mageStaticParticleSheet;
+
+  if (sSheet.complete && sSheet.naturalWidth > 0) {
+    const totalFrames = 4;
+    const sFrameW = sSheet.naturalWidth / totalFrames;
+    const sFrameH = sSheet.naturalHeight;
+    const sDrawW = sFrameW * 2;
+    const sDrawH = sFrameH * 2;
+
+    for (const p of atk.particles) {
+
+
+      // Animate frame based on lifetime progression
+      const progress = p.age / p.maxAge;
+      const frame = Math.min(
+        Math.floor(progress * totalFrames),
+        totalFrames - 1
+      );
+
+      const pScreenX = snapToGrid(
+        centerX + ((p.x - p.vx - position.x) * 50) / 2
+      );
+
+      const pScreenY = snapToGrid(
+        centerY + ((p.z - p.vy - position.z) * 50) / 2
+      );
+
+
+
+      ctx.drawImage(
+        sSheet,
+        frame * sFrameW,
+        0,
+        sFrameW,
+        sFrameH,
+        pScreenX - sDrawW / 2,
+        pScreenY - sDrawH / 2,
+        sDrawW,
+        sDrawH
+      );
+    }
+
+    ctx.globalAlpha = 1;
+  }
 
         ctx.globalAlpha = 1;
         ctx.restore();
@@ -3042,8 +3075,8 @@ export default memo(function CanvasGame() {
 
           ctx.translate(sx, sy);
 
-          const drawW = frameW * 2;
-          const drawH = frameH * 2;
+          const drawW = frameW * 3;
+          const drawH = frameH * 3;
 
           ctx.drawImage(
             lSheet,
@@ -3063,7 +3096,7 @@ export default memo(function CanvasGame() {
         ctx.fillStyle = "#fd5161";
 
         ctx.beginPath();
-        ctx.arc(sx, sy, 14, 0, Math.PI * 2);
+        ctx.arc(sx, sy, 14, 0, Math.PI * 4);
         ctx.fill();
 
         ctx.restore();
@@ -3311,9 +3344,7 @@ export default memo(function CanvasGame() {
         ctx.translate(screenX, screenY);
         ctx.globalAlpha = 0.35 + Math.sin(performance.now() / 80) * 0.15;
         ctx.fillStyle = action === "heal" ? "#44ff88" : "#ff3333";
-        ctx.beginPath();
-        ctx.arc(0, 0, 28, 0, Math.PI * 2);
-        ctx.fill();
+        
         ctx.globalAlpha = 1;
         ctx.restore();
         
