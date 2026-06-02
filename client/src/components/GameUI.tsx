@@ -66,9 +66,6 @@ export function LevelUpScreen() {
     (window.innerHeight - CANVAS_HEIGHT) / 2 +
     CANVAS_HEIGHT / 2;
 
-  /* -------------------------
-     RESET ON OPEN
-  ------------------------- */
   useEffect(() => {
     if (!showLevelUpScreen) return;
 
@@ -113,9 +110,7 @@ export function LevelUpScreen() {
     );
   }, [animationPhase]);
 
-  /* -------------------------
-     DESCRIPTION RENDER
-  ------------------------- */
+  
   useEffect(() => {
     if (animationPhase !== "ready") return;
     if (!displayedUpgrade) return;
