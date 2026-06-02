@@ -14,15 +14,10 @@ export interface Upgrade {
   description: string;
   icon: number;
   category: string;
-  tier: number;
   requires?: string[];
   apply: () => void;
 }
 
-export interface SpriteIcon {
-  normal: string;
-  selected: string;
-}
 
 // ============================================================================
 // PLAYER STATE INTERFACE
@@ -57,7 +52,7 @@ interface PlayerState {
   baseProjectileRange: number;
   projectileSize: number;
   projectileCount: number;
-  life: number,
+  life: number;
   homing: boolean;
   incendiary: boolean;
   piercing: number;
@@ -94,7 +89,6 @@ interface PlayerState {
 
   // Burn effects
   burnDurationMultiplier: number;
-
 
   muzzleFlashTimer: number;
   muzzleFlashPosition: THREE.Vector3 | null;
@@ -166,7 +160,10 @@ interface PlayerState {
   updateDash: (delta: number) => void;
 
   // Actions - Damage feedback
-  triggerDamageFlash: (position: THREE.Vector3, knockback: THREE.Vector3) => void;
+  triggerDamageFlash: (
+    position: THREE.Vector3,
+    knockback: THREE.Vector3,
+  ) => void;
   updateDamageFlash: (delta: number) => void;
 
   // Actions - Regeneration
@@ -220,138 +217,135 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
   },
 
   regeneration: {
-  id: "regeneration",
-  name: "Regeneration",
-  description: "Heal 1 HP every 50 seconds",
-  icon: 28,
-  category: "buff",
-  tier: 3,
-  requires: ["fleet_footed"],
-  apply: () => {
-    usePlayer.setState({
-      regeneration: true,
-      regenerationInterval: 50,
-    });
+    id: "regeneration",
+    name: "Regeneration",
+    description: "Heal 1 HP every 50 seconds",
+    icon: 28,
+    category: "buff",
+    tier: 3,
+    requires: ["fleet_footed"],
+    apply: () => {
+      usePlayer.setState({
+        regeneration: true,
+        regenerationInterval: 50,
+      });
+    },
   },
-},
 
   wildfire: {
-  id: "wildfire",
-  name: "Wildfire",
-  description:
-    "Summons inflict Burn. Burn duration +100%",
-  icon: 42,
-  category: "summon",
-  tier: 3,
-  requires: ["ghost_wizard", "electro_mastery"],
-  apply: () => {
-    usePlayer.setState({
-      burnDurationMultiplier: 2,
-    });
+    id: "wildfire",
+    name: "Wildfire",
+    description: "Summons inflict Burn. Burn duration +100%",
+    icon: 42,
+    category: "summon",
+    tier: 3,
+    requires: ["ghost_wizard", "electro_mastery"],
+    apply: () => {
+      usePlayer.setState({
+        burnDurationMultiplier: 2,
+      });
 
-    useSummons.setState({
-      summonBurn: true, // Enable burn effect on summons
-    });
+      useSummons.setState({
+        summonBurn: true, // Enable burn effect on summons
+      });
+    },
   },
-},
 
   master_summoner: {
-  id: "master_summoner",
-  name: "Master Summoner",
-  description:
-    "Summon Attack Speed +50%, Bullet Damage -25%",
-  icon: 4,
-  category: "summon",
-  tier: 4,
-  requires: ["wildfire", "blade_dance"],
-  apply: () => {
-    const player = usePlayer.getState();
+    id: "master_summoner",
+    name: "Master Summoner",
+    description: "Summon Attack Speed +50%, Bullet Damage -25%",
+    icon: 4,
+    category: "summon",
+    tier: 4,
+    requires: ["wildfire", "blade_dance"],
+    apply: () => {
+      const player = usePlayer.getState();
 
-    usePlayer.setState({
-      baseDamage: player.baseDamage * 0.75,
-    });
+      usePlayer.setState({
+        baseDamage: player.baseDamage * 0.75,
+      });
 
-    useSummons.setState({
-      summonAttackSpeedMultiplier:
-        (useSummons.getState().summonAttackSpeedMultiplier || 1) * 1.5,
-    });
+      useSummons.setState({
+        summonAttackSpeedMultiplier:
+          (useSummons.getState().summonAttackSpeedMultiplier || 1) * 1.5,
+      });
+    },
   },
-},
 
   sharpened_edge: {
-  id: "sharpened_edge",
-  name: "Sharpen",
-  description: "All Summon Damage +40%",
-  icon: 53,
-  category: "summon",
-  tier: 2,
-  requires: ["magic_dagger"],
-  apply: () => {
-    useSummons.setState({
-      summonDamageMultiplier:
-        (useSummons.getState().summonDamageMultiplier || 1) * 1.4,
-    });
+    id: "sharpened_edge",
+    name: "Sharpen",
+    description: "All Summon Damage +40%",
+    icon: 53,
+    category: "summon",
+    tier: 2,
+    requires: ["magic_dagger"],
+    apply: () => {
+      useSummons.setState({
+        summonDamageMultiplier:
+          (useSummons.getState().summonDamageMultiplier || 1) * 1.4,
+      });
+    },
   },
-},
 
   blade_dance: {
-  id: "blade_dance",
-  name: "Blade Dance",
-  description: "Summon 2 additional Daggers",
-  icon: 54,
-  category: "summon",
-  tier: 3,
-  requires: ["sharpened_edge"],
-  apply: () => {
-    const { addSummon } = useSummons.getState();
+    id: "blade_dance",
+    name: "Blade Dance",
+    description: "Summon 2 additional Daggers",
+    icon: 54,
+    category: "summon",
+    tier: 3,
+    requires: ["sharpened_edge"],
+    apply: () => {
+      const { addSummon } = useSummons.getState();
 
-    addSummon("dagger");
-    addSummon("dagger");
+      addSummon("dagger");
+      addSummon("dagger");
+    },
   },
-},
 
   stormcaller: {
-  id: "stormcaller",
-  name: "Stormcaller",
-  description:
-    "Every 15 seconds, all enemies in range are struck by lightning",
-  icon: 34,
-  category: "summon",
-  tier: 3,
-  requires: ["energized"],
-  apply: () => {
-    useSummons.setState({
-      stormcaller: true,
-      stormcallerCooldown: 15,
-    });
+    id: "stormcaller",
+    name: "Stormcaller",
+    description:
+      "Every 15 seconds, all enemies in range are struck by lightning",
+    icon: 34,
+    category: "summon",
+    tier: 3,
+    requires: ["energized"],
+    apply: () => {
+      useSummons.setState({
+        stormcaller: true,
+        stormcallerCooldown: 15,
+      });
+    },
   },
-},
 
   minigun: {
-  id: "minigun",
-  name: "Bullet Spray",
-  description:
-    "Max Ammo x3, Spread +50%, Knockback -90%, Fire Rate +50%, Bullet Damage -50%",
-  icon: 23,
-  category: "reload",
-  tier: 3,
-  requires: ["armed_ready", "fresh_clip"],
-  apply: () => {
-    const player = usePlayer.getState();
+    id: "minigun",
+    name: "Bullet Spray",
+    description:
+      "Max Ammo x3, Spread +50%, Knockback -90%, Fire Rate +50%, Bullet Damage -50%",
+    icon: 23,
+    category: "reload",
+    tier: 3,
+    requires: ["armed_ready", "fresh_clip"],
+    apply: () => {
+      const player = usePlayer.getState();
 
-    const newAmmo = player.maxAmmo * 3;
+      const newAmmo = player.maxAmmo * 3;
 
-    usePlayer.setState({
-      maxAmmo: newAmmo,
-      ammo: player.ammo + (newAmmo - player.maxAmmo),
-      accuracy: player.accuracy * (1 / 1.5),
-      knockbackMultiplier:
-        (player.knockbackMultiplier || 1) * 0.1,
-      firerate: player.firerate * (1 / 1.5),
-      baseDamage: player.baseDamage * 0.5,
-    });
+      usePlayer.setState({
+        maxAmmo: newAmmo,
+        ammo: player.ammo + (newAmmo - player.maxAmmo),
+        accuracy: player.accuracy * (1 / 1.5),
+        knockbackMultiplier: (player.knockbackMultiplier || 1) * 0.1,
+        firerate: player.firerate * (1 / 1.5),
+        baseDamage: player.baseDamage * 0.5,
+      });
+    },
   },
-},
 
   sniper: {
     id: "sniper",
@@ -371,24 +365,25 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
   },
 
   hyper_rounds: {
-  id: "hyper_rounds",
-  name: "Hyper Rounds",
-  description: "Bullet Size -50%, Fire Rate -25%, Bullet Speed +25%, Bullet Damage +50%, Piercing +2",
-  icon: 61,
-  category: "speed",
-  tier: 3,
-  requires: ["penetration"],
-  apply: () => {
-    const player = usePlayer.getState();
-    usePlayer.setState({
-      projectileSize: player.projectileSize * 0.5,
-      firerate: player.firerate * 1.25,
-      baseProjectileSpeed: player.baseProjectileSpeed * 1.25,
-      baseDamage: player.baseDamage * 1.5,
-      piercing: player.piercing + 1,
-    });
+    id: "hyper_rounds",
+    name: "Hyper Rounds",
+    description:
+      "Bullet Size -50%, Fire Rate -25%, Bullet Speed +25%, Bullet Damage +50%, Piercing +2",
+    icon: 61,
+    category: "speed",
+    tier: 3,
+    requires: ["penetration"],
+    apply: () => {
+      const player = usePlayer.getState();
+      usePlayer.setState({
+        projectileSize: player.projectileSize * 0.5,
+        firerate: player.firerate * 1.25,
+        baseProjectileSpeed: player.baseProjectileSpeed * 1.25,
+        baseDamage: player.baseDamage * 1.5,
+        piercing: player.piercing + 1,
+      });
+    },
   },
-},
 
   assassin: {
     id: "assassin",
@@ -436,27 +431,28 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
       });
     },
   },
-  
+
   hand_cannon: {
-  id: "hand_cannon",
-  name: "Hand Cannon",
-  description: "Max Ammo -75%, Bullet Damage +250%, Bullet Size +50%, Piercing +1",
-  icon: 12,
-  category: "reload",
-  tier: 3,
-  requires: ["big_shot"],
-  apply: () => {
-    const player = usePlayer.getState();
-    const newMaxAmmo = Math.max(1, Math.floor(player.maxAmmo * 0.25));
-    usePlayer.setState({
-      maxAmmo: newMaxAmmo,
-      ammo: Math.min(player.ammo, newMaxAmmo),
-      baseDamage: player.baseDamage * 3.5,
-      projectileSize: player.projectileSize * 1.5,
-      piercing: player.piercing + 1,
-    });
+    id: "hand_cannon",
+    name: "Hand Cannon",
+    description:
+      "Max Ammo -75%, Bullet Damage +250%, Bullet Size +50%, Piercing +1",
+    icon: 12,
+    category: "reload",
+    tier: 3,
+    requires: ["big_shot"],
+    apply: () => {
+      const player = usePlayer.getState();
+      const newMaxAmmo = Math.max(1, Math.floor(player.maxAmmo * 0.25));
+      usePlayer.setState({
+        maxAmmo: newMaxAmmo,
+        ammo: Math.min(player.ammo, newMaxAmmo),
+        baseDamage: player.baseDamage * 3.5,
+        projectileSize: player.projectileSize * 1.5,
+        piercing: player.piercing + 1,
+      });
+    },
   },
-},
 
   splinter: {
     id: "splinter",
@@ -472,23 +468,22 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
   },
 
   railgun: {
-  id: "railgun",
-  name: "Railgun",
-  description:
-    "-80% Spread, Bullets pierce killed enemies (-20% damage per death pierce)",
-  icon: 22,
-  category: "damage",
-  tier: 3,
-  requires: ["splinter", "big shot"],
-  apply: () => {
-    const player = usePlayer.getState();
-    usePlayer.setState({
-      railgun: true,
-      accuracy: player.accuracy * 5,
-    });
-    
+    id: "railgun",
+    name: "Railgun",
+    description:
+      "-80% Spread, Bullets pierce killed enemies (-20% damage per death pierce)",
+    icon: 22,
+    category: "damage",
+    tier: 3,
+    requires: ["splinter", "big shot"],
+    apply: () => {
+      const player = usePlayer.getState();
+      usePlayer.setState({
+        railgun: true,
+        accuracy: player.accuracy * 5,
+      });
+    },
   },
-},
 
   // BULLET ENHANCEMENTS
   homing_rounds: {
@@ -570,7 +565,8 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
   siege: {
     id: "siege",
     name: "Siege",
-    description: "Bullet Damage increases when standing still. Damage bonus resets when you move.",
+    description:
+      "Bullet Damage increases when standing still. Damage bonus resets when you move.",
     icon: 31,
     category: "firerate",
     tier: 3,
@@ -627,7 +623,8 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
   fusillade: {
     id: "fusillade",
     name: "Fusillade",
-    description: "Projectiles +1, Spread +15%, Fire Rate -50%, doubles base projectiles",
+    description:
+      "Projectiles +1, Spread +15%, Fire Rate -50%, doubles base projectiles",
     icon: 46,
     category: "multishot",
     tier: 3,
@@ -643,21 +640,21 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
   },
 
   shotgun: {
-  id: "shotgun",
-  name: "Shotgun",
-  description: "Bullet Damage +100%, Bullet Lifetime -90%",
-  icon: 71,
-  category: "multishot",
-  tier: 3,
-  requires: ["fan_fire", "split_fire"],
-  apply: () => {
-    const player = usePlayer.getState();
-    usePlayer.setState({
-      baseDamage: player.baseDamage * 2.0,
-      life: player.life * 0.10,
-    });
+    id: "shotgun",
+    name: "Shotgun",
+    description: "Bullet Damage +100%, Bullet Lifetime -90%",
+    icon: 71,
+    category: "multishot",
+    tier: 3,
+    requires: ["fan_fire", "split_fire"],
+    apply: () => {
+      const player = usePlayer.getState();
+      usePlayer.setState({
+        baseDamage: player.baseDamage * 2.0,
+        life: player.life * 0.1,
+      });
+    },
   },
-},
 
   // RELOAD TREE
   quick_hands: {
@@ -797,7 +794,8 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
   ghost_friend: {
     id: "ghost_friend",
     name: "Ghost Friend",
-    description: "Summon a Ghost Friend that fires piercing projectiles for 8 damage",
+    description:
+      "Summon a Ghost Friend that fires piercing projectiles for 8 damage",
     icon: 24,
     category: "summon",
     tier: 1,
@@ -851,7 +849,8 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
   magic_scythe: {
     id: "magic_scythe",
     name: "Magic Scythe",
-    description: "Summon a Magic Scythe that orbits and deals 20 damage on contact",
+    description:
+      "Summon a Magic Scythe that orbits and deals 20 damage on contact",
     icon: 52,
     category: "summon",
     tier: 1,
@@ -889,7 +888,6 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
       usePlayer.setState({ speed: player.speed * 1.1 });
     },
   },
-
 
   windcutter: {
     id: "windcutter",
@@ -966,10 +964,12 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
 // ============================================================================
 
 const generateRandomUpgrades = (takenUpgrades: Set<string>): Upgrade[] => {
-  const available = Object.values(ALL_UPGRADES).filter(upgrade => {
+  const available = Object.values(ALL_UPGRADES).filter((upgrade) => {
     if (takenUpgrades.has(upgrade.id)) return false;
     if (upgrade.requires && upgrade.requires.length > 0) {
-      const hasRequirement = upgrade.requires.some(req => takenUpgrades.has(req));
+      const hasRequirement = upgrade.requires.some((req) =>
+        takenUpgrades.has(req),
+      );
       if (!hasRequirement) return false;
     }
     return true;
@@ -999,14 +999,14 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   defense: 0,
 
   // Combat
-  firerate: 0.40,
+  firerate: 0.4,
   ammo: 6,
   maxAmmo: 6,
   reloadTime: 1,
   isReloading: false,
   reloadProgress: 0,
   isFiring: false,
-  
+
   baseDamage: 13,
   baseProjectileSpeed: 50,
   baseProjectileRange: 50,
@@ -1024,8 +1024,6 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   magnetRange: 1,
   speedWhenFiring: 0,
   healPerLevelUp: 0,
-  
-  
 
   // Special Upgrades
   knockbackMultiplier: 2.0,
@@ -1098,7 +1096,10 @@ export const usePlayer = create<PlayerState>((set, get) => ({
 
     // Apply healing from lifesteal upgrades
     if (state.healPerLevelUp > 0) {
-      const newHearts = Math.min(state.hearts + state.healPerLevelUp, state.maxHearts);
+      const newHearts = Math.min(
+        state.hearts + state.healPerLevelUp,
+        state.maxHearts,
+      );
       set({
         level: newLevel,
         xp: 0,
@@ -1141,7 +1142,8 @@ export const usePlayer = create<PlayerState>((set, get) => ({
 
   tryDash: (direction) => {
     const state = get();
-    if (!state.hasDash || state.dashCooldown > 0 || state.isReloading) return false;
+    if (!state.hasDash || state.dashCooldown > 0 || state.isReloading)
+      return false;
 
     const normalizedDir = direction.clone().normalize();
     set({
@@ -1153,100 +1155,111 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     return true;
   },
 
-  updateDash: (delta) => set((state) => {
-    if (state.dashCooldown > 0) {
-      const newCooldown = Math.max(0, state.dashCooldown - delta);
-      return { dashCooldown: newCooldown };
-    }
+  updateDash: (delta) =>
+    set((state) => {
+      if (state.dashCooldown > 0) {
+        const newCooldown = Math.max(0, state.dashCooldown - delta);
+        return { dashCooldown: newCooldown };
+      }
 
-    if (state.isDashing && state.dashDirection) {
-      const dashSpeed = 35;
-      const dashDuration = 0.15;
-      const move = state.dashDirection.clone().multiplyScalar(dashSpeed * delta);
-      return {
-        position: state.position.clone().add(move),
-        isDashing: false,
-        dashDirection: null,
-      };
-    }
+      if (state.isDashing && state.dashDirection) {
+        const dashSpeed = 35;
+        const dashDuration = 0.15;
+        const move = state.dashDirection
+          .clone()
+          .multiplyScalar(dashSpeed * delta);
+        return {
+          position: state.position.clone().add(move),
+          isDashing: false,
+          dashDirection: null,
+        };
+      }
 
-    return {};
-  }),
+      return {};
+    }),
 
   // === DAMAGE FEEDBACK ACTIONS ===
 
-  triggerDamageFlash: (position, knockback) => set({
-    damageFlashTimer: 0.3,
-    damageFlashPosition: position.clone(),
-    lastDamageKnockback: knockback.clone(),
-  }),
+  triggerDamageFlash: (position, knockback) =>
+    set({
+      damageFlashTimer: 0.3,
+      damageFlashPosition: position.clone(),
+      lastDamageKnockback: knockback.clone(),
+    }),
 
-  updateDamageFlash: (delta) => set((state) => {
-    if (state.damageFlashTimer <= 0) return {};
+  updateDamageFlash: (delta) =>
+    set((state) => {
+      if (state.damageFlashTimer <= 0) return {};
 
-    const newTimer = Math.max(0, state.damageFlashTimer - delta);
-    if (newTimer > 0 && state.lastDamageKnockback) {
-      const knockbackSpeed = 8;
-      const knockbackMove = state.lastDamageKnockback.clone().multiplyScalar(knockbackSpeed * delta);
+      const newTimer = Math.max(0, state.damageFlashTimer - delta);
+      if (newTimer > 0 && state.lastDamageKnockback) {
+        const knockbackSpeed = 8;
+        const knockbackMove = state.lastDamageKnockback
+          .clone()
+          .multiplyScalar(knockbackSpeed * delta);
+        return {
+          damageFlashTimer: newTimer,
+          position: state.position.clone().add(knockbackMove),
+        };
+      }
+
       return {
-        damageFlashTimer: newTimer,
-        position: state.position.clone().add(knockbackMove),
+        damageFlashTimer: 0,
+        damageFlashPosition: null,
+        lastDamageKnockback: null,
       };
-    }
-
-    return {
-      damageFlashTimer: 0,
-      damageFlashPosition: null,
-      lastDamageKnockback: null,
-    };
-  }),
+    }),
 
   // === COMBAT ACTIONS ===
 
-  startFanFire: () => set({
-    fanFireActive: true,
-    fanFireIndex: 0,
-    fanFireTimer: 0,
-  }),
+  startFanFire: () =>
+    set({
+      fanFireActive: true,
+      fanFireIndex: 0,
+      fanFireTimer: 0,
+    }),
 
-  updateFanFire: (delta, fireCallback) => set((state) => {
-    if (!state.fanFireActive) return {};
+  updateFanFire: (delta, fireCallback) =>
+    set((state) => {
+      if (!state.fanFireActive) return {};
 
-    const newTimer = state.fanFireTimer + delta;
-    const intervalTime = state.reloadTime / 10;
+      const newTimer = state.fanFireTimer + delta;
+      const intervalTime = state.reloadTime / 10;
 
-    if (newTimer >= intervalTime && state.fanFireIndex < 10) {
-      fireCallback();
+      if (newTimer >= intervalTime && state.fanFireIndex < 10) {
+        fireCallback();
+        return {
+          fanFireTimer: 0,
+          fanFireIndex: state.fanFireIndex + 1,
+        };
+      }
+
+      if (state.fanFireIndex >= 10) {
+        return {
+          fanFireActive: false,
+          fanFireIndex: 0,
+          fanFireTimer: 0,
+        };
+      }
+
+      return { fanFireTimer: newTimer };
+    }),
+
+  fireMuzzleFlash: (position) =>
+    set({
+      muzzleFlashTimer: 6,
+      muzzleFlashPosition: position.clone(),
+    }),
+
+  updateMuzzleFlash: () =>
+    set((state) => {
+      if (state.muzzleFlashTimer <= 0) return {};
+      const nextTimer = Math.max(state.muzzleFlashTimer - 1, 0);
       return {
-        fanFireTimer: 0,
-        fanFireIndex: state.fanFireIndex + 1,
+        muzzleFlashTimer: nextTimer,
+        muzzleFlashPosition: nextTimer > 0 ? state.muzzleFlashPosition : null,
       };
-    }
-
-    if (state.fanFireIndex >= 10) {
-      return {
-        fanFireActive: false,
-        fanFireIndex: 0,
-        fanFireTimer: 0,
-      };
-    }
-
-    return { fanFireTimer: newTimer };
-  }),
-
-  fireMuzzleFlash: (position) => set({
-    muzzleFlashTimer: 6,
-    muzzleFlashPosition: position.clone(),
-  }),
-
-  updateMuzzleFlash: () => set((state) => {
-    if (state.muzzleFlashTimer <= 0) return {};
-    const nextTimer = Math.max(state.muzzleFlashTimer - 1, 0);
-    return {
-      muzzleFlashTimer: nextTimer,
-      muzzleFlashPosition: nextTimer > 0 ? state.muzzleFlashPosition : null,
-    };
-  }),
+    }),
 
   setFiring: (val) => set({ isFiring: val }),
 
@@ -1355,103 +1368,110 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     }
   },
 
-  move: (delta) => set((state) => ({
-    position: state.position.clone().add(delta)
-  })),
+  move: (delta) =>
+    set((state) => ({
+      position: state.position.clone().add(delta),
+    })),
 
-  loseHeart: () => set((state) => ({
-    hearts: Math.max(state.hearts - 1, 0),
-    invincibilityTimer: state.invincibilityDuration
-  })),
+  loseHeart: () =>
+    set((state) => ({
+      hearts: Math.max(state.hearts - 1, 0),
+      invincibilityTimer: state.invincibilityDuration,
+    })),
 
-  updateInvincibility: (delta) => set((state) => {
-    if (state.invincibilityTimer <= 0) return {};
-    return { invincibilityTimer: Math.max(state.invincibilityTimer - delta, 0) };
-  }),
-
-  updateRegeneration: (delta) => set((state) => {
-    if (!state.regeneration) return {};
-
-    const newTimer = state.regenerationTimer + delta;
-    if (newTimer >= state.regenerationInterval) {
-      const healed = Math.min(state.hearts + 1, state.maxHearts);
+  updateInvincibility: (delta) =>
+    set((state) => {
+      if (state.invincibilityTimer <= 0) return {};
       return {
-        regenerationTimer: 0,
-        hearts: healed,
+        invincibilityTimer: Math.max(state.invincibilityTimer - delta, 0),
       };
-    }
-    return { regenerationTimer: newTimer };
-  }),
+    }),
 
-  reset: () => set({
-    position: new THREE.Vector3(),
-    velocity: new THREE.Vector3(),
-    speed: 10,
-    hearts: 5,
-    maxHearts: 5,
-    invincibilityTimer: 0,
-    invincibilityDuration: 3,
-    firerate: 0.40,
-    ammo: 6,
-    maxAmmo: 6,
-    isReloading: false,
-    reloadTime: 1,
-    reloadProgress: 0,
-    isFiring: false,
-    isMoving: false,
-    baseDamage: 13,
-    baseProjectileSpeed: 50,
-    baseProjectileRange: 50,
-    projectileCount: 1,
-    life: 2.5,
-    homing: false,
-    incendiary: false,
-    piercing: 0,
-    bouncing: 0,
-    trailLength: 1,
-    explosive: undefined,
-    chainLightning: undefined,
-    accuracy: 0.75,
-    knockbackMultiplier: 2.0,
-    projectileSize: 12.0,
-    instantKillThreshold: 0,
-    splinterBullets: false,
-    pierceKilledEnemies: false,
-    railgun: false,
-    siegeMode: false,
-    fanFire: false,
-    splitFire: false,
-    freshClip: false,
-    freshClipActive: false,
-    freshClipTimer: 0,
-    lastAmmoExplosive: false,
-    killClip: false,
-    killClipStacks: 0,
-    regeneration: false,
-    regenerationInterval: 50,
-    regenerationTimer: 0,
-    burnDurationMultiplier: 1,
-    lastMovementTime: 0,
-    muzzleFlashTimer: 0,
-    muzzleFlashPosition: null,
-    fanFireActive: false,
-    fanFireIndex: 0,
-    fanFireTimer: 0,
-    visionRange: 1,
-    cameraZoom: 1,
-    hasDash: false,
-    dashCooldown: 0,
-    maxDashCooldown: 2,
-    isDashing: false,
-    dashDirection: null,
-    damageFlashTimer: 0,
-    damageFlashPosition: null,
-    lastDamageKnockback: null,
-    xp: 0,
-    level: 1,
-    xpToNextLevel: calculateXPForLevel(1),
-    showLevelUpScreen: false,
-    availableUpgrades: [],
-    takenUpgrades: new Set<string>(),
-  })
+  updateRegeneration: (delta) =>
+    set((state) => {
+      if (!state.regeneration) return {};
+
+      const newTimer = state.regenerationTimer + delta;
+      if (newTimer >= state.regenerationInterval) {
+        const healed = Math.min(state.hearts + 1, state.maxHearts);
+        return {
+          regenerationTimer: 0,
+          hearts: healed,
+        };
+      }
+      return { regenerationTimer: newTimer };
+    }),
+
+  reset: () =>
+    set({
+      position: new THREE.Vector3(),
+      velocity: new THREE.Vector3(),
+      speed: 10,
+      hearts: 5,
+      maxHearts: 5,
+      invincibilityTimer: 0,
+      invincibilityDuration: 3,
+      firerate: 0.4,
+      ammo: 6,
+      maxAmmo: 6,
+      isReloading: false,
+      reloadTime: 1,
+      reloadProgress: 0,
+      isFiring: false,
+      isMoving: false,
+      baseDamage: 13,
+      baseProjectileSpeed: 50,
+      baseProjectileRange: 50,
+      projectileCount: 1,
+      life: 2.5,
+      homing: false,
+      incendiary: false,
+      piercing: 0,
+      bouncing: 0,
+      trailLength: 1,
+      explosive: undefined,
+      chainLightning: undefined,
+      accuracy: 0.75,
+      knockbackMultiplier: 2.0,
+      projectileSize: 12.0,
+      instantKillThreshold: 0,
+      splinterBullets: false,
+      pierceKilledEnemies: false,
+      railgun: false,
+      siegeMode: false,
+      fanFire: false,
+      splitFire: false,
+      freshClip: false,
+      freshClipActive: false,
+      freshClipTimer: 0,
+      lastAmmoExplosive: false,
+      killClip: false,
+      killClipStacks: 0,
+      regeneration: false,
+      regenerationInterval: 50,
+      regenerationTimer: 0,
+      burnDurationMultiplier: 1,
+      lastMovementTime: 0,
+      muzzleFlashTimer: 0,
+      muzzleFlashPosition: null,
+      fanFireActive: false,
+      fanFireIndex: 0,
+      fanFireTimer: 0,
+      visionRange: 1,
+      cameraZoom: 1,
+      hasDash: false,
+      dashCooldown: 0,
+      maxDashCooldown: 2,
+      isDashing: false,
+      dashDirection: null,
+      damageFlashTimer: 0,
+      damageFlashPosition: null,
+      lastDamageKnockback: null,
+      xp: 0,
+      level: 1,
+      xpToNextLevel: calculateXPForLevel(1),
+      showLevelUpScreen: false,
+      availableUpgrades: [],
+      takenUpgrades: new Set<string>(),
+    }),
 }));

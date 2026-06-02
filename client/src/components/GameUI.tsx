@@ -20,17 +20,21 @@ fontWhiteImage.src = "/sprites/font-atlas-white.png";
 const fontRedImage = new Image();
 fontRedImage.src = "/sprites/font-atlas-red.png";
 
-const LEVEL_UP_BEAM_SPRITESHEET = "/sprites/upgrades/level-up-spritesheet.png";
 const CONTAINER_SPRITESHEET = "/sprites/upgrades/containers-spritesheet.png";
-const UPGRADES_SPRITESHEET = "/sprites/upgrades/upgrades-spritesheet.png";
+const UPGRADES_SPRITESHEET = "/sprites/upgrade-spritesheet.png";
 
-const hashText = (text: string) => {
-  let hash = 0;
-  for (let i = 0; i < text.length; i++) {
-    hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
-  }
-  return hash;
-};
+const SHEET_COLS = 9;
+const TILE_SIZE = 32;
+
+function getIconUV(iconIndex: number) {
+  const i = iconIndex - 1;
+
+  const col = i % SHEET_COLS;
+  const row = Math.floor(i / SHEET_COLS);
+
+  return { col, row };
+}
+
 
 
 export function LevelUpScreen() {
@@ -247,7 +251,10 @@ export function LevelUpScreen() {
             const isSelected = i === selectedIndex;
             const isHovered = i === hoveredIndex;
             const isReady = animationPhase === "ready";
+            const { col, row } = getIconUV(upgrade.icon);
 
+            const SPRITE_PX = 32;
+            const SCALE = 2; 
             return (
               <div
                 key={upgrade.id}
@@ -258,11 +265,11 @@ export function LevelUpScreen() {
                 onMouseLeave={() => setHoveredIndex(null)}
                 className="relative"
                 style={{
-                  width: "96px",
-                  height: "96px",
+                  width: "89px",
+                  height: "89px",
                   pointerEvents: isReady ? "auto" : "none",
                   opacity: isReady ? 1 : 0,
-                  transition: "transform 140ms ease",
+                  
                 }}
               >
                 <div
@@ -279,6 +286,21 @@ export function LevelUpScreen() {
                   className="upgrade-sprite"
                   style={{
                     backgroundImage: `url(${UPGRADES_SPRITESHEET})`,
+                    width: `${SPRITE_PX * SCALE}px`,
+                    height: `${SPRITE_PX * SCALE}px`,
+                    imageRendering: "pixelated",
+
+                    backgroundPosition: `
+                      ${-col * SPRITE_PX * SCALE}px
+                      ${-row * SPRITE_PX * SCALE}px
+                    `,
+
+                    backgroundSize: `${SHEET_COLS * SPRITE_PX * SCALE}px`,
+                    transform: `
+                      translate(-50%, -50%)
+                      scale(${isHovered ? 1.51 : isSelected ? 1.51 : 1})
+                    `,
+                    
                   }}
                 />
               </div>
@@ -342,11 +364,9 @@ export function LevelUpScreen() {
           position: absolute;
           left: 50%;
           top: 50%;
-          width: 64px;
-          height: 64px;
-          transform: translate(-50%, -50%);
           image-rendering: pixelated;
           pointer-events: none;
+          transform: translate(-50%, -50%);
         }
 
         .upgrade-container-sprite {
