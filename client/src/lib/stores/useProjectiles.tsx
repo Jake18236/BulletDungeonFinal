@@ -210,28 +210,23 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
     const updated: Projectile[] = [];
 
     for (const proj of get().projectiles) {
-      // --- Move projectile ---
 
-      // Store previous position for continuous collision detection
+
       proj.previousPosition.copy(proj.position);
 
-      // Add chaotic wobble to projectile movement (every other frame for perf)
       if (Math.random() < 0.5) {
-        const wobbleIntensity = 0.15;
+        const wobbleIntensity = 0.35;
         const wobbleX = (Math.random() - 0.5) * wobbleIntensity * proj.speed;
         const wobbleZ = (Math.random() - 0.5) * wobbleIntensity * proj.speed;
         proj.velocity.x += wobbleX * delta * 2;
         proj.velocity.z += wobbleZ * delta * 2;
       }
 
-      // Slow the projectile with diminishing drag over time.
-      // The projectile starts fast and decelerates, but the slowing amount decreases
-      // the further it travels.
       const travelFactor = Math.min(1, proj.distanceTraveled / 20);
-      const dragBase = 0.5;
-      const dragFalloff = 0.7;
+      const dragBase = 0.4;
+      const dragFalloff = 0.01;
       const dragFactor = dragBase / (1 + dragFalloff * travelFactor);
-      const speedDecay = Math.max(0.45, 1 - dragFactor * delta);
+      const speedDecay = Math.max(0, 1 - dragFactor * delta);
       proj.velocity.multiplyScalar(speedDecay);
 
       const move = proj.velocity.clone().multiplyScalar(delta);
@@ -303,9 +298,8 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       
       let hitEnemy = false;
 
-      // Loop over enemies - use continuous collision detection
       for (const enemy of enemies) {
-        // Skip enemies we've already pierced
+        //skip 
         if (proj.piercedEnemies.has(enemy.id)) continue;
 
         const enemyRadius = enemy.type === "boss"
@@ -319,21 +313,15 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
         const maxDist = enemyRadius + 2; // Conservative bounds
         if (distSq > maxDist * maxDist) continue;
 
-        // Continuous collision detection: check if line segment from previousPosition to position 
-        // intersects with enemy sphere
         const segmentStart = proj.previousPosition;
         const segmentEnd = proj.position;
         const enemyPos = enemy.position;
 
-        // Vector along the segment
         const segment = segmentEnd.clone().sub(segmentStart);
         const segmentLengthSq = segment.x * segment.x + segment.z * segment.z;
         
-        // Early exit if segment is too far
         if (segmentLengthSq < 0.0001) {
-          // Projectile didn't move much, use simpler check
           if (distSq <= enemyRadius * enemyRadius) {
-            // Direct hit
           } else {
             continue;
           }
@@ -414,8 +402,6 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       }
 
 
-      // Remove projectile if piercing is exhausted (and no bounces left)
-      // Railgun kills don't count against the piercing limit — only living-enemy pierces do
       const effectivePierceCount = proj.piercedEnemies.size - proj.pierceKillCount;
       if (hitEnemy && proj.bouncesLeft === 0 && effectivePierceCount > proj.piercing) {
         continue;

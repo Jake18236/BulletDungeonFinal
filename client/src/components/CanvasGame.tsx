@@ -195,7 +195,6 @@ let _nextImpactId = 0;
 let _nextProjectileId = 0;
 let _nextFootstepId = 0;
 
-
 function generateRoomTerrain(): TerrainObstacle[] {
   const trees: TerrainObstacle[] = [];
   let obstacleId = 0;
@@ -265,7 +264,7 @@ function resolveTerrainPenetration(
   radius: number,
 ): THREE.Vector3 {
   const resolved = pos.clone();
-  const combined = radius; // Pre-compute to avoid repeated addition
+  const combined = radius;
 
   for (let i = 0; i < 2; i++) {
     for (const obs of obstacles) {
@@ -292,11 +291,9 @@ function moveWithTerrainSlide(
   obstacles: TerrainObstacle[],
   radius: number,
 ): THREE.Vector3 {
-  // Optimized: reuse vector math, early exit
   const targetX = currentPos.x + move.x;
   const targetZ = currentPos.z + move.z;
 
-  // Quick check without creating new vector
   let collision = false;
   const combinedRadius = radius;
   for (const obs of obstacles) {
@@ -354,8 +351,15 @@ function moveWithTerrainSlide(
   return resolveTerrainPenetration(currentPos, obstacles, radius);
 }
 
-function getEnemyType(enemy: { type?: string }): "basic" | "tank" | "eyeball" | "tree" {
-  if (enemy.type === "tank" || enemy.type === "eyeball" || enemy.type === "tree") return enemy.type;
+function getEnemyType(enemy: {
+  type?: string;
+}): "basic" | "tank" | "eyeball" | "tree" {
+  if (
+    enemy.type === "tank" ||
+    enemy.type === "eyeball" ||
+    enemy.type === "tree"
+  )
+    return enemy.type;
   return "basic";
 }
 
@@ -364,7 +368,8 @@ function getEnemyBodyHitRadius(enemy: {
   isBoss?: boolean;
   bossType?: string;
 }) {
-  if (enemy.isBoss && enemy.bossType === "lazarus") return SHOGGOTH_CONFIG.bodyHitRadius;
+  if (enemy.isBoss && enemy.bossType === "lazarus")
+    return SHOGGOTH_CONFIG.bodyHitRadius;
   if (enemy.isBoss && enemy.bossType === "reaper") return 3.2;
   if (enemy.type === "crow") return 0.6;
   if (enemy.type === "mage") return 1.6;
@@ -372,7 +377,11 @@ function getEnemyBodyHitRadius(enemy: {
   return ENEMY_TYPE_CONFIG[getEnemyType(enemy)].bodyHitRadius;
 }
 
-function getEnemyCollisionRadius(enemy: { type?: string; isBoss?: boolean; bossType?: string }) {
+function getEnemyCollisionRadius(enemy: {
+  type?: string;
+  isBoss?: boolean;
+  bossType?: string;
+}) {
   if (enemy.isBoss && enemy.bossType === "reaper") return 3.5;
   if (enemy.type === "crow") return 0.5;
   if (enemy.type === "mage") return 0.9;
@@ -385,7 +394,6 @@ function distancePointToSegment(
   a: THREE.Vector2,
   b: THREE.Vector2,
 ) {
-  // Optimized: avoid cloning vectors, use direct math
   const abx = b.x - a.x;
   const aby = b.y - a.y;
   const abLenSq = abx * abx + aby * aby;
@@ -482,7 +490,6 @@ function releaseLightningTree(tree: TerrainObstacle, nowMs: number) {
   queueTreeFrames(tree, [1, 0]);
 }
 
-// Snap coordinates to 2-pixel grid for consistent pixelation
 const snapToGrid = (value: number) => Math.round(value / 1) * 1;
 
 // =====================================================
@@ -529,7 +536,6 @@ export default memo(function CanvasGame() {
   const fireSprite = useRef<HTMLImageElement>(new Image());
   const fireEmissionThrottleRef = useRef<Record<string, number>>({});
   const spriteReady = useRef(false);
-  const reaperActiveLasersRef = useRef<Array<{ originX: number; originZ: number; angle: number; life: number }>>([]);
   const mageLightningRef = useRef<MageLightningAttack[]>([]);
   const lightningSpriteSheet = useRef<HTMLImageElement>(new Image());
   const lightningReady = useRef(false);
@@ -619,7 +625,7 @@ export default memo(function CanvasGame() {
       poolRef.current.push({
         x: 0,
         y: 0,
-        size: 8,
+        size: 0,
         life: 0,
         maxLife: 0,
       });
@@ -832,7 +838,6 @@ export default memo(function CanvasGame() {
       size: ENEMY_TYPE_CONFIG.eyeball.projectileSize ?? 0.35,
     });
   };
-
 
   useEffect(() => {
     const gameLoop = (currentTime: number) => {
@@ -1060,11 +1065,8 @@ export default memo(function CanvasGame() {
               !damagedThisFrameRef.current &&
               attack.damageTimer >= 0.2
             ) {
-              applyPlayerDamage(
-                new THREE.Vector3(position.x, 0, position.z),
-              );
+              applyPlayerDamage(new THREE.Vector3(position.x, 0, position.z));
               damagedThisFrameRef.current = true;
-              
             }
           }
 
@@ -1198,6 +1200,7 @@ export default memo(function CanvasGame() {
             if (ps.fanFire && ammo === 1) {
               ps.startFanFire();
             }
+            
             if (phase === "playing")
               cameraRef.current.shake({ strength: 35, durationMs: 60 });
             ps.fireMuzzleFlash(barrelFlashPosition);
@@ -1362,33 +1365,49 @@ export default memo(function CanvasGame() {
                 _laz4.copy(_laz2).multiplyScalar(-0.65);
               }
               if (_laz4.lengthSq() > 0) {
-                enemy.position.addScaledVector(_laz4.normalize(), enemy.speed * delta);
+                enemy.position.addScaledVector(
+                  _laz4.normalize(),
+                  enemy.speed * delta,
+                );
               }
               enemy.rotationY = Math.atan2(_laz2.z, _laz2.x);
-              enemy.projectileCooldown = (enemy.projectileCooldown ?? 0) - delta;
-              if (enemy.projectileCooldown <= 0 && distanceToPlayer <= SHOGGOTH_CONFIG.maxDistance) {
+              enemy.projectileCooldown =
+                (enemy.projectileCooldown ?? 0) - delta;
+              if (
+                enemy.projectileCooldown <= 0 &&
+                distanceToPlayer <= SHOGGOTH_CONFIG.maxDistance
+              ) {
                 enemy.attackState = "laser_windup";
                 enemy.windUpTimer = 0;
                 enemy.clawWindUp = 0;
                 enemy.clawGlowIntensity = 0;
-                if (!enemy.dashDirection) enemy.dashDirection = new THREE.Vector3();
+                if (!enemy.dashDirection)
+                  enemy.dashDirection = new THREE.Vector3();
                 enemy.dashDirection.copy(_laz2);
               }
             } else if (enemy.attackState === "laser_windup") {
               enemy.windUpTimer = (enemy.windUpTimer ?? 0) + delta;
-              const windupProgress = Math.min(enemy.windUpTimer / (enemy.maxWindUpTime ?? 1), 1);
+              const windupProgress = Math.min(
+                enemy.windUpTimer / (enemy.maxWindUpTime ?? 1),
+                1,
+              );
               const lockedDirection =
                 enemy.dashDirection && enemy.dashDirection.lengthSq() > 0
                   ? _laz4.copy(enemy.dashDirection).normalize()
                   : _laz2;
-              enemy.rotationY = Math.atan2(lockedDirection.z, lockedDirection.x);
+              enemy.rotationY = Math.atan2(
+                lockedDirection.z,
+                lockedDirection.x,
+              );
               enemy.clawWindUp = windupProgress;
               enemy.clawGlowIntensity = windupProgress;
               enemy.velocity.multiplyScalar(0.82);
               if (enemy.windUpTimer >= (enemy.maxWindUpTime ?? 1)) {
                 enemy.attackState = "laser_firing";
                 enemy.windUpTimer = 0;
-                enemy.laserBaseRotation = enemy.rotationY ?? Math.atan2(lockedDirection.z, lockedDirection.x);
+                enemy.laserBaseRotation =
+                  enemy.rotationY ??
+                  Math.atan2(lockedDirection.z, lockedDirection.x);
                 enemy.projectileCooldown = SHOGGOTH_CONFIG.beamDamageInterval;
                 playHit();
               }
@@ -1397,18 +1416,24 @@ export default memo(function CanvasGame() {
                 cameraRef.current.shake({ strength: 5, durationMs: 1000 });
               enemy.windUpTimer = (enemy.windUpTimer ?? 0) + delta;
               const fireDuration = SHOGGOTH_CONFIG.fireDuration;
-              const spinAmount = (enemy.windUpTimer ?? 0) * SHOGGOTH_CONFIG.rotationSpeed;
-              const baseRotation = enemy.laserBaseRotation ?? enemy.rotationY ?? 0;
+              const spinAmount =
+                (enemy.windUpTimer ?? 0) * SHOGGOTH_CONFIG.rotationSpeed;
+              const baseRotation =
+                enemy.laserBaseRotation ?? enemy.rotationY ?? 0;
               const currentRotation = baseRotation + spinAmount;
               enemy.rotationY = currentRotation;
               enemy.position.addScaledVector(_laz3, enemy.speed * 0.42 * delta);
-              enemy.projectileCooldown = (enemy.projectileCooldown ?? 0) - delta;
+              enemy.projectileCooldown =
+                (enemy.projectileCooldown ?? 0) - delta;
               if (enemy.projectileCooldown <= 0) {
-                const beamOriginOffsetWorld = SHOGGOTH_CONFIG.beamOriginOffsetPx / 25;
+                const beamOriginOffsetWorld =
+                  SHOGGOTH_CONFIG.beamOriginOffsetPx / 25;
                 for (const beamOffset of SHOGGOTH_CONFIG.beamAngles) {
                   const beamAngle = currentRotation + beamOffset;
                   _laz5.set(Math.cos(beamAngle), 0, Math.sin(beamAngle));
-                  _laz6.copy(enemy.position).addScaledVector(_laz5, beamOriginOffsetWorld);
+                  _laz6
+                    .copy(enemy.position)
+                    .addScaledVector(_laz5, beamOriginOffsetWorld);
                   _laz7.subVectors(position, _laz6);
                   const along = _laz7.dot(_laz5);
                   const latSq = _laz7.lengthSq() - along * along;
@@ -1420,7 +1445,10 @@ export default memo(function CanvasGame() {
                     invincibilityTimer <= 0 &&
                     !damagedThisFrameRef.current
                   ) {
-                    _laz6.addScaledVector(_laz5, Math.min(along, LAZARUS_BEAM_LENGTH_WORLD));
+                    _laz6.addScaledVector(
+                      _laz5,
+                      Math.min(along, LAZARUS_BEAM_LENGTH_WORLD),
+                    );
                     applyPlayerDamage(_laz6);
                     damagedThisFrameRef.current = true;
                   }
@@ -1435,8 +1463,14 @@ export default memo(function CanvasGame() {
               }
             } else if (enemy.attackState === "recovering") {
               enemy.windUpTimer = (enemy.windUpTimer ?? 0) - delta;
-              enemy.clawGlowIntensity = Math.max((enemy.clawGlowIntensity ?? 0) - delta * 2.8, 0);
-              enemy.clawWindUp = Math.max((enemy.clawWindUp ?? 0) - delta * 2.8, 0);
+              enemy.clawGlowIntensity = Math.max(
+                (enemy.clawGlowIntensity ?? 0) - delta * 2.8,
+                0,
+              );
+              enemy.clawWindUp = Math.max(
+                (enemy.clawWindUp ?? 0) - delta * 2.8,
+                0,
+              );
               if (enemy.windUpTimer <= 0) {
                 enemy.attackState = "chasing";
               }
@@ -1471,26 +1505,34 @@ export default memo(function CanvasGame() {
             if (rState === "floating") {
               const blend = Math.min(1, 2 * delta);
               if (distToPlayer > IDEAL_DIST + 1) {
-                enemy.velocity.x += (safeDirX * enemy.speed - enemy.velocity.x) * blend;
-                enemy.velocity.z += (safeDirZ * enemy.speed - enemy.velocity.z) * blend;
+                enemy.velocity.x +=
+                  (safeDirX * enemy.speed - enemy.velocity.x) * blend;
+                enemy.velocity.z +=
+                  (safeDirZ * enemy.speed - enemy.velocity.z) * blend;
               } else if (distToPlayer < IDEAL_DIST - 2) {
-                enemy.velocity.x += (-safeDirX * enemy.speed * 0.5 - enemy.velocity.x) * blend;
-                enemy.velocity.z += (-safeDirZ * enemy.speed * 0.5 - enemy.velocity.z) * blend;
+                enemy.velocity.x +=
+                  (-safeDirX * enemy.speed * 0.5 - enemy.velocity.x) * blend;
+                enemy.velocity.z +=
+                  (-safeDirZ * enemy.speed * 0.5 - enemy.velocity.z) * blend;
               } else {
                 const perpX = -safeDirZ;
                 const perpZ = safeDirX;
-                enemy.velocity.x += (perpX * enemy.speed * 0.4 - enemy.velocity.x) * blend;
-                enemy.velocity.z += (perpZ * enemy.speed * 0.4 - enemy.velocity.z) * blend;
+                enemy.velocity.x +=
+                  (perpX * enemy.speed * 0.4 - enemy.velocity.x) * blend;
+                enemy.velocity.z +=
+                  (perpZ * enemy.speed * 0.4 - enemy.velocity.z) * blend;
               }
               enemy.position.x += enemy.velocity.x * delta;
               enemy.position.z += enemy.velocity.z * delta;
               enemy.rotationY = Math.atan2(safeDirZ, safeDirX);
 
-              enemy.reaperMoveCooldown = (enemy.reaperMoveCooldown ?? 4) - delta;
+              enemy.reaperMoveCooldown =
+                (enemy.reaperMoveCooldown ?? 4) - delta;
               if ((enemy.reaperMoveCooldown ?? 0) <= 0) {
                 enemy.reaperState = "charging";
                 enemy.reaperChargeTimer = 1.0;
-                if (!enemy.dashDirection) enemy.dashDirection = new THREE.Vector3();
+                if (!enemy.dashDirection)
+                  enemy.dashDirection = new THREE.Vector3();
                 enemy.dashDirection.set(safeDirX, 0, safeDirZ);
               }
             } else if (rState === "charging") {
@@ -1498,7 +1540,8 @@ export default memo(function CanvasGame() {
               enemy.position.x += enemy.velocity.x * delta;
               enemy.position.z += enemy.velocity.z * delta;
               enemy.rotationY = Math.atan2(safeDirZ, safeDirX);
-              if (!enemy.dashDirection) enemy.dashDirection = new THREE.Vector3();
+              if (!enemy.dashDirection)
+                enemy.dashDirection = new THREE.Vector3();
               enemy.dashDirection.set(safeDirX, 0, safeDirZ);
 
               enemy.reaperChargeTimer = (enemy.reaperChargeTimer ?? 1) - delta;
@@ -1509,13 +1552,14 @@ export default memo(function CanvasGame() {
                 enemy.reaperDashTimer = 0;
               }
             } else if (rState === "dashing") {
-              const ACCELERATION = 20;
+              const ACCELERATION = 15;
               const TURN_RATE = 2.8;
-              const DRAG = 0.001;
+              const DRAG = 0.002;
               const MAX_SPEED = 48;
 
               _rep1.set(safeDirX, 0, safeDirZ);
-              if (!enemy.dashDirection) enemy.dashDirection = new THREE.Vector3().copy(_rep1);
+              if (!enemy.dashDirection)
+                enemy.dashDirection = new THREE.Vector3().copy(_rep1);
               enemy.dashDirection.lerp(_rep1, TURN_RATE * delta).normalize();
 
               enemy.velocity.x += enemy.dashDirection.x * ACCELERATION * delta;
@@ -1524,7 +1568,9 @@ export default memo(function CanvasGame() {
               enemy.velocity.x *= Math.max(0, 1 - DRAG * delta);
               enemy.velocity.z *= Math.max(0, 1 - DRAG * delta);
 
-              const speedSq = enemy.velocity.x * enemy.velocity.x + enemy.velocity.z * enemy.velocity.z;
+              const speedSq =
+                enemy.velocity.x * enemy.velocity.x +
+                enemy.velocity.z * enemy.velocity.z;
               if (speedSq > MAX_SPEED * MAX_SPEED) {
                 const scale = MAX_SPEED / Math.sqrt(speedSq);
                 enemy.velocity.x *= scale;
@@ -1540,7 +1586,10 @@ export default memo(function CanvasGame() {
               if (!enemy.reaperPassedPlayer && distToPlayer < 4) {
                 enemy.reaperPassedPlayer = true;
               }
-              if ((enemy.reaperDashTimer ?? 0) > 3.4 || enemy.reaperPassedPlayer === true) {
+              if (
+                (enemy.reaperDashTimer ?? 0) > 3.4 ||
+                enemy.reaperPassedPlayer === true
+              ) {
                 enemy.reaperState = "summoning";
                 enemy.reaperSummonTimer = 0;
                 enemy.reaperSummonWave = 0;
@@ -1554,8 +1603,15 @@ export default memo(function CanvasGame() {
               enemy.position.x += enemy.velocity.x * delta;
               enemy.position.z += enemy.velocity.z * delta;
 
-              if (enemy.velocity.x * enemy.velocity.x + enemy.velocity.z * enemy.velocity.z > 0.01) {
-                enemy.rotationY = Math.atan2(enemy.velocity.z, enemy.velocity.x);
+              if (
+                enemy.velocity.x * enemy.velocity.x +
+                  enemy.velocity.z * enemy.velocity.z >
+                0.01
+              ) {
+                enemy.rotationY = Math.atan2(
+                  enemy.velocity.z,
+                  enemy.velocity.x,
+                );
               }
 
               const sc = useEnemies.getState().spawnCrow;
@@ -1565,8 +1621,12 @@ export default memo(function CanvasGame() {
                 for (let ci = 0; ci < 3; ci++) {
                   const ang = (ci / 3) * Math.PI * 2;
                   sc(
-                    new THREE.Vector3(enemy.position.x + Math.cos(ang) * 2, 0, enemy.position.z + Math.sin(ang) * 2),
-                    new THREE.Vector3(Math.cos(ang) * 5, 0, Math.sin(ang) * 4)
+                    new THREE.Vector3(
+                      enemy.position.x + Math.cos(ang) * 2,
+                      0,
+                      enemy.position.z + Math.sin(ang) * 2,
+                    ),
+                    new THREE.Vector3(Math.cos(ang) * 5, 0, Math.sin(ang) * 4),
                   );
                 }
               }
@@ -1576,26 +1636,32 @@ export default memo(function CanvasGame() {
                 for (let ci = 0; ci < 3; ci++) {
                   const ang = (ci / 3) * Math.PI * 2 + Math.PI / 3;
                   sc(
-                    new THREE.Vector3(enemy.position.x + Math.cos(ang) * 2, 0, enemy.position.z + Math.sin(ang) * 2),
-                    new THREE.Vector3(Math.cos(ang) * 6, 0, Math.sin(ang) * 5)
+                    new THREE.Vector3(
+                      enemy.position.x + Math.cos(ang) * 2,
+                      0,
+                      enemy.position.z + Math.sin(ang) * 2,
+                    ),
+                    new THREE.Vector3(Math.cos(ang) * 6, 0, Math.sin(ang) * 5),
                   );
                 }
               }
 
               if (t >= 0.9) {
                 enemy.reaperState = "floating";
-                enemy.reaperMoveCooldown = 2 + Math.random() * 1.5;
+                enemy.reaperMoveCooldown = 8 + Math.random() * 1.5;
               }
             } else if (rState === "gliding") {
-              const DRAG = 0.04;
+              const DRAG = 0.01;
               enemy.velocity.x *= Math.max(0, 1 - DRAG * delta);
               enemy.velocity.z *= Math.max(0, 1 - DRAG * delta);
               enemy.position.x += enemy.velocity.x * delta;
               enemy.position.z += enemy.velocity.z * delta;
-              const spdSq = enemy.velocity.x * enemy.velocity.x + enemy.velocity.z * enemy.velocity.z;
+              const spdSq =
+                enemy.velocity.x * enemy.velocity.x +
+                enemy.velocity.z * enemy.velocity.z;
               if (spdSq < 0.25) {
                 enemy.reaperState = "floating";
-                enemy.reaperMoveCooldown = 4.0 + Math.random() * 2;
+                enemy.reaperMoveCooldown = 8.0 + Math.random() * 2;
               }
             }
 
@@ -1621,9 +1687,15 @@ export default memo(function CanvasGame() {
               const t = gameplayElapsedMsRef.current * 0.001;
               const wobbleX = Math.sin(crowSeed * 2.618 + t * 8.3) * 0.5;
               const wobbleZ = Math.cos(crowSeed * 1.414 + t * 6.7) * 0.5;
-              enemy.velocity.x += ((dx / dist) * enemy.speed - enemy.velocity.x) * blend + wobbleX;
-              enemy.velocity.z += ((dz / dist) * enemy.speed - enemy.velocity.z) * blend + wobbleZ;
-              const vsSq = enemy.velocity.x * enemy.velocity.x + enemy.velocity.z * enemy.velocity.z;
+              enemy.velocity.x +=
+                ((dx / dist) * enemy.speed - enemy.velocity.x) * blend +
+                wobbleX;
+              enemy.velocity.z +=
+                ((dz / dist) * enemy.speed - enemy.velocity.z) * blend +
+                wobbleZ;
+              const vsSq =
+                enemy.velocity.x * enemy.velocity.x +
+                enemy.velocity.z * enemy.velocity.z;
               if (vsSq > enemy.speed * enemy.speed) {
                 const vs = Math.sqrt(vsSq);
                 enemy.velocity.x = (enemy.velocity.x / vs) * enemy.speed;
@@ -1635,8 +1707,15 @@ export default memo(function CanvasGame() {
             }
 
             // Apply knockback acceleration
-            if (enemy.knockbackAcceleration && enemy.knockbackDuration && enemy.knockbackDuration > 0) {
-              enemy.velocity.addScaledVector(enemy.knockbackAcceleration, delta);
+            if (
+              enemy.knockbackAcceleration &&
+              enemy.knockbackDuration &&
+              enemy.knockbackDuration > 0
+            ) {
+              enemy.velocity.addScaledVector(
+                enemy.knockbackAcceleration,
+                delta,
+              );
               enemy.knockbackDuration -= delta;
               if (enemy.knockbackDuration <= 0) {
                 enemy.knockbackAcceleration = undefined;
@@ -1664,8 +1743,10 @@ export default memo(function CanvasGame() {
             if (mState === "moving") {
               if (dist > ENGAGE_DIST) {
                 const blend = Math.min(1, 12 * delta);
-                enemy.velocity.x += ((dx / dist) * enemy.speed - enemy.velocity.x) * blend;
-                enemy.velocity.z += ((dz / dist) * enemy.speed - enemy.velocity.z) * blend;
+                enemy.velocity.x +=
+                  ((dx / dist) * enemy.speed - enemy.velocity.x) * blend;
+                enemy.velocity.z +=
+                  ((dz / dist) * enemy.speed - enemy.velocity.z) * blend;
                 const vs = Math.hypot(enemy.velocity.x, enemy.velocity.z);
                 if (vs > enemy.speed) {
                   enemy.velocity.x = (enemy.velocity.x / vs) * enemy.speed;
@@ -1683,7 +1764,8 @@ export default memo(function CanvasGame() {
                   if (e.id === enemy.id || e.type === "crow") continue;
                   const ex = e.position.x - enemy.position.x;
                   const ez = e.position.z - enemy.position.z;
-                  if ((ex * ex + ez * ez) < 100 && e.health < e.maxHealth * 0.7) nearbyHurt++;
+                  if (ex * ex + ez * ez < 100 && e.health < e.maxHealth * 0.7)
+                    nearbyHurt++;
                 }
                 healW += nearbyHurt * 0.15;
 
@@ -1713,13 +1795,19 @@ export default memo(function CanvasGame() {
               if ((enemy.mageCastTimer ?? 0) <= 0) {
                 if (enemy.mageAction === "heal") {
                   const healAmt = enemy.maxHealth * 0.2;
-                  enemy.health = Math.min(enemy.maxHealth, enemy.health + healAmt);
+                  enemy.health = Math.min(
+                    enemy.maxHealth,
+                    enemy.health + healAmt,
+                  );
                   for (const ally of enemies) {
                     if (ally.id === enemy.id) continue;
                     const ax = ally.position.x - enemy.position.x;
                     const az = ally.position.z - enemy.position.z;
-                    if ((ax * ax + az * az) < 81) {
-                      ally.health = Math.min(ally.maxHealth, ally.health + ally.maxHealth * 0.2);
+                    if (ax * ax + az * az < 81) {
+                      ally.health = Math.min(
+                        ally.maxHealth,
+                        ally.health + ally.maxHealth * 0.2,
+                      );
                     }
                   }
                 }
@@ -1727,7 +1815,6 @@ export default memo(function CanvasGame() {
                 enemy.mageCastCooldown = 3.0;
               }
             } else if (mState === "recovering") {
-              
               enemy.mageCastCooldown = (enemy.mageCastCooldown ?? 0) - delta;
               if ((enemy.mageCastCooldown ?? 0) <= 0) {
                 enemy.mageState = "moving";
@@ -1735,8 +1822,15 @@ export default memo(function CanvasGame() {
             }
 
             // Apply knockback acceleration
-            if (enemy.knockbackAcceleration && enemy.knockbackDuration && enemy.knockbackDuration > 0) {
-              enemy.velocity.addScaledVector(enemy.knockbackAcceleration, delta);
+            if (
+              enemy.knockbackAcceleration &&
+              enemy.knockbackDuration &&
+              enemy.knockbackDuration > 0
+            ) {
+              enemy.velocity.addScaledVector(
+                enemy.knockbackAcceleration,
+                delta,
+              );
               enemy.knockbackDuration -= delta;
               if (enemy.knockbackDuration <= 0) {
                 enemy.knockbackAcceleration = undefined;
@@ -1766,32 +1860,45 @@ export default memo(function CanvasGame() {
             const isEyeball = enemy.type === "eyeball";
             if (isEyeball) {
               enemy.rotationY = Math.atan2(dirZ, dirX);
-              const isRangedAttacking = (enemy as any).isRangedAttacking ?? false;
+              const isRangedAttacking =
+                (enemy as any).isRangedAttacking ?? false;
 
-              if (distance <= (ENEMY_TYPE_CONFIG.eyeball.engageDistancePx ?? 100) / 25) {
+              if (
+                distance <=
+                (ENEMY_TYPE_CONFIG.eyeball.engageDistancePx ?? 100) / 25
+              ) {
                 (enemy as any).isRangedAttacking = true;
-              } else if (distance > (ENEMY_TYPE_CONFIG.eyeball.disengageDistancePx ?? 150) / 25) {
+              } else if (
+                distance >
+                (ENEMY_TYPE_CONFIG.eyeball.disengageDistancePx ?? 150) / 25
+              ) {
                 (enemy as any).isRangedAttacking = false;
               } else {
                 (enemy as any).isRangedAttacking = isRangedAttacking;
               }
 
               if ((enemy as any).isRangedAttacking) {
-                (enemy as any).rangedShotCooldown = ((enemy as any).rangedShotCooldown ?? 0) - delta;
+                (enemy as any).rangedShotCooldown =
+                  ((enemy as any).rangedShotCooldown ?? 0) - delta;
                 if ((enemy as any).rangedShotCooldown <= 0) {
                   spawnEyeballProjectile(enemy);
-                  (enemy as any).rangedShotCooldown = ENEMY_TYPE_CONFIG.eyeball.projectileFireInterval ?? 1.1;
+                  (enemy as any).rangedShotCooldown =
+                    ENEMY_TYPE_CONFIG.eyeball.projectileFireInterval ?? 1.1;
                 }
                 // Decelerate while attacking
                 enemy.velocity.x *= Math.max(0, 1 - 10 * delta);
                 enemy.velocity.z *= Math.max(0, 1 - 10 * delta);
               } else {
-                enemy.velocity.x += (dirX * enemy.speed - enemy.velocity.x) * blend;
-                enemy.velocity.z += (dirZ * enemy.speed - enemy.velocity.z) * blend;
+                enemy.velocity.x +=
+                  (dirX * enemy.speed - enemy.velocity.x) * blend;
+                enemy.velocity.z +=
+                  (dirZ * enemy.speed - enemy.velocity.z) * blend;
               }
             } else {
-              enemy.velocity.x += (dirX * enemy.speed - enemy.velocity.x) * blend;
-              enemy.velocity.z += (dirZ * enemy.speed - enemy.velocity.z) * blend;
+              enemy.velocity.x +=
+                (dirX * enemy.speed - enemy.velocity.x) * blend;
+              enemy.velocity.z +=
+                (dirZ * enemy.speed - enemy.velocity.z) * blend;
             }
           } else {
             enemy.velocity.x *= Math.max(0, 1 - 8 * delta);
@@ -1799,7 +1906,9 @@ export default memo(function CanvasGame() {
           }
 
           // Cap velocity at enemy speed (before knockback)
-          const vspdSq = enemy.velocity.x * enemy.velocity.x + enemy.velocity.z * enemy.velocity.z;
+          const vspdSq =
+            enemy.velocity.x * enemy.velocity.x +
+            enemy.velocity.z * enemy.velocity.z;
           if (vspdSq > enemy.speed * enemy.speed) {
             const scale = enemy.speed / Math.sqrt(vspdSq);
             enemy.velocity.x *= scale;
@@ -1807,7 +1916,11 @@ export default memo(function CanvasGame() {
           }
 
           // Apply knockback acceleration on top of movement velocity
-          if (enemy.knockbackAcceleration && enemy.knockbackDuration && enemy.knockbackDuration > 0) {
+          if (
+            enemy.knockbackAcceleration &&
+            enemy.knockbackDuration &&
+            enemy.knockbackDuration > 0
+          ) {
             enemy.velocity.addScaledVector(enemy.knockbackAcceleration, delta);
             enemy.knockbackDuration -= delta;
             if (enemy.knockbackDuration <= 0) {
@@ -1857,7 +1970,8 @@ export default memo(function CanvasGame() {
             if (dx > MAX_SEP_DIST || dx < -MAX_SEP_DIST) continue;
             const dz = e1.position.z - e2.position.z;
             if (dz > MAX_SEP_DIST || dz < -MAX_SEP_DIST) continue;
-            const minDist = getEnemyCollisionRadius(e1) + getEnemyCollisionRadius(e2);
+            const minDist =
+              getEnemyCollisionRadius(e1) + getEnemyCollisionRadius(e2);
             const distSq = dx * dx + dz * dz;
             if (distSq > 0 && distSq < minDist * minDist) {
               const dist = Math.sqrt(distSq);
@@ -1927,9 +2041,7 @@ export default memo(function CanvasGame() {
             invincibilityTimer <= 0 &&
             !damagedThisFrameRef.current
           ) {
-            applyPlayerDamage(
-              projectile.position,
-            );
+            applyPlayerDamage(projectile.position);
             damagedThisFrameRef.current = true;
             continue;
           }
@@ -1955,7 +2067,10 @@ export default memo(function CanvasGame() {
         // Update mage lightning attacks
         for (const atk of mageLightningRef.current) {
           atk.animTimer += delta;
-          if (atk.animTimer >= 0.09) { atk.animTimer = 0; atk.frame = (atk.frame + 1) % 4; }
+          if (atk.animTimer >= 0.09) {
+            atk.animTimer = 0;
+            atk.frame = (atk.frame + 1) % 4;
+          }
           if (!atk.fired) {
             atk.warningTimer += delta;
 
@@ -1991,8 +2106,14 @@ export default memo(function CanvasGame() {
               atk.particles = [];
               const tpDx = position.x - atk.targetX;
               const tpDz = position.z - atk.targetZ;
-              if (Math.hypot(tpDx, tpDz) <= 2.0 && invincibilityTimer <= 0 && !damagedThisFrameRef.current) {
-                applyPlayerDamage(new THREE.Vector3(atk.targetX, 0, atk.targetZ));
+              if (
+                Math.hypot(tpDx, tpDz) <= 2.0 &&
+                invincibilityTimer <= 0 &&
+                !damagedThisFrameRef.current
+              ) {
+                applyPlayerDamage(
+                  new THREE.Vector3(atk.targetX, 0, atk.targetZ),
+                );
                 damagedThisFrameRef.current = true;
               }
             }
@@ -2001,12 +2122,14 @@ export default memo(function CanvasGame() {
           }
         }
         mageLightningRef.current = mageLightningRef.current.filter(
-          atk => !atk.fired || atk.fireTimer > 0
+          (atk) => !atk.fired || atk.fireTimer > 0,
         );
 
         useEnemies.getState().updateAutoSpawn(delta, position);
         for (const mark of footstepMarksRef.current) mark.life += delta;
-        footstepMarksRef.current = footstepMarksRef.current.filter((mark) => mark.life < mark.maxLife);
+        footstepMarksRef.current = footstepMarksRef.current.filter(
+          (mark) => mark.life < mark.maxLife,
+        );
         if (hearts <= 0) end();
       }
 
@@ -2115,8 +2238,12 @@ export default memo(function CanvasGame() {
       if (damageFlashTimer > 0) {
         const intensity = Math.min(1, damageFlashTimer / 0.25) * 0.72;
         const grad = ctx.createRadialGradient(
-          CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, CANVAS_HEIGHT * 0.2,
-          CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, CANVAS_HEIGHT * 0.82,
+          CANVAS_WIDTH / 2,
+          CANVAS_HEIGHT / 2,
+          CANVAS_HEIGHT * 0.2,
+          CANVAS_WIDTH / 2,
+          CANVAS_HEIGHT / 2,
+          CANVAS_HEIGHT * 0.82,
         );
         grad.addColorStop(0, "rgba(200,0,0,0)");
         grad.addColorStop(1, `rgba(200,0,0,${intensity.toFixed(3)})`);
@@ -2165,12 +2292,7 @@ export default memo(function CanvasGame() {
     // Boss explosion on death
     if (enemy.isBoss) {
       const { applyExplosiveDamage } = useHit.getState();
-      applyExplosiveDamage(
-        enemy.position.clone(),
-        320 / 25,
-        80,
-        enemies,
-      );
+      applyExplosiveDamage(enemy.position.clone(), 320 / 25, 80, enemies);
     }
 
     if (enemy.type !== "crow") {
@@ -2192,7 +2314,6 @@ export default memo(function CanvasGame() {
         frameDurationMs: 85,
       });
     }
-    
 
     if (ps.splinterBullets) {
       const stats = ps.getProjectileStats();
@@ -2717,7 +2838,7 @@ export default memo(function CanvasGame() {
     }
 
     ctx.restore();
-  };
+  }
 
   const drawImpactEffects = (ctx: CanvasRenderingContext2D) => {
     const impactEffects = useVisualEffects.getState().impactEffects;
@@ -2820,10 +2941,13 @@ export default memo(function CanvasGame() {
       ctx.restore();
     }
   };
-  
+
   const drawMageLightning = (ctx: CanvasRenderingContext2D) => {
     if (mageLightningRef.current.length === 0) return;
-    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+    const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT,
+    );
 
     for (const atk of mageLightningRef.current) {
       const sx = snapToGrid(centerX + ((atk.targetX - position.x) * 50) / 2);
@@ -2849,50 +2973,46 @@ export default memo(function CanvasGame() {
         }
 
         // ── Floating static particles rising from mage ──
-  const sSheet = mageStaticParticleSheet;
+        const sSheet = mageStaticParticleSheet;
 
-  if (sSheet.complete && sSheet.naturalWidth > 0) {
-    const totalFrames = 4;
-    const sFrameW = sSheet.naturalWidth / totalFrames;
-    const sFrameH = sSheet.naturalHeight;
-    const sDrawW = sFrameW * 2;
-    const sDrawH = sFrameH * 2;
+        if (sSheet.complete && sSheet.naturalWidth > 0) {
+          const totalFrames = 4;
+          const sFrameW = sSheet.naturalWidth / totalFrames;
+          const sFrameH = sSheet.naturalHeight;
+          const sDrawW = sFrameW * 2;
+          const sDrawH = sFrameH * 2;
 
-    for (const p of atk.particles) {
+          for (const p of atk.particles) {
+            // Animate frame based on lifetime progression
+            const progress = p.age / p.maxAge;
+            const frame = Math.min(
+              Math.floor(progress * totalFrames),
+              totalFrames - 1,
+            );
 
+            const pScreenX = snapToGrid(
+              centerX + ((p.x - p.vx - position.x) * 50) / 2,
+            );
 
-      // Animate frame based on lifetime progression
-      const progress = p.age / p.maxAge;
-      const frame = Math.min(
-        Math.floor(progress * totalFrames),
-        totalFrames - 1
-      );
+            const pScreenY = snapToGrid(
+              centerY + ((p.z - p.vy - position.z) * 50) / 2,
+            );
 
-      const pScreenX = snapToGrid(
-        centerX + ((p.x - p.vx - position.x) * 50) / 2
-      );
+            ctx.drawImage(
+              sSheet,
+              frame * sFrameW,
+              0,
+              sFrameW,
+              sFrameH,
+              pScreenX - sDrawW / 2,
+              pScreenY - sDrawH / 2,
+              sDrawW,
+              sDrawH,
+            );
+          }
 
-      const pScreenY = snapToGrid(
-        centerY + ((p.z - p.vy - position.z) * 50) / 2
-      );
-
-
-
-      ctx.drawImage(
-        sSheet,
-        frame * sFrameW,
-        0,
-        sFrameW,
-        sFrameH,
-        pScreenX - sDrawW / 2,
-        pScreenY - sDrawH / 2,
-        sDrawW,
-        sDrawH
-      );
-    }
-
-    ctx.globalAlpha = 1;
-  }
+          ctx.globalAlpha = 1;
+        }
 
         ctx.globalAlpha = 1;
         ctx.restore();
@@ -2900,8 +3020,7 @@ export default memo(function CanvasGame() {
         const MAX_FIRE_TIME = 0.4;
 
         // Normalize animation progress
-        const progress =
-          1 - atk.fireTimer / MAX_FIRE_TIME;
+        const progress = 1 - atk.fireTimer / MAX_FIRE_TIME;
 
         const lSheet = enemyLightningSpriteSheet;
 
@@ -2915,14 +3034,10 @@ export default memo(function CanvasGame() {
         const totalFrames = 5;
         const frameIndex = Math.min(
           totalFrames - 1,
-          Math.floor(progress * totalFrames)
+          Math.floor(progress * totalFrames),
         );
 
-
-        if (
-          lSheet.complete &&
-          lSheet.naturalWidth > 0
-        ) {
+        if (lSheet.complete && lSheet.naturalWidth > 0) {
           ctx.save();
 
           ctx.translate(sx, sy);
@@ -2955,7 +3070,7 @@ export default memo(function CanvasGame() {
       }
     }
   };
-  
+
   const drawDamageNumbers = (ctx: CanvasRenderingContext2D) => {
     const damageNumbers = useVisualEffects.getState().damageNumbers;
     const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(
@@ -2985,15 +3100,13 @@ export default memo(function CanvasGame() {
         fontWhiteImage,
         {
           align: "center",
-          scale: dmg.scale, 
+          scale: dmg.scale,
         },
       );
     });
 
     ctx.restore();
   };
-
-  
 
   const drawTreeLightning = (ctx: CanvasRenderingContext2D, nowMs: number) => {
     if (treeLightningRef.current.length === 0) return;
@@ -3176,7 +3289,8 @@ export default memo(function CanvasGame() {
     // Mage enemy rendering
     if (enemy.type === "mage") {
       const sheet = mageEnemySpriteSheet;
-      const hasSheet = sheet.complete && sheet.naturalWidth > 0 && sheet.naturalHeight > 0;
+      const hasSheet =
+        sheet.complete && sheet.naturalWidth > 0 && sheet.naturalHeight > 0;
       const COLS = 4;
       const frameW = hasSheet ? sheet.naturalWidth / COLS : 48;
       const frameH = hasSheet ? sheet.naturalHeight : 48;
@@ -3195,10 +3309,9 @@ export default memo(function CanvasGame() {
         ctx.translate(screenX, screenY);
         ctx.globalAlpha = 0.35 + Math.sin(performance.now() / 80) * 0.15;
         ctx.fillStyle = action === "heal" ? "#44ff88" : "#ff3333";
-        
+
         ctx.globalAlpha = 1;
         ctx.restore();
-        
       }
 
       ctx.save();
@@ -3209,9 +3322,14 @@ export default memo(function CanvasGame() {
       if (hasSheet) {
         ctx.drawImage(
           sheet,
-          animFrame * frameW, 0, frameW, frameH,
-          Math.floor(-drawW / 2), Math.floor(-drawH / 2),
-          drawW, drawH,
+          animFrame * frameW,
+          0,
+          frameW,
+          frameH,
+          Math.floor(-drawW / 2),
+          Math.floor(-drawH / 2),
+          drawW,
+          drawH,
         );
       } else {
         ctx.fillStyle = "#aa44ff";
@@ -3250,7 +3368,7 @@ export default memo(function CanvasGame() {
 
     ctx.restore();
   };
-  
+
   const drawEnemyEyes = (
     ctx: CanvasRenderingContext2D,
     enemy: any,
@@ -3261,15 +3379,20 @@ export default memo(function CanvasGame() {
     if (enemy.type === "tree") {
       if (enemy.spriteFrame === 0) return;
 
-      const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+      const { x: centerX, y: centerY } =
+        cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
       const screenX = snapToGrid(centerX + ((enemy.x - position.x) * 50) / 2);
       const screenY = snapToGrid(centerY + ((enemy.z - position.z) * 50) / 2);
 
-      if (treeEnemyEyesSprite.complete && treeEnemyEyesSprite.naturalWidth > 0 && treeEnemyEyesSprite.naturalHeight > 0) {
+      if (
+        treeEnemyEyesSprite.complete &&
+        treeEnemyEyesSprite.naturalWidth > 0 &&
+        treeEnemyEyesSprite.naturalHeight > 0
+      ) {
         const frameW = treeEnemyEyesSprite.naturalWidth / 2;
         const frameH = treeEnemyEyesSprite.naturalHeight;
         const eyeFrame = enemy.spriteFrame === 1 ? 0 : 1;
-        const radiusPx = enemy.radius * (25);
+        const radiusPx = enemy.radius * 25;
         const scale = 2;
         const drawW = frameW * scale;
         const drawH = frameH * scale;
@@ -3553,7 +3676,8 @@ export default memo(function CanvasGame() {
       );
 
       const sheet = reaperBossSpriteSheet;
-      const hasSheet = sheet.complete && sheet.naturalWidth > 0 && sheet.naturalHeight > 0;
+      const hasSheet =
+        sheet.complete && sheet.naturalWidth > 0 && sheet.naturalHeight > 0;
       // 2 rows × 4 cols spritesheet, each frame 128×128
       const COLS = 4;
       const ROWS = 2;
@@ -3597,8 +3721,17 @@ export default memo(function CanvasGame() {
             ctx.translate(screenX + ndx * g, screenY + ndz * g);
             ctx.imageSmoothingEnabled = false;
             if (!facingRight) ctx.scale(-1, 1);
-            ctx.drawImage(sheet, srcX, srcY, frameW, frameH,
-              Math.floor(-drawSize / 2), Math.floor(-drawSize / 2), drawSize, drawSize);
+            ctx.drawImage(
+              sheet,
+              srcX,
+              srcY,
+              frameW,
+              frameH,
+              Math.floor(-drawSize / 2),
+              Math.floor(-drawSize / 2),
+              drawSize,
+              drawSize,
+            );
             ctx.restore();
           }
         }
@@ -3625,8 +3758,17 @@ export default memo(function CanvasGame() {
         ctx.imageSmoothingEnabled = false;
         if (!facingRight) ctx.scale(-1, 1);
         if (enemy.hitFlash > 0) ctx.filter = "brightness(60)";
-        ctx.drawImage(sheet, srcX, srcY, frameW, frameH,
-          Math.floor(-drawSize / 2), Math.floor(-drawSize / 2), drawSize, drawSize);
+        ctx.drawImage(
+          sheet,
+          srcX,
+          srcY,
+          frameW,
+          frameH,
+          Math.floor(-drawSize / 2),
+          Math.floor(-drawSize / 2),
+          drawSize,
+          drawSize,
+        );
         ctx.restore();
       }
 
@@ -3636,18 +3778,36 @@ export default memo(function CanvasGame() {
       const hpPct = Math.max(0, enemy.health / enemy.maxHealth);
 
       ctx.fillStyle = "rgba(0,0,0,0.72)";
-      ctx.fillRect(snapToGrid(screenX - barW / 2 - 2), snapToGrid(barY - 2), barW + 4, barH + 4);
+      ctx.fillRect(
+        snapToGrid(screenX - barW / 2 - 2),
+        snapToGrid(barY - 2),
+        barW + 4,
+        barH + 4,
+      );
       ctx.fillStyle = "#400";
       ctx.fillRect(snapToGrid(screenX - barW / 2), barY, barW, barH);
       ctx.fillStyle = hpPct > 0.45 ? "#5DFF63" : "#ffc642";
-      ctx.fillRect(snapToGrid(screenX - barW / 2), barY, snapToGrid(barW * hpPct), barH);
+      ctx.fillRect(
+        snapToGrid(screenX - barW / 2),
+        barY,
+        snapToGrid(barW * hpPct),
+        barH,
+      );
       ctx.strokeStyle = "#fff";
       ctx.lineWidth = 2;
       ctx.strokeRect(snapToGrid(screenX - barW / 2), barY, barW, barH);
-      drawBitmapText(ctx, "BOSS", snapToGrid(screenX), snapToGrid(barY - 10), font, fontRedImage, {
-        align: "center",
-        scale: 1,
-      });
+      drawBitmapText(
+        ctx,
+        "BOSS",
+        snapToGrid(screenX),
+        snapToGrid(barY - 10),
+        font,
+        fontRedImage,
+        {
+          align: "center",
+          scale: 1,
+        },
+      );
       return;
     }
 
@@ -3656,17 +3816,24 @@ export default memo(function CanvasGame() {
 
     // Crow: rendered here in the eye/overlay layer
     if (enemy.type === "crow") {
-      const { x: centerX, y: centerY } = cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
-      const screenX = snapToGrid(centerX + ((enemy.position.x - position.x) * 50) / 2);
-      const screenY = snapToGrid(centerY + ((enemy.position.z - position.z) * 50) / 2);
+      const { x: centerX, y: centerY } =
+        cameraRef.current.getPlayerScreenCenter(CANVAS_WIDTH, CANVAS_HEIGHT);
+      const screenX = snapToGrid(
+        centerX + ((enemy.position.x - position.x) * 50) / 2,
+      );
+      const screenY = snapToGrid(
+        centerY + ((enemy.position.z - position.z) * 50) / 2,
+      );
       const sheet = crowEnemySpriteSheet;
-      const hasSheet = sheet.complete && sheet.naturalWidth > 0 && sheet.naturalHeight > 0;
+      const hasSheet =
+        sheet.complete && sheet.naturalWidth > 0 && sheet.naturalHeight > 0;
       const cols = 4;
       const frameW = hasSheet ? sheet.naturalWidth / cols : 20;
       const frameH = hasSheet ? sheet.naturalHeight : 20;
-      const animFrame = (enemy.spawnTimer ?? 0) > 0
-        ? 0
-        : Math.floor(animationNowMs / 120) % cols;
+      const animFrame =
+        (enemy.spawnTimer ?? 0) > 0
+          ? 0
+          : Math.floor(animationNowMs / 120) % cols;
       const drawSize = 40;
       const facingRight = enemy.position.x <= position.x;
       ctx.save();
@@ -3675,8 +3842,17 @@ export default memo(function CanvasGame() {
       if (!facingRight) ctx.scale(-1, 1);
       if (enemy.hitFlash > 0) ctx.filter = "brightness(60)";
       if (hasSheet) {
-        ctx.drawImage(sheet, animFrame * frameW, 0, frameW, frameH,
-          Math.floor(-drawSize / 2), Math.floor(-drawSize / 2), drawSize, drawSize);
+        ctx.drawImage(
+          sheet,
+          animFrame * frameW,
+          0,
+          frameW,
+          frameH,
+          Math.floor(-drawSize / 2),
+          Math.floor(-drawSize / 2),
+          drawSize,
+          drawSize,
+        );
       }
       ctx.restore();
       return;
@@ -3824,7 +4000,10 @@ export default memo(function CanvasGame() {
 
     // ── Crow custom death animation (1 row × 4 cols, 20×20 px) ──
     const crowSprite = crowDeathSpritesheet;
-    const crowHasSprite = crowSprite.complete && crowSprite.naturalWidth > 0 && crowSprite.naturalHeight > 0;
+    const crowHasSprite =
+      crowSprite.complete &&
+      crowSprite.naturalWidth > 0 &&
+      crowSprite.naturalHeight > 0;
     const crowFrameW = crowHasSprite ? crowSprite.naturalWidth / 4 : 20;
     const crowFrameH = crowHasSprite ? crowSprite.naturalHeight : 20;
     const nextCrowAnimations: EnemyDeathAnimation[] = [];
@@ -3835,8 +4014,12 @@ export default memo(function CanvasGame() {
       if (frameIndex >= 4) continue;
       nextCrowAnimations.push(animation);
 
-      const screenX = snapToGrid(centerX + ((animation.position.x - position.x) * 50) / 2);
-      const screenY = snapToGrid(centerY + ((animation.position.z - position.z) * 50) / 2);
+      const screenX = snapToGrid(
+        centerX + ((animation.position.x - position.x) * 50) / 2,
+      );
+      const screenY = snapToGrid(
+        centerY + ((animation.position.z - position.z) * 50) / 2,
+      );
       const drawW = crowFrameW * 3;
       const drawH = crowFrameH * 3;
 
@@ -3844,14 +4027,22 @@ export default memo(function CanvasGame() {
       ctx.translate(screenX, screenY);
       ctx.imageSmoothingEnabled = false;
       if (crowHasSprite) {
-        ctx.drawImage(crowSprite, frameIndex * crowFrameW, 0, crowFrameW, crowFrameH,
-          -drawW / 2, -drawH / 2, drawW, drawH);
+        ctx.drawImage(
+          crowSprite,
+          frameIndex * crowFrameW,
+          0,
+          crowFrameW,
+          crowFrameH,
+          -drawW / 2,
+          -drawH / 2,
+          drawW,
+          drawH,
+        );
       }
       ctx.restore();
     }
     crowDeathAnimationsRef.current = nextCrowAnimations;
   };
-
 
   const drawSummons = (
     ctx: CanvasRenderingContext2D,
@@ -3987,7 +4178,6 @@ export default memo(function CanvasGame() {
       }
     }
   };
-
 
   const drawStatusEffects = (
     ctx: CanvasRenderingContext2D,

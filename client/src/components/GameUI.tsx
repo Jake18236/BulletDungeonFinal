@@ -34,68 +34,60 @@ const hashText = (text: string) => {
 
 
 export function LevelUpScreen() {
+  const {
+    level,
+    availableUpgrades,
+    showLevelUpScreen,
+    selectUpgrade,
+  } = usePlayer();
 
-  const { level, availableUpgrades, showLevelUpScreen, xp, selectUpgrade } = usePlayer();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [isChooseHovered, setIsChooseHovered] = useState(false);
-  const [animationPhase, setAnimationPhase] = useState<"beam" | "dropdown" | "ready">("beam");
-  const [beamProgress, setBeamProgress] = useState(0);
-  const [beamFrame, setBeamFrame] = useState(0);
+  const [animationPhase, setAnimationPhase] = useState<
+    "dropdown" | "ready"
+  >("dropdown");
+
   const titleCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const descCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const chooseCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
+  const previewIndex =
+    hoveredIndex !== null ? hoveredIndex : selectedIndex;
+
+  const displayedUpgrade =
+    availableUpgrades?.[previewIndex];
+
+  const playerScreenX =
+    (window.innerWidth - CANVAS_WIDTH) / 2 +
+    CANVAS_WIDTH / 2;
+
+  const playerScreenY =
+    (window.innerHeight - CANVAS_HEIGHT) / 2 +
+    CANVAS_HEIGHT / 2;
+
+  /* -------------------------
+     RESET ON OPEN
+  ------------------------- */
   useEffect(() => {
-    if (showLevelUpScreen) {
-      // Force immediate state reset
-      setAnimationPhase("beam");
-      setBeamProgress(0);
-      setBeamFrame(0);
-      setSelectedIndex(0);
-      setHoveredIndex(null);
-    }
+    if (!showLevelUpScreen) return;
+
+    setSelectedIndex(0);
+    setHoveredIndex(null);
+    setIsChooseHovered(false);
+
+    setAnimationPhase("dropdown");
+
+    const t = setTimeout(() => {
+      setAnimationPhase("ready");
+    }, 450);
+
+    return () => clearTimeout(t);
   }, [showLevelUpScreen]);
-  
-  // Beam animation
-  useEffect(() => {
-    if (animationPhase === "beam" && showLevelUpScreen) {
-      const interval = setInterval(() => {
-        setBeamProgress(prev => {
-          if (prev >= 0.480) {
-            clearInterval(interval);
-            setTimeout(() => setAnimationPhase("dropdown"), 0);
-            return 1;
-          }
-          return prev + 0.02;
-        });
-      }, 20);
-      return () => clearInterval(interval);
-    }
-  }, [animationPhase, showLevelUpScreen]);
 
-  useEffect(() => {
-    if (animationPhase !== "beam" || !showLevelUpScreen) return;
-
-    const interval = setInterval(() => {
-      setBeamFrame((prev) => (prev + 1) % 6);
-    }, 80);
-
-    return () => clearInterval(interval);
-  }, [animationPhase, showLevelUpScreen]);
-
-  // Dropdown animation → ready
-  useEffect(() => {
-    if (animationPhase === "dropdown") {
-      const timeout = setTimeout(() => setAnimationPhase("ready"), 100);
-      return () => clearTimeout(timeout);
-    }
-  }, [animationPhase]);
-  
-  const displayedUpgrade = availableUpgrades[hoveredIndex ?? selectedIndex];
-  const playerScreenX = (window.innerWidth - CANVAS_WIDTH) / 2 + CANVAS_WIDTH / 2;
-  const playerScreenY = (window.innerHeight - CANVAS_HEIGHT) / 2 + CANVAS_HEIGHT / 2;
-
+  /* -------------------------
+     TITLE RENDER
+  ------------------------- */
   useEffect(() => {
     if (animationPhase !== "ready") return;
 
@@ -107,66 +99,77 @@ export function LevelUpScreen() {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    const cx = canvas.width / 2;
-
-  drawBitmapText(ctx, "CHOOSE AN UPGRADE", cx, 50, font, fontRedImage, {
-    align: "center",
-    scale: 3,
-  });
+    drawBitmapText(
+      ctx,
+      "CHOOSE AN UPGRADE",
+      canvas.width / 2,
+      50,
+      font,
+      fontRedImage,
+      {
+        align: "center",
+        scale: 3,
+      }
+    );
   }, [animationPhase]);
 
-// description text
-useEffect(() => {
-  if (animationPhase !== "ready") return;
+  /* -------------------------
+     DESCRIPTION RENDER
+  ------------------------- */
+  useEffect(() => {
+    if (animationPhase !== "ready") return;
+    if (!displayedUpgrade) return;
 
-  const canvas = descCanvasRef.current;
-  if (!canvas) return;
+    const canvas = descCanvasRef.current;
+    if (!canvas) return;
 
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  const cx = canvas.width / 2;
+    drawNineSlice(
+      ctx,
+      frameSprite,
+      0,
+      0,
+      canvas.width,
+      canvas.height,
+      3
+    );
 
-ctx.imageSmoothingEnabled = false;
+    drawBitmapText(
+      ctx,
+      displayedUpgrade.name,
+      canvas.width / 2,
+      20,
+      font,
+      fontRedImage,
+      {
+        align: "center",
+        scale: 4,
+      }
+    );
 
-drawNineSlice(
-  ctx,
-  frameSprite,
-  0,
-  0,
-  canvas.width,
-  canvas.height,
-  3,
-);
+    drawWrappedText(
+      ctx,
+      displayedUpgrade.description,
+      canvas.width / 2,
+      100,
+      canvas.width - 40,
+      font,
+      fontWhiteImage,
+      {
+        align: "center",
+        scale: 2,
+      }
+    );
+  }, [animationPhase, displayedUpgrade]);
 
-  // --- NAME ---
-  drawBitmapText(ctx, displayedUpgrade.name, cx, 20, font, fontRedImage, {
-    align: "center",
-    scale: 4,
-    
-  });
-
-  // --- DESCRIPTION ---
-  drawWrappedText(
-    ctx,
-    displayedUpgrade.description,
-    cx,
-    100,
-    canvas.width - 40,
-    font,
-    fontWhiteImage,
-    {
-      align: "center",
-      scale: 2,
-    }
-  );
-
-}, [animationPhase, displayedUpgrade]);
-  
-// choose button text
-useEffect(() => {
+  /* -------------------------
+     BUTTON RENDER
+  ------------------------- */
+  useEffect(() => {
     if (animationPhase !== "ready") return;
 
     const canvas = chooseCanvasRef.current;
@@ -178,210 +181,168 @@ useEffect(() => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.imageSmoothingEnabled = false;
 
-    
     drawNineSlice(
-  ctx,
-  frameSprite,
-  0,
-  0,
-  canvas.width,
-  canvas.height,
-  2,
-);
+      ctx,
+      frameSprite,
+      0,
+      0,
+      canvas.width,
+      canvas.height,
+      2
+    );
 
-
-    drawBitmapText(ctx, 
-      "CHOOSE", 
-      canvas.width / 2, 
-      canvas.height / 2, 
-      font, isChooseHovered ? fontWhiteImage : fontRedImage,
-       {
-    align: "center",
-    baseline: "middle",
-    scale: 2,
-  });
-
+    drawBitmapText(
+      ctx,
+      "CHOOSE",
+      canvas.width / 2,
+      canvas.height / 2,
+      font,
+      isChooseHovered ? fontWhiteImage : fontRedImage,
+      {
+        align: "center",
+        baseline: "middle",
+        scale: 2,
+      }
+    );
   }, [animationPhase, isChooseHovered]);
 
-if (!showLevelUpScreen || availableUpgrades.length === 0) return null;
+  /* -------------------------
+     EARLY EXIT
+  ------------------------- */
+  if (!showLevelUpScreen || availableUpgrades.length === 0) {
+    return null;
+  }
 
+  /* -------------------------
+     RENDER
+  ------------------------- */
   return (
     <div className="fixed inset-0 z-[20] font-pixel pointer-events-none">
-      {/* Background overlay */}
+      {/* Background */}
+      <div className="absolute inset-0 bg-black opacity-30" />
+
+      {/* MAIN PANEL */}
       <div
-        className="absolute inset-0 bg-black transition-opacity duration-500"
-        style={{ opacity: 0.3 }}
-      />
+        className="absolute left-1/2 w-full max-w-3xl px-4 pointer-events-auto"
+        style={{
+          top: animationPhase === "dropdown" ? "-100%" : "50%",
+          transform: "translate(-50%, -50%)",
+          transition:
+            "top 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)",
+        }}
+      >
+        {/* TITLE */}
+        <div className="text-center mb-4">
+          <canvas
+            ref={titleCanvasRef}
+            width={600}
+            height={120}
+            style={{
+              display: "block",
+              margin: "0 auto",
+              opacity: animationPhase === "ready" ? 1 : 0,
+              transition: "opacity 0.3s ease",
+            }}
+          />
+        </div>
 
-      {/* Beam animation */}
-      {animationPhase === "beam" && (
-        <div
-          className="absolute pointer-events-none"
-          style={{
-            left: `${playerScreenX}px`,
-            top: `${playerScreenY + 24}px`,
-            width: "128px",
-            height: "420px",
-            transform: "translate(-50%, -100%)",
+        {/* UPGRADES */}
+        <div className="flex justify-center gap-0 mb-20">
+          {availableUpgrades.map((upgrade, i) => {
+            const isSelected = i === selectedIndex;
+            const isHovered = i === hoveredIndex;
+            const isReady = animationPhase === "ready";
 
-            backgroundImage: `url(${LEVEL_UP_BEAM_SPRITESHEET})`,
-            backgroundRepeat: "no-repeat",
-            backgroundSize: "600% 100%",
-            backgroundPosition: `${(beamFrame / 5) * 100}% 0%`,
-            opacity: 1.5,
-            filter: "none",
-          }}
-        />
-      )}
+            return (
+              <div
+                key={upgrade.id}
+                onClick={() => {
+                  if (isReady) setSelectedIndex(i);
+                }}
+                onMouseEnter={() => setHoveredIndex(i)}
+                onMouseLeave={() => setHoveredIndex(null)}
+                className="relative"
+                style={{
+                  width: "96px",
+                  height: "96px",
+                  pointerEvents: isReady ? "auto" : "none",
+                  opacity: isReady ? 1 : 0,
+                  transition: "transform 140ms ease",
+                }}
+              >
+                <div
+                  className="upgrade-container-sprite"
+                  style={{
+                    backgroundImage: `url(${CONTAINER_SPRITESHEET})`,
+                    backgroundPosition: `0% ${
+                      (isSelected || isHovered ? 1 : 0) * 100
+                    }%`,
+                  }}
+                />
 
-      {animationPhase !== "beam" && (
-        <div
-          className="absolute left-1/2 w-full max-w-3xl px-4 pointer-events-auto"
-          style={{
-            top: animationPhase === "dropdown" ? "-100%" : "50%",
-            transform: "translate(-50%, -50%)",
-            transition: animationPhase === "dropdown" || animationPhase === "ready" 
-              ? "top 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)" 
-              : "none",
-          }}
-        >
-          {/* Level text */}
-          <div className="text-center mb-4">
+                <div
+                  className="upgrade-sprite"
+                  style={{
+                    backgroundImage: `url(${UPGRADES_SPRITESHEET})`,
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
+
+        {/* DESCRIPTION */}
+        <div className="flex justify-center">
+          <canvas
+            ref={descCanvasRef}
+            width={800}
+            height={300}
+            style={{
+              display: "block",
+              transform:
+                animationPhase === "ready"
+                  ? "translateY(0) scale(1)"
+                  : "translateY(30px) scale(0.95)",
+              transition:
+                "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.5s",
+            }}
+          />
+        </div>
+
+        {/* BUTTON */}
+        <div className="flex justify-center mt-6">
+          <div
+            onClick={() => {
+              if (animationPhase === "ready") {
+                selectUpgrade(displayedUpgrade);
+                setIsChooseHovered(false);
+              }
+            }}
+            onMouseEnter={() => setIsChooseHovered(true)}
+            onMouseLeave={() => setIsChooseHovered(false)}
+            style={{
+              width: "200px",
+              height: "60px",
+              transform:
+                animationPhase === "ready"
+                  ? "translateY(0) scale(1)"
+                  : "translateY(30px) scale(0.95)",
+              transition:
+                "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.5s",
+            }}
+          >
             <canvas
-              ref={titleCanvasRef}
-              width={600}
-              height={120}
-              style={{
-                display: "block",
-                margin: "0 auto",
-                opacity:
-                  animationPhase === "ready" ? 1 : 0,
-                transition: "opacity 0.3s ease",
-              }}
+              ref={chooseCanvasRef}
+              width={200}
+              height={60}
+              style={{ display: "block" }}
             />
           </div>
-
-          {/* Upgrade icons */}
-          <div className="flex justify-center gap-0 mb-20">
-            {availableUpgrades.map((upgrade, i) => {
-              const isSelected = i === selectedIndex;
-              const isHovered = i === hoveredIndex;
-              const isReady = animationPhase === "ready";
-              const iconSeed = hashText(`${upgrade.id}-${i}`);
-              const iconRow = iconSeed % 4;
-              const iconCol = Math.floor(iconSeed / 4) % 4;
-              const containerRow = isSelected || isHovered ? 1 : 0;
-
-              return (
-                <div
-                  key={upgrade.id}
-                  onClick={() => isReady && setSelectedIndex(i)}
-                  onMouseEnter={() => setHoveredIndex(i)}
-                  onMouseLeave={() => setHoveredIndex(null)}
-                  className="relative"
-                  style={{
-                    width: "96px",
-                    height: "96px",
-                    pointerEvents: isReady ? "auto" : "none",
-                    transform: `scale(${isHovered ? 1 : 1})`,
-                    opacity: isReady ? 1 : 0,
-                    transition: "transform 140ms ease",
-                  }}
-                >
-                  <div
-                    className="upgrade-container-sprite"
-                    style={{
-                      backgroundImage: `url(${CONTAINER_SPRITESHEET})`,
-                      backgroundPosition: `0% ${containerRow * 100}%`,
-                    }}
-                  />
-                  <div
-                    className="upgrade-filler-sprite"
-                    style={{
-                      backgroundImage: `url(${CONTAINER_SPRITESHEET})`,
-                      backgroundPosition: `100% ${containerRow * 100}%`,
-                    }}
-                  />
-                  <div
-                    className="upgrade-sprite"
-                    style={{
-                      backgroundImage: `url(${UPGRADES_SPRITESHEET})`,
-                      backgroundSize: "400% 400%",
-                      backgroundPosition: `${(iconCol / 3) * 100}% ${(iconRow / 3) * 100}%`,
-                    }}
-                  />
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Upgrade description */}
-          <div
-            className="flex justify-center"
-          >
-
-            <canvas
-  ref={descCanvasRef}
-  width={800}
-  height={300}
-  style={{
-    display: "block",
-    overflow: "hidden",
-    backgroundRepeat: "no-repeat",
-    backgroundSize: "100% 100%",
-    transform:
-    animationPhase === "ready"
-      ? "translateY(0) scale(1)"
-      : "translateY(30px) scale(0.95)",
-    transition:
-      "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.5s",
-            }}
-/>
-          </div>
-
-          {/* Choose button */}
-          <div className="flex justify-center mt-6">
-  <div
-  onClick={() => {
-    if (animationPhase === "ready") {
-      selectUpgrade(displayedUpgrade);
-      setIsChooseHovered(false);
-    }
-  }}
-    onMouseEnter={() => setIsChooseHovered(true)}
-    onMouseLeave={() => setIsChooseHovered(false)}
-    style={{
-      width: "200px",
-      height: "60px",
-      overflow: "hidden",
-      alignItems: "center",
-      justifyContent: "center",
-      transform:
-    animationPhase === "ready"
-      ? "translateY(0) scale(1)"
-      : "translateY(30px) scale(0.95)",
-    transition:
-      "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.5s",
-    }}
-  >
-    <canvas
-      ref={chooseCanvasRef}
-      width={200}
-      height={60}
-      style={{ display: "block",
-      overflow: "hidden",
-      alignItems: "center",
-      justifyContent: "center",
-       }}
-    />
-  </div>
-</div>
         </div>
-      )}
+      </div>
 
-      {/* Hexagon styles */}
+      {/* STYLES */}
       <style>{`
-        
         .upgrade-sprite {
           position: absolute;
           left: 50%;
@@ -389,28 +350,16 @@ if (!showLevelUpScreen || availableUpgrades.length === 0) return null;
           width: 64px;
           height: 64px;
           transform: translate(-50%, -50%);
-          background-repeat: no-repeat;
           image-rendering: pixelated;
           pointer-events: none;
         }
 
-        .upgrade-container-sprite,
-        .upgrade-filler-sprite {
-          gap: 5px;
+        .upgrade-container-sprite {
           position: absolute;
           inset: 0;
           background-size: 200% 200%;
-          background-repeat: no-repeat;
-          
-          pointer-events: none;
           image-rendering: pixelated;
         }
-
-        .upgrade-filler-sprite {
-          opacity: 1;
-          pointer-events: none;
-        }
-        
 
         .font-pixel {
           font-family: 'Pixelify Sans';

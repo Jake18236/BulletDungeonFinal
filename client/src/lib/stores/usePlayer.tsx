@@ -12,7 +12,7 @@ export interface Upgrade {
   id: string;
   name: string;
   description: string;
-  icon: string | SpriteIcon;
+  icon: number;
   category: string;
   tier: number;
   requires?: string[];
@@ -190,10 +190,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     id: "take_aim",
     name: "Take Aim",
     description: "Bullet Speed +30%, Spread -15%",
-    icon: {
-      normal: "/sprites/upgrades/speed/take_aim.png",
-      selected: "/sprites/upgrades/speed/take_aim_selected.png",
-    },
+    icon: 59,
     category: "speed",
     tier: 1,
     apply: () => {
@@ -203,13 +200,13 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
         accuracy: Math.min(1.0, player.accuracy * 1.15),
       });
     },
-  },
+  }, //
 
   penetration: {
     id: "penetration",
     name: "Penetration",
     description: "Bullet Speed +15%, Piercing +1",
-    icon: "➡️",
+    icon: 61,
     category: "speed",
     tier: 2,
     requires: ["take_aim"],
@@ -222,14 +219,14 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     },
   },
 
-regeneration: {
+  regeneration: {
   id: "regeneration",
   name: "Regeneration",
   description: "Heal 1 HP every 50 seconds",
-  icon: "💚",
-  category: "vitality",
+  icon: 28,
+  category: "buff",
   tier: 3,
-  requires: ["vitality"],
+  requires: ["fleet_footed"],
   apply: () => {
     usePlayer.setState({
       regeneration: true,
@@ -238,12 +235,12 @@ regeneration: {
   },
 },
 
-wildfire: {
+  wildfire: {
   id: "wildfire",
   name: "Wildfire",
   description:
     "Summons inflict Burn. Burn duration +100%",
-  icon: "🔥",
+  icon: 42,
   category: "summon",
   tier: 3,
   requires: ["ghost_wizard", "electro_mastery"],
@@ -258,12 +255,12 @@ wildfire: {
   },
 },
 
-master_summoner: {
+  master_summoner: {
   id: "master_summoner",
   name: "Master Summoner",
   description:
     "Summon Attack Speed +50%, Bullet Damage -25%",
-  icon: "👑",
+  icon: 4,
   category: "summon",
   tier: 4,
   requires: ["wildfire", "blade_dance"],
@@ -281,11 +278,11 @@ master_summoner: {
   },
 },
 
-sharpened_edge: {
+  sharpened_edge: {
   id: "sharpened_edge",
   name: "Sharpen",
   description: "All Summon Damage +40%",
-  icon: "🗡️",
+  icon: 53,
   category: "summon",
   tier: 2,
   requires: ["magic_dagger"],
@@ -297,11 +294,11 @@ sharpened_edge: {
   },
 },
 
-blade_dance: {
+  blade_dance: {
   id: "blade_dance",
   name: "Blade Dance",
   description: "Summon 2 additional Daggers",
-  icon: "⚔️",
+  icon: 54,
   category: "summon",
   tier: 3,
   requires: ["sharpened_edge"],
@@ -313,29 +310,29 @@ blade_dance: {
   },
 },
 
-stormcaller: {
+  stormcaller: {
   id: "stormcaller",
   name: "Stormcaller",
   description:
     "Every 15 seconds, all enemies in range are struck by lightning",
-  icon: "🌩️",
+  icon: 34,
   category: "summon",
-  tier: 4,
-  requires: ["electro_mastery"],
+  tier: 3,
+  requires: ["energized"],
   apply: () => {
     useSummons.setState({
       stormcaller: true,
-      stormcallerCooldown: 15 + Math.random(),
+      stormcallerCooldown: 15,
     });
   },
 },
 
-minigun: {
+  minigun: {
   id: "minigun",
-  name: "Minigun",
+  name: "Bullet Spray",
   description:
     "Max Ammo x3, Spread +50%, Knockback -90%, Fire Rate +50%, Bullet Damage -50%",
-  icon: "🔫",
+  icon: 23,
   category: "reload",
   tier: 3,
   requires: ["armed_ready", "fresh_clip"],
@@ -360,7 +357,7 @@ minigun: {
     id: "sniper",
     name: "Sniper",
     description: "Bullet Speed +25%, Bullet Damage +15%",
-    icon: "🎯",
+    icon: 60,
     category: "speed",
     tier: 2,
     requires: ["take_aim"],
@@ -376,18 +373,19 @@ minigun: {
   hyper_rounds: {
   id: "hyper_rounds",
   name: "Hyper Rounds",
-  description: "Bullet Size -50%, Fire Rate -25%, Bullet Speed +25%, Bullet Damage +100%",
-  icon: "⚡",
+  description: "Bullet Size -50%, Fire Rate -25%, Bullet Speed +25%, Bullet Damage +50%, Piercing +2",
+  icon: 61,
   category: "speed",
   tier: 3,
-  requires: ["sniper"],
+  requires: ["penetration"],
   apply: () => {
     const player = usePlayer.getState();
     usePlayer.setState({
       projectileSize: player.projectileSize * 0.5,
       firerate: player.firerate * 1.25,
       baseProjectileSpeed: player.baseProjectileSpeed * 1.25,
-      baseDamage: player.baseDamage * 2.0,
+      baseDamage: player.baseDamage * 1.5,
+      piercing: player.piercing + 1,
     });
   },
 },
@@ -396,12 +394,12 @@ minigun: {
     id: "assassin",
     name: "Assassin",
     description: "Instant-kill enemies below 20% HP",
-    icon: "💀",
+    icon: 62,
     category: "speed",
     tier: 3,
     requires: ["sniper", "penetration"],
     apply: () => {
-      usePlayer.setState({ instantKillThreshold: 0.2 });
+      usePlayer.setState({ instantKillThreshold: 2 });
     },
   },
 
@@ -410,10 +408,7 @@ minigun: {
     id: "power_shot",
     name: "Power Shot",
     description: "Bullet Damage +40%, Knockback +20%",
-    icon: {
-      normal: "/sprites/upgrades/damage/power_shot.png",
-      selected: "/sprites/upgrades/damage/power_shot_selected.png",
-    },
+    icon: 16,
     category: "damage",
     tier: 1,
     apply: () => {
@@ -429,7 +424,7 @@ minigun: {
     id: "big_shot",
     name: "Big Shot",
     description: "Bullet Damage +45%, Bullet Size +40%",
-    icon: "🔵",
+    icon: 17,
     category: "damage",
     tier: 2,
     requires: ["power_shot"],
@@ -441,11 +436,12 @@ minigun: {
       });
     },
   },
+  
   hand_cannon: {
   id: "hand_cannon",
   name: "Hand Cannon",
   description: "Max Ammo -75%, Bullet Damage +250%, Bullet Size +50%, Piercing +1",
-  icon: "🔫",
+  icon: 12,
   category: "reload",
   tier: 3,
   requires: ["big_shot"],
@@ -466,7 +462,7 @@ minigun: {
     id: "splinter",
     name: "Splinter",
     description: "Killed enemies explode into 3 bullets dealing 10% damage",
-    icon: "💢",
+    icon: 18,
     category: "damage",
     tier: 2,
     requires: ["power_shot"],
@@ -480,7 +476,7 @@ minigun: {
   name: "Railgun",
   description:
     "-80% Spread, Bullets pierce killed enemies (-20% damage per death pierce)",
-  icon: "🚄",
+  icon: 22,
   category: "damage",
   tier: 3,
   requires: ["splinter", "big shot"],
@@ -494,12 +490,12 @@ minigun: {
   },
 },
 
-  // BULLET ENHANCEMENT UPGRADES
+  // BULLET ENHANCEMENTS
   homing_rounds: {
     id: "homing_rounds",
     name: "Homing Rounds",
     description: "Projectiles home in on enemies",
-    icon: "🎯",
+    icon: 27,
     category: "damage",
     tier: 2,
     requires: ["power_shot"],
@@ -512,7 +508,7 @@ minigun: {
     id: "incendiary_rounds",
     name: "Incendiary Rounds",
     description: "Projectiles inflict Burn: 4 damage/s for 3s",
-    icon: "🔥",
+    icon: 37,
     category: "damage",
     tier: 2,
     requires: ["power_shot"],
@@ -526,10 +522,7 @@ minigun: {
     id: "rapid_fire",
     name: "Rapid Fire",
     description: "Fire Rate +25%",
-    icon: {
-      normal: "/sprites/upgrades/firerate/rapid_fire.png",
-      selected: "/sprites/upgrades/firerate/rapid_fire_selected.png",
-    },
+    icon: 20,
     category: "firerate",
     tier: 1,
     apply: () => {
@@ -542,7 +535,7 @@ minigun: {
     id: "light_bullets",
     name: "Light Bullets",
     description: "Fire Rate +15%, Max Ammo +1, Bullet Speed +15%",
-    icon: "⚡",
+    icon: 13,
     category: "firerate",
     tier: 2,
     requires: ["rapid_fire"],
@@ -561,7 +554,7 @@ minigun: {
     id: "rubber_bullets",
     name: "Rubber Bullets",
     description: "Bullet Bounce +1, Fire Rate +10%",
-    icon: "🏀",
+    icon: 21,
     category: "firerate",
     tier: 2,
     requires: ["rapid_fire"],
@@ -578,7 +571,7 @@ minigun: {
     id: "siege",
     name: "Siege",
     description: "Bullet Damage increases when standing still. Damage bonus resets when you move.",
-    icon: "🛡️",
+    icon: 31,
     category: "firerate",
     tier: 3,
     requires: ["light_bullets", "rubber_bullets"],
@@ -592,7 +585,7 @@ minigun: {
     id: "double_shot",
     name: "Double Shot",
     description: "Projectiles +1, Spread +10%, Bullet Damage -10%",
-    icon: "🔱",
+    icon: 43,
     category: "multishot",
     tier: 1,
     apply: () => {
@@ -609,7 +602,7 @@ minigun: {
     id: "fan_fire",
     name: "Fan Fire",
     description: "On last ammo: shoot 10 bullets in a circle at 15% damage",
-    icon: "🌟",
+    icon: 44,
     category: "multishot",
     tier: 2,
     requires: ["double_shot"],
@@ -622,7 +615,7 @@ minigun: {
     id: "split_fire",
     name: "Split Fire",
     description: "Shoots an additional bullet behind you",
-    icon: "↔️",
+    icon: 45,
     category: "multishot",
     tier: 2,
     requires: ["double_shot"],
@@ -635,7 +628,7 @@ minigun: {
     id: "fusillade",
     name: "Fusillade",
     description: "Projectiles +1, Spread +15%, Fire Rate -50%, doubles base projectiles",
-    icon: "💫",
+    icon: 46,
     category: "multishot",
     tier: 3,
     requires: ["fan_fire", "split_fire"],
@@ -653,7 +646,7 @@ minigun: {
   id: "shotgun",
   name: "Shotgun",
   description: "Bullet Damage +100%, Bullet Lifetime -90%",
-  icon: "💥",
+  icon: 71,
   category: "multishot",
   tier: 3,
   requires: ["fan_fire", "split_fire"],
@@ -671,7 +664,7 @@ minigun: {
     id: "quick_hands",
     name: "Quick Hands",
     description: "Reload Rate +20%, Fire Rate +5%",
-    icon: "🔄",
+    icon: 47,
     category: "reload",
     tier: 1,
     apply: () => {
@@ -687,7 +680,7 @@ minigun: {
     id: "armed_ready",
     name: "Armed & Ready",
     description: "Reload Rate +10%, Max Ammo +2",
-    icon: "📦",
+    icon: 49,
     category: "reload",
     tier: 2,
     requires: ["quick_hands"],
@@ -704,7 +697,7 @@ minigun: {
     id: "fresh_clip",
     name: "Fresh Clip",
     description: "Reload Rate +5%; after reload, Damage +50% for 1s",
-    icon: "✨",
+    icon: 48,
     category: "reload",
     tier: 2,
     requires: ["quick_hands"],
@@ -717,14 +710,14 @@ minigun: {
     },
   },
 
-explosive_last_round: {
+  explosive_last_round: {
     id: "explosive_last_round",
     name: "Last Round Blast",
     description: "Last bullet explodes on impact",
-    icon: "💥",
+    icon: 77,
     category: "reload",
     tier: 3,
-    requires: ["incendiary", "big_shot"],
+    requires: ["incendiary", "splinter"],
     apply: () => {
       usePlayer.setState({ lastAmmoExplosive: true });
     },
@@ -734,7 +727,7 @@ explosive_last_round: {
     id: "kill_clip",
     name: "Kill Clip",
     description: "Reload Rate increases with kills (resets on reload)",
-    icon: "💀",
+    icon: 65,
     category: "reload",
     tier: 3,
     requires: ["armed_ready", "fresh_clip"],
@@ -743,13 +736,13 @@ explosive_last_round: {
     },
   },
 
-  // VITALITY & BUFF TREE
+  // BUFF TREE
   fleet_footed: {
     id: "fleet_footed",
     name: "Fleet Footed",
     description: "Movement Speed +20%",
-    icon: "👟",
-    category: "vitality",
+    icon: 38,
+    category: "buff",
     tier: 1,
     apply: () => {
       const player = usePlayer.getState();
@@ -761,8 +754,8 @@ explosive_last_round: {
     id: "hawk_eye",
     name: "Hawk Eye",
     description: "Vision Range +40%",
-    icon: "👁️",
-    category: "vitality",
+    icon: 67,
+    category: "buff",
     tier: 1,
     apply: () => {
       const player = usePlayer.getState();
@@ -773,39 +766,14 @@ explosive_last_round: {
     },
   },
 
-  dash: {
-    id: "dash",
-    name: "Quick Dash",
-    description: "Right-click to dash. Cooldown: 2 seconds",
-    icon: "💨",
-    category: "vitality",
-    tier: 1,
-    apply: () => {
-      usePlayer.setState({ hasDash: true, dashCooldown: 0, maxDashCooldown: 2 });
-    },
-  },
-
-  vitality: {
-    id: "vitality",
-    name: "Vitality",
-    description: "Gain 1 HP every level up",
-    icon: "❤️",
-    category: "vitality",
-    tier: 2,
-    requires: ["fleet_footed"],
-    apply: () => {
-      usePlayer.setState({ healPerLevelUp: 1 });
-    },
-  },
-
   rapid_stride: {
     id: "rapid_stride",
     name: "Rapid Stride",
     description: "Movement Speed +100% while firing",
-    icon: "💨",
-    category: "vitality",
-    tier: 2,
-    requires: ["fleet_footed"],
+    icon: 39,
+    category: "buff",
+    tier: 3,
+    requires: ["hawk_eye, magnetic_field"],
     apply: () => {
       usePlayer.setState({ speedWhenFiring: 0.3 });
     },
@@ -815,8 +783,8 @@ explosive_last_round: {
     id: "magnetic_field",
     name: "Magnetic Field",
     description: "Magnet Range +50%",
-    icon: "🧲",
-    category: "vitality",
+    icon: 55,
+    category: "buff",
     tier: 2,
     requires: ["fleet_footed"],
     apply: () => {
@@ -830,7 +798,7 @@ explosive_last_round: {
     id: "ghost_friend",
     name: "Ghost Friend",
     description: "Summon a Ghost Friend that fires piercing projectiles for 8 damage",
-    icon: "👻",
+    icon: 24,
     category: "summon",
     tier: 1,
     apply: () => {
@@ -843,7 +811,7 @@ explosive_last_round: {
     id: "best_friends",
     name: "Best Friends",
     description: "Fire Rate +10%. Ghost attacks 50% faster",
-    icon: "💕",
+    icon: 26,
     category: "summon",
     tier: 2,
     requires: ["ghost_friend"],
@@ -858,7 +826,7 @@ explosive_last_round: {
     id: "ghost_wizard",
     name: "Ghost Wizard",
     description: "Ghost projectiles inflict Burn for 6 damage/s",
-    icon: "🔮",
+    icon: 15,
     category: "summon",
     tier: 3,
     requires: ["best_friends"],
@@ -867,11 +835,11 @@ explosive_last_round: {
     },
   },
 
-  vengeful_ghost: {
-    id: "vengeful_ghost",
-    name: "Vengeful Ghost",
-    description: "Ghost shoots 2 additional projectiles (total 3)",
-    icon: "😈",
+  triple_shot_ghost: {
+    id: "triple_shot_ghost",
+    name: "Triple Shot Ghost",
+    description: "Ghost shoots 2 additional projectiles",
+    icon: 25,
     category: "summon",
     tier: 4,
     requires: ["ghost_wizard"],
@@ -884,7 +852,7 @@ explosive_last_round: {
     id: "magic_scythe",
     name: "Magic Scythe",
     description: "Summon a Magic Scythe that orbits and deals 20 damage on contact",
-    icon: "🗡️",
+    icon: 52,
     category: "summon",
     tier: 1,
     apply: () => {
@@ -897,7 +865,7 @@ explosive_last_round: {
     id: "magic_dagger",
     name: "Magic Dagger",
     description: "Summon a Dagger",
-    icon: "🗡️",
+    icon: 51,
     category: "summon",
     tier: 1,
     apply: () => {
@@ -910,9 +878,10 @@ explosive_last_round: {
     id: "duel_wield",
     name: "Duel Wield",
     description: "Summon another Magic Scythe, +10% Player Speed",
-    icon: "🗡️",
+    icon: 3,
     category: "summon",
     tier: 1,
+    requires: ["magic_scythe"],
     apply: () => {
       const { addSummon } = useSummons.getState();
       addSummon("scythe");
@@ -926,24 +895,22 @@ explosive_last_round: {
     id: "windcutter",
     name: "Windcutter",
     description: "Move Speed +10%. Scythe speed scales with Move Speed",
-    icon: "💨",
+    icon: 1,
     category: "summon",
-    tier: 3,
-    requires: ["shadowblade"],
+    tier: 2,
+    requires: ["magic_scythe"],
     apply: () => {
       const player = usePlayer.getState();
       usePlayer.setState({ speed: player.speed * 1.1 });
       useSummons.setState({ scytheSpeedBonus: true });
-      const { addSummon } = useSummons.getState();
-      addSummon("scythe");
     },
   },
 
   stormblade: {
-    id: "shadowblade",
-    name: "Shadowblade",
-    description: "Scythe's inflict bleeding for 5 seconds",
-    icon: "⚫",
+    id: "stormblade",
+    name: "Stormblade",
+    description: "Scythe's deal more damage based on lightning damage",
+    icon: 2,
     category: "summon",
     tier: 2,
     requires: ["magic_scythe"],
@@ -958,7 +925,7 @@ explosive_last_round: {
     id: "lightning",
     name: "Lightning",
     description: "Summon lightning that strikes 1 enemy every 2s",
-    icon: "⚡",
+    icon: 32,
     category: "summon",
     tier: 1,
     apply: () => {
@@ -971,7 +938,7 @@ explosive_last_round: {
     id: "energized",
     name: "Energized",
     description: "Lightning strikes have 20% chance to refill 3 ammo",
-    icon: "⚡",
+    icon: 33,
     category: "summon",
     tier: 2,
     requires: ["lightning"],
@@ -984,7 +951,7 @@ explosive_last_round: {
     id: "electro_mastery",
     name: "Electro Mastery",
     description: "All Lightning damage +12",
-    icon: "🌩️",
+    icon: 30,
     category: "summon",
     tier: 3,
     requires: ["energized"],
@@ -1020,7 +987,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   // Position & Movement
   position: new THREE.Vector3(),
   velocity: new THREE.Vector3(),
-  speed: 15,
+  speed: 10,
   isMoving: false,
   lastMovementTime: 0,
 
@@ -1032,7 +999,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   defense: 0,
 
   // Combat
-  firerate: 0.35,
+  firerate: 0.40,
   ammo: 6,
   maxAmmo: 6,
   reloadTime: 1,
@@ -1041,10 +1008,10 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   isFiring: false,
   
   baseDamage: 13,
-  baseProjectileSpeed: 60,
+  baseProjectileSpeed: 50,
   baseProjectileRange: 50,
   projectileCount: 1,
-  life: 3.0,
+  life: 2.5,
   projectileSize: 12.0,
   homing: false,
   incendiary: false,
@@ -1054,7 +1021,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   trailLength: 5,
   explosive: undefined,
   chainLightning: undefined,
-  magnetRange: 0,
+  magnetRange: 1,
   speedWhenFiring: 0,
   healPerLevelUp: 0,
   
@@ -1092,7 +1059,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   fanFireTimer: 0,
 
   // Special mechanics
-  visionRange: 1.4,
+  visionRange: 1,
   cameraZoom: 1,
   hasDash: false,
   dashCooldown: 0,
@@ -1419,13 +1386,12 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   reset: () => set({
     position: new THREE.Vector3(),
     velocity: new THREE.Vector3(),
-    speed: 12,
+    speed: 10,
     hearts: 5,
     maxHearts: 5,
     invincibilityTimer: 0,
     invincibilityDuration: 3,
-    defense: 0,
-    firerate: 0.25,
+    firerate: 0.40,
     ammo: 6,
     maxAmmo: 6,
     isReloading: false,
@@ -1434,10 +1400,10 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     isFiring: false,
     isMoving: false,
     baseDamage: 13,
-    baseProjectileSpeed: 60,
+    baseProjectileSpeed: 50,
     baseProjectileRange: 50,
     projectileCount: 1,
-    life: 3.0,
+    life: 2.5,
     homing: false,
     incendiary: false,
     piercing: 0,
@@ -1471,7 +1437,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     fanFireActive: false,
     fanFireIndex: 0,
     fanFireTimer: 0,
-    visionRange: 1.4,
+    visionRange: 1,
     cameraZoom: 1,
     hasDash: false,
     dashCooldown: 0,

@@ -49,9 +49,9 @@ export const SHOGGOTH_CONFIG = {
   beamLengthScale: 10,
   beamHalfWidthWorld: 0.5,
   beamDamageInterval: 0.05,
-  rotationSpeed: Math.PI * 0.03,
+  rotationSpeed: Math.PI * 0.02,
   fireDuration: 4,
-  beamOriginOffsetPx: 80,
+  beamOriginOffsetPx: 40,
   beamAngles: [0, (Math.PI * 2) / 5, (Math.PI * 4) / 5, (Math.PI * 6) / 5, (Math.PI * 8) / 5] as const,
 } as const;
 
@@ -286,7 +286,7 @@ addXPOrb: (position, value) => {
     updateXPOrbs: (delta, playerPos) => {
       const baseRange = 5;
       const playerMagnetBonus = usePlayer.getState().magnetRange;
-      const MAGNET_RANGE = baseRange * (1 + playerMagnetBonus);
+      const MAGNET_RANGE = baseRange * (playerMagnetBonus);
       const COLLECT_RANGE = 1.5;
       const MAGNET_SPEED = 15;
       const MAGNET_RANGE_SQ = MAGNET_RANGE * MAGNET_RANGE;
@@ -297,9 +297,9 @@ addXPOrb: (position, value) => {
       set((state) => {
         const orbs = state.xpOrbs;
         let writeIdx = 0;
-
         for (let i = 0; i < orbs.length; i++) {
           const orb = orbs[i];
+
           const dx = playerPos.x - orb.position.x;
           const dz = playerPos.z - orb.position.z;
           const distSq = dx * dx + dz * dz;
@@ -309,44 +309,46 @@ addXPOrb: (position, value) => {
             continue;
           }
 
-          if (distSq < MAGNET_RANGE_SQ) {
-            const mag = Math.sqrt(distSq);
-            if (!orb.magnetized) {
-              // First frame entering magnet range: kick outward
-              orb.magnetized = true;
-              orb.kickTimer = 0.08;
-              orb.velocity.x = -(dx / mag) * 15;
-              orb.velocity.z = -(dz / mag) * 15;
-            } else if (orb.kickTimer > 0) {
-              // Kick phase: decelerate
+          const mag = Math.sqrt(distSq) || 1;
+
+          // ENTER MAGNET STATE (only once)
+          if (!orb.magnetized && distSq < MAGNET_RANGE_SQ) {
+            orb.magnetized = true;
+            orb.kickTimer = 0.08;
+
+            // outward kick
+            orb.velocity.x = -(dx / mag) * 10;
+            orb.velocity.z = -(dz / mag) * 10;
+          }
+
+          if (orb.magnetized) {
+            if (orb.kickTimer > 0) {
+             
               orb.kickTimer -= delta;
               orb.velocity.x *= Math.max(0, 1 - 9 * delta);
               orb.velocity.z *= Math.max(0, 1 - 9 * delta);
             } else {
-              // Pull toward player
+              
               orb.velocity.x = (dx / mag) * MAGNET_SPEED;
               orb.velocity.z = (dz / mag) * MAGNET_SPEED;
             }
           } else {
-            orb.magnetized = false;
+            
             orb.velocity.x *= Math.max(0, 1 - 3 * delta);
             orb.velocity.z *= Math.max(0, 1 - 3 * delta);
           }
 
-          // Update trail — store last 7 positions
-          if (!orb.trail) orb.trail = [];
+          orb.trail ??= [];
           orb.trail.unshift({ x: orb.position.x, z: orb.position.z });
           if (orb.trail.length > 7) orb.trail.length = 7;
 
           orb.position.x += orb.velocity.x * delta;
           orb.position.z += orb.velocity.z * delta;
 
-          if (writeIdx !== i) {
-            orbs[writeIdx] = orb;
-          }
+          if (writeIdx !== i) orbs[writeIdx] = orb;
           writeIdx++;
         }
-
+        
         orbs.length = writeIdx;
         return { xpOrbs: orbs };
       });
@@ -376,11 +378,6 @@ updateDamagePopups: (delta) => {
 
     addEnemy: (enemyData) => {
       const MAX_ENEMIES = 500;
-
-      set(state => {
-        if (state.enemies.length >= MAX_ENEMIES) {
-          return {};
-        }
 
         const enemyTypePool: Array<"basic" | "tank" | "eyeball"> = ["basic", "tank", "eyeball"];
         const chosenType =
@@ -443,7 +440,6 @@ updateDamagePopups: (delta) => {
             enemies: state.enemies,
           };
         });
-      });
     },
 
     removeEnemy: (id) =>
@@ -465,7 +461,7 @@ updateDamagePopups: (delta) => {
         position: position.clone(),
         health: 420,
         maxHealth: 420,
-        speed: 6.5,
+        speed: 5.5,
 
         type: "boss",
         velocity: new THREE.Vector3(),
@@ -474,18 +470,9 @@ updateDamagePopups: (delta) => {
         isBoss: true,
         bossType: "lazarus",
 
-        dashCooldown: 3.2,
-        maxDashCooldown: 3.2,
         windUpTimer: 0,
         maxWindUpTime: 1.05,
         attackState: "chasing",
-        dashDirection: new THREE.Vector3(),
-        isDashing: false,
-        clawWindUp: 0,
-        clawGlowIntensity: 0,
-        isEnraged: false,
-        projectileCooldown: 0,
-        maxProjectileCooldown: 2,
         rotationY: 0,
         laserBaseRotation: 0,
       };
@@ -499,7 +486,7 @@ updateDamagePopups: (delta) => {
         position: position.clone(),
         health: 4500,
         maxHealth: 4500,
-        speed: 4.5,
+        speed: 3.5,
 
         type: "boss",
         velocity: new THREE.Vector3(),
@@ -524,9 +511,9 @@ updateDamagePopups: (delta) => {
       const crow: Enemy = {
         id: String(nextEnemyId++),
         position: position.clone(),
-        health: 5,
-        maxHealth: 18,
-        speed: 14.5,
+        health: 1,
+        maxHealth: 1,
+        speed: 10.0,
         type: "crow",
         velocity: impulse ? impulse.clone() : new THREE.Vector3(),
         hitFlash: 0,
