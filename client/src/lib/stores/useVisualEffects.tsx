@@ -100,7 +100,7 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
         x: position.x,
         y: position.z,
         life: 0,
-        maxLife: 0.15,
+        maxLife: 0.20,
         size,
         frameIndex: 0,
         totalFrames: 2,

@@ -38,14 +38,6 @@ interface HitState {
     allEnemies: Enemy[],
     sourceColor?: string
   ) => void;
-  applyChainLightning: (
-    startEnemy: Enemy,
-    chains: number,
-    range: number,
-    damage: number,
-    chainedEnemies: Set<string>,
-    allEnemies: Enemy[]
-  ) => void;
   applyPlayerDamage: (impactPos: THREE.Vector3) => void;
 }
 
@@ -75,9 +67,11 @@ export const useHit = create<HitState>((set, get) => ({
     const knockbackOrigin = params.sourcePos ?? (params.isPlayerDamage ? playerPosition : impactPos);
 
     if (knockbackOrigin) {
-      const dir = enemy.position.clone().sub(knockbackOrigin);
-      dir.y = 0;
-      if (dir.lengthSq() > 0.1) {
+      const _knockbackDir = new THREE.Vector3();
+
+      _knockbackDir.subVectors(enemy.position, knockbackOrigin);
+      _knockbackDir.y = 0;
+      if (_knockbackDir.lengthSq() > 0.1) {
         const ps = usePlayer.getState();
         let finalKnockback = knockbackStrength*3 * (ps.knockbackMultiplier);
 
@@ -85,16 +79,18 @@ export const useHit = create<HitState>((set, get) => ({
           finalKnockback = 0;
         } else if (enemy.type === "tank") {
           finalKnockback *= 0.4;
+        } else if (enemy.type === "mage") {
+          finalKnockback *= 0.5;
         }
 
         if (finalKnockback > 0) {
-          dir.normalize();
+          _knockbackDir.normalize();
 
           const knockbackDurationMs = 0.15;
           if (!enemy.knockbackAcceleration) {
             enemy.knockbackAcceleration = new THREE.Vector3();
           }
-          enemy.knockbackAcceleration = dir.multiplyScalar(finalKnockback / knockbackDurationMs);
+          enemy.knockbackAcceleration.copy(_knockbackDir).multiplyScalar(finalKnockback / knockbackDurationMs);
           enemy.knockbackDuration = knockbackDurationMs;
         }
       }
@@ -106,7 +102,7 @@ export const useHit = create<HitState>((set, get) => ({
       applyStatusEffect(enemy.id, "burn", params.burn.damage, params.burn.duration);
     }
 
-    if (params.explosive && params.impactPos && allEnemies.length > 0) {
+    if (params.explosive && params.impactPos) {
       get().applyExplosiveDamage(
         params.impactPos.clone(),
         params.explosive.radius,
@@ -179,46 +175,6 @@ export const useHit = create<HitState>((set, get) => ({
     playHit();
   },
 
-  applyChainLightning: (startEnemy, chains, range, damage, chainedEnemies, allEnemies) => {
-    if (chainedEnemies.size >= chains) return;
-
-    const { playHit } = useAudio.getState();
-    const { addDamageNumber, addImpact } = useVisualEffects.getState();
-
-    const targets = allEnemies.filter(e =>
-      e.id !== startEnemy.id &&
-      !chainedEnemies.has(e.id) &&
-      e.position.distanceTo(startEnemy.position) < range &&
-      e.health > 0
-    );
-
-    if (targets.length === 0) return;
-
-    const target = targets.reduce((nearest, e) => {
-      const dist = e.position.distanceTo(startEnemy.position);
-      const nearestDist = nearest.position.distanceTo(startEnemy.position);
-      return dist < nearestDist ? e : nearest;
-    });
-
-    target.health -= damage;
-    chainedEnemies.add(target.id);
-
-    addImpact(target.position.clone());
-    addDamageNumber(target.position.x, target.position.z, damage);
-
-    playHit();
-
-    if (chainedEnemies.size < chains) {
-      get().applyChainLightning(
-        target,
-        chains,
-        range,
-        damage * 0.7,
-        chainedEnemies,
-        allEnemies
-      );
-    }
-  },
 
   applyPlayerDamage: (impactPos) => {
     const { loseHeart, position, velocity, invincibilityTimer } = usePlayer.getState();

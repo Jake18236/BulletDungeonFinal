@@ -189,7 +189,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Bullet Speed +30%, Spread -15%",
     icon: 59,
     category: "speed",
-    tier: 1,
+
     apply: () => {
       const player = usePlayer.getState();
       usePlayer.setState({
@@ -205,7 +205,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Bullet Speed +15%, Piercing +1",
     icon: 61,
     category: "speed",
-    tier: 2,
+ 
     requires: ["take_aim"],
     apply: () => {
       const player = usePlayer.getState();
@@ -222,7 +222,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Heal 1 HP every 50 seconds",
     icon: 28,
     category: "buff",
-    tier: 3,
+    
     requires: ["fleet_footed"],
     apply: () => {
       usePlayer.setState({
@@ -238,7 +238,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Summons inflict Burn. Burn duration +100%",
     icon: 42,
     category: "summon",
-    tier: 3,
+    
     requires: ["ghost_wizard", "electro_mastery"],
     apply: () => {
       usePlayer.setState({
@@ -257,7 +257,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Summon Attack Speed +50%, Bullet Damage -25%",
     icon: 4,
     category: "summon",
-    tier: 4,
+    
     requires: ["wildfire", "blade_dance"],
     apply: () => {
       const player = usePlayer.getState();
@@ -279,7 +279,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "All Summon Damage +40%",
     icon: 53,
     category: "summon",
-    tier: 2,
+    
     requires: ["magic_dagger"],
     apply: () => {
       useSummons.setState({
@@ -295,7 +295,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Summon 2 additional Daggers",
     icon: 54,
     category: "summon",
-    tier: 3,
+    
     requires: ["sharpened_edge"],
     apply: () => {
       const { addSummon } = useSummons.getState();
@@ -312,7 +312,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
       "Every 15 seconds, all enemies in range are struck by lightning",
     icon: 34,
     category: "summon",
-    tier: 3,
+    
     requires: ["energized"],
     apply: () => {
       useSummons.setState({
@@ -329,7 +329,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
       "Max Ammo x3, Spread +50%, Knockback -90%, Fire Rate +50%, Bullet Damage -50%",
     icon: 23,
     category: "reload",
-    tier: 3,
+    
     requires: ["armed_ready", "fresh_clip"],
     apply: () => {
       const player = usePlayer.getState();
@@ -353,7 +353,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Bullet Speed +25%, Bullet Damage +15%",
     icon: 60,
     category: "speed",
-    tier: 2,
+    
     requires: ["take_aim"],
     apply: () => {
       const player = usePlayer.getState();
@@ -371,7 +371,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
       "Bullet Size -50%, Fire Rate -25%, Bullet Speed +25%, Bullet Damage +50%, Piercing +2",
     icon: 61,
     category: "speed",
-    tier: 3,
+    
     requires: ["penetration"],
     apply: () => {
       const player = usePlayer.getState();
@@ -391,10 +391,10 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Instant-kill enemies below 20% HP",
     icon: 62,
     category: "speed",
-    tier: 3,
+    
     requires: ["sniper", "penetration"],
     apply: () => {
-      usePlayer.setState({ instantKillThreshold: 2 });
+      usePlayer.setState({ instantKillThreshold: 0.2 });
     },
   },
 
@@ -405,7 +405,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Bullet Damage +40%, Knockback +20%",
     icon: 16,
     category: "damage",
-    tier: 1,
+    
     apply: () => {
       const player = usePlayer.getState();
       usePlayer.setState({
@@ -421,7 +421,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Bullet Damage +45%, Bullet Size +40%",
     icon: 17,
     category: "damage",
-    tier: 2,
+    
     requires: ["power_shot"],
     apply: () => {
       const player = usePlayer.getState();
@@ -439,7 +439,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
       "Max Ammo -75%, Bullet Damage +250%, Bullet Size +50%, Piercing +1",
     icon: 12,
     category: "reload",
-    tier: 3,
+    
     requires: ["big_shot"],
     apply: () => {
       const player = usePlayer.getState();
@@ -460,7 +460,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Killed enemies explode into 3 bullets dealing 10% damage",
     icon: 18,
     category: "damage",
-    tier: 2,
+    
     requires: ["power_shot"],
     apply: () => {
       usePlayer.setState({ splinterBullets: true });
@@ -474,7 +474,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
       "-80% Spread, Bullets pierce killed enemies (-20% damage per death pierce)",
     icon: 22,
     category: "damage",
-    tier: 3,
+    
     requires: ["splinter", "big shot"],
     apply: () => {
       const player = usePlayer.getState();
@@ -492,7 +492,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Projectiles home in on enemies",
     icon: 27,
     category: "damage",
-    tier: 2,
+    
     requires: ["power_shot"],
     apply: () => {
       usePlayer.setState({ homing: true });
@@ -505,7 +505,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Projectiles inflict Burn: 4 damage/s for 3s",
     icon: 37,
     category: "damage",
-    tier: 2,
+    
     requires: ["power_shot"],
     apply: () => {
       usePlayer.setState({ incendiary: true });
@@ -519,7 +519,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Fire Rate +25%",
     icon: 20,
     category: "firerate",
-    tier: 1,
+    
     apply: () => {
       const player = usePlayer.getState();
       usePlayer.setState({ firerate: player.firerate * 0.75 });
@@ -532,7 +532,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Fire Rate +15%, Max Ammo +1, Bullet Speed +15%",
     icon: 13,
     category: "firerate",
-    tier: 2,
+    
     requires: ["rapid_fire"],
     apply: () => {
       const player = usePlayer.getState();
@@ -551,7 +551,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Bullet Bounce +1, Fire Rate +10%",
     icon: 21,
     category: "firerate",
-    tier: 2,
+    
     requires: ["rapid_fire"],
     apply: () => {
       const player = usePlayer.getState();
@@ -569,7 +569,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
       "Bullet Damage increases when standing still. Damage bonus resets when you move.",
     icon: 31,
     category: "firerate",
-    tier: 3,
+    
     requires: ["light_bullets", "rubber_bullets"],
     apply: () => {
       usePlayer.setState({ siegeMode: true });
@@ -583,7 +583,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Projectiles +1, Spread +10%, Bullet Damage -10%",
     icon: 43,
     category: "multishot",
-    tier: 1,
+    
     apply: () => {
       const player = usePlayer.getState();
       usePlayer.setState({
@@ -600,7 +600,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "On last ammo: shoot 10 bullets in a circle at 15% damage",
     icon: 44,
     category: "multishot",
-    tier: 2,
+    
     requires: ["double_shot"],
     apply: () => {
       usePlayer.setState({ fanFire: true });
@@ -613,7 +613,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Shoots an additional bullet behind you",
     icon: 45,
     category: "multishot",
-    tier: 2,
+    
     requires: ["double_shot"],
     apply: () => {
       usePlayer.setState({ splitFire: true });
@@ -627,7 +627,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
       "Projectiles +1, Spread +15%, Fire Rate -50%, doubles base projectiles",
     icon: 46,
     category: "multishot",
-    tier: 3,
+    
     requires: ["fan_fire", "split_fire"],
     apply: () => {
       const player = usePlayer.getState();
@@ -645,7 +645,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Bullet Damage +100%, Bullet Lifetime -90%",
     icon: 71,
     category: "multishot",
-    tier: 3,
+    
     requires: ["fan_fire", "split_fire"],
     apply: () => {
       const player = usePlayer.getState();
@@ -663,7 +663,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Reload Rate +20%, Fire Rate +5%",
     icon: 47,
     category: "reload",
-    tier: 1,
+    
     apply: () => {
       const player = usePlayer.getState();
       usePlayer.setState({
@@ -679,7 +679,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Reload Rate +10%, Max Ammo +2",
     icon: 49,
     category: "reload",
-    tier: 2,
+    
     requires: ["quick_hands"],
     apply: () => {
       const player = usePlayer.getState();
@@ -696,7 +696,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Reload Rate +5%; after reload, Damage +50% for 1s",
     icon: 48,
     category: "reload",
-    tier: 2,
+    
     requires: ["quick_hands"],
     apply: () => {
       const player = usePlayer.getState();
@@ -713,7 +713,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Last bullet explodes on impact",
     icon: 77,
     category: "reload",
-    tier: 3,
+    
     requires: ["incendiary", "splinter"],
     apply: () => {
       usePlayer.setState({ lastAmmoExplosive: true });
@@ -726,7 +726,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Reload Rate increases with kills (resets on reload)",
     icon: 65,
     category: "reload",
-    tier: 3,
+    
     requires: ["armed_ready", "fresh_clip"],
     apply: () => {
       usePlayer.setState({ killClip: true });
@@ -740,7 +740,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Movement Speed +20%",
     icon: 38,
     category: "buff",
-    tier: 1,
+    
     apply: () => {
       const player = usePlayer.getState();
       usePlayer.setState({ speed: player.speed * 1.2 });
@@ -753,7 +753,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Vision Range +40%",
     icon: 67,
     category: "buff",
-    tier: 1,
+    
     apply: () => {
       const player = usePlayer.getState();
       usePlayer.setState({
@@ -769,7 +769,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Movement Speed +100% while firing",
     icon: 39,
     category: "buff",
-    tier: 3,
+    
     requires: ["hawk_eye, magnetic_field"],
     apply: () => {
       usePlayer.setState({ speedWhenFiring: 0.3 });
@@ -782,7 +782,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Magnet Range +50%",
     icon: 55,
     category: "buff",
-    tier: 2,
+    
     requires: ["fleet_footed"],
     apply: () => {
       const player = usePlayer.getState();
@@ -798,7 +798,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
       "Summon a Ghost Friend that fires piercing projectiles for 8 damage",
     icon: 24,
     category: "summon",
-    tier: 1,
+    
     apply: () => {
       const { addSummon } = useSummons.getState();
       addSummon("ghost");
@@ -811,7 +811,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Fire Rate +10%. Ghost attacks 50% faster",
     icon: 26,
     category: "summon",
-    tier: 2,
+    
     requires: ["ghost_friend"],
     apply: () => {
       const player = usePlayer.getState();
@@ -826,7 +826,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Ghost projectiles inflict Burn for 6 damage/s",
     icon: 15,
     category: "summon",
-    tier: 3,
+    
     requires: ["best_friends"],
     apply: () => {
       useSummons.setState({ ghostBurn: true });
@@ -839,7 +839,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Ghost shoots 2 additional projectiles",
     icon: 25,
     category: "summon",
-    tier: 4,
+    
     requires: ["ghost_wizard"],
     apply: () => {
       useSummons.setState({ ghostProjectiles: 3 });
@@ -853,7 +853,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
       "Summon a Magic Scythe that orbits and deals 20 damage on contact",
     icon: 52,
     category: "summon",
-    tier: 1,
+    
     apply: () => {
       const { addSummon } = useSummons.getState();
       addSummon("scythe");
@@ -866,7 +866,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Summon a Dagger",
     icon: 51,
     category: "summon",
-    tier: 1,
+    
     apply: () => {
       const { addSummon } = useSummons.getState();
       addSummon("dagger");
@@ -879,7 +879,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Summon another Magic Scythe, +10% Player Speed",
     icon: 3,
     category: "summon",
-    tier: 1,
+    
     requires: ["magic_scythe"],
     apply: () => {
       const { addSummon } = useSummons.getState();
@@ -895,7 +895,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Move Speed +10%. Scythe speed scales with Move Speed",
     icon: 1,
     category: "summon",
-    tier: 2,
+    
     requires: ["magic_scythe"],
     apply: () => {
       const player = usePlayer.getState();
@@ -910,7 +910,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Scythe's deal more damage based on lightning damage",
     icon: 2,
     category: "summon",
-    tier: 2,
+    
     requires: ["magic_scythe"],
     apply: () => {
       useSummons.setState({
@@ -925,7 +925,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Summon lightning that strikes 1 enemy every 2s",
     icon: 32,
     category: "summon",
-    tier: 1,
+    
     apply: () => {
       const { addSummon } = useSummons.getState();
       addSummon("lightning");
@@ -938,7 +938,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "Lightning strikes have 20% chance to refill 3 ammo",
     icon: 33,
     category: "summon",
-    tier: 2,
+    
     requires: ["lightning"],
     apply: () => {
       useSummons.setState({ energized: true });
@@ -951,7 +951,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     description: "All Lightning damage +12",
     icon: 30,
     category: "summon",
-    tier: 3,
+    
     requires: ["energized"],
     apply: () => {
       useSummons.setState({ electroMastery: true });

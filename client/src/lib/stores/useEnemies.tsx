@@ -198,26 +198,36 @@ export const useEnemies = create<EnemiesState>((set, get) => {
   };
 
   const spawnSessions: SpawnSession[] = [
-    createSession("basic_1", "basic", "0:00", "0:30", 24, 20, 4, 3),
+    createSession("basic_1", "basic", "0:00", "0:30", 0, 20, 4, 3),
     createSession("basic_2", "basic", "0:30", "1:00", 24, 50, 10, 4),
     createSession("basic_3", "basic", "1:00", "3:00", 30, 60, 7, 4),
     createSession("basic_4", "basic", "3:00", "30:00", 100, 60, 8, 1),
+    createSession("basic_5", "basic", "3:00", "30:00", 1000, 60, 8, 1),
     // // //eyes
-    createSession("eyeball_1", "eyeball", "0:30", "2:00", 30, 2, 2, 10),
+    createSession("eyeball_1", "eyeball", "0:00", "2:00", 0, 2, 2, 1),
     createSession("eyeball_2", "eyeball", "2:00", "3:00", 50, 20, 5, 2),
-    createSession("eyeball_3", "eyeball", "3:01", "30:00", 80, 20, 2, 10),
+    createSession("eyeball_3", "eyeball", "3:01", "8:00", 80, 20, 2, 10),
+    createSession("eyeball_4", "eyeball", "8:01", "30:00", 800, 20, 3, 10),
    //tanks
-    createSession("tank_1", "tank", "1:00", "2:00", 200, 4, 1, 5),
+    createSession("tank_1", "tank", "1:00", "2:00", 2000000, 4, 1, 5),
     createSession("tank_2", "tank", "2:00", "3:00", 200, 6, 2, 2),
-    createSession("tank_3", "tank", "3:00", "30:00", 1000, 2580, 2, 10),
+    createSession("tank_3", "tank", "3:00", "7:00", 1000, 25, 2, 10),
+    createSession("tank_4", "tank", "7:00", "10:00", 10000, 25, 2, 10),
+    createSession("tank_5", "tank", "10:00", "30:00", 50000, 25, 2, 10),
     //boss
-    createSession("lazarus_1", "lazarus", "1:00", "30:00", 2500, 1, 1, 10),
+    createSession("lazarus_1", "lazarus", "0:00", "4:00", 35000, 5, 1, 1),
+    createSession("lazarus_2", "lazarus", "4:00", "9:00", 4500, 1, 1, 10),
+    createSession("lazarus_3", "lazarus", "9:00", "30:00", 20000, 2, 1, 10),
     //reaper boss
-    createSession("reaper_1", "reaper", "1:00", "30:00", 4500, 1, 1, 2),
+    createSession("reaper_1", "reaper", "0:00", "3:00", 450000, 3, 1, 2),
+    createSession("reaper_2", "reaper", "5:00", "10:00", 9000, 1, 1, 3),
+    createSession("reaper_3", "reaper", "10:00", "30:00", 10000, 5, 5, 10),
     //mage
-    createSession("mage_1", "mage", "1:00", "2:00", 35, 6, 1, 2),
+    createSession("mage_1", "mage", "0:00", "2:00", 3500, 6, 1, 2),
     createSession("mage_2", "mage", "2:00", "4:00", 50, 12, 2, 8),
     createSession("mage_3", "mage", "4:00", "30:00", 80, 60, 3, 5),
+    createSession("mage_4", "mage", "4:00", "10:00", 80, 60, 3, 5),
+    createSession("mage_5", "mage", "10:00", "30:00", 3000, 20, 3, 5),
   ];
 
   let spawnSessionTimers = spawnSessions.reduce<Record<string, number>>((acc, session) => {
@@ -258,7 +268,7 @@ export const useEnemies = create<EnemiesState>((set, get) => {
 },
 
 addXPOrb: (position, value) => {
-  const MAX_XP_ORBS = 500;
+  const MAX_XP_ORBS = 300;
 
   set(state => {
     const orbs = state.xpOrbs;
@@ -377,7 +387,7 @@ updateDamagePopups: (delta) => {
 },
 
     addEnemy: (enemyData) => {
-      const MAX_ENEMIES = 500;
+      const MAX_ENEMIES = 600;
 
         const enemyTypePool: Array<"basic" | "tank" | "eyeball"> = ["basic", "tank", "eyeball"];
         const chosenType =
@@ -486,7 +496,7 @@ updateDamagePopups: (delta) => {
         position: position.clone(),
         health: 4500,
         maxHealth: 4500,
-        speed: 3.5,
+        speed: 6.5,
 
         type: "boss",
         velocity: new THREE.Vector3(),
@@ -511,8 +521,8 @@ updateDamagePopups: (delta) => {
       const crow: Enemy = {
         id: String(nextEnemyId++),
         position: position.clone(),
-        health: 1,
-        maxHealth: 1,
+        health: 10,
+        maxHealth: 10,
         speed: 10.0,
         type: "crow",
         velocity: impulse ? impulse.clone() : new THREE.Vector3(),

@@ -560,9 +560,6 @@ export default memo(function CanvasGame() {
     img.src = "/sprites/lightning.png";
   }, []);
 
-  const projectileTrailLastPosRef = useRef<Map<string, THREE.Vector3>>(
-    new Map(),
-  );
   const addImpact = useVisualEffects((state) => state.addImpact);
   const addExplosion = useVisualEffects((state) => state.addExplosion);
   const addDamageNumber = useVisualEffects((state) => state.addDamageNumber);
@@ -619,6 +616,8 @@ export default memo(function CanvasGame() {
 
   const poolRef = useRef<TrailParticle[]>([]);
   const writeIndexRef = useRef(0);
+  const activeCountRef = useRef(0);
+  const highWaterRef = useRef(0);
 
   if (poolRef.current.length === 0) {
     for (let i = 0; i < poolSize; i++) {
@@ -693,7 +692,6 @@ export default memo(function CanvasGame() {
     mageLightningRef.current = [];
     footstepMarksRef.current = [];
     footstepSpawnTimerRef.current = 0;
-    projectileTrailLastPosRef.current.clear();
   }, []);
 
   useEffect(() => {
@@ -762,20 +760,7 @@ export default memo(function CanvasGame() {
       } else if (e.button === 2) {
         // Right-click dash
         const ps = usePlayer.getState();
-        if (ps.hasDash && ps.dashCooldown <= 0) {
-          const center = useCamera.getState().screenCenter;
-          const dx = mouseRef.current.x - center.x;
-          const dz = mouseRef.current.y - center.y;
-          const distance = Math.sqrt(dx * dx + dz * dz);
-          if (distance > 0) {
-            const direction = new THREE.Vector3(
-              dx / distance,
-              0,
-              dz / distance,
-            );
-            usePlayer.getState().tryDash(direction);
-          }
-        }
+
       }
     };
 
@@ -851,7 +836,7 @@ export default memo(function CanvasGame() {
       if (!canvasRef.current) return;
 
       const canvas = canvasRef.current;
-      const ctx = canvas.getContext("2d");
+      const ctx = canvas.getContext('2d', { alpha: false });
       if (!ctx) return;
 
       const animationNowMs =
@@ -960,44 +945,10 @@ export default memo(function CanvasGame() {
                 enemy,
                 damage,
                 impactPos: enemy.position.clone(),
-                color: "#ffb347",
                 isSummonDamage: true,
               },
               enemies,
             );
-            if (enemy.health <= 0) {
-              handleEnemyKilledBySummon();
-
-              const ps = usePlayer.getState();
-              if (ps.splinterBullets) {
-                const stats = ps.getProjectileStats();
-                const addProjectile = useProjectiles.getState().addProjectile;
-
-                for (let i = 0; i < 3; i++) {
-                  const angle =
-                    (i / 3) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
-                  const direction = new THREE.Vector3(
-                    Math.cos(angle),
-                    0,
-                    Math.sin(angle),
-                  );
-
-                  addProjectile({
-                    position: enemy.position.clone(),
-                    direction,
-                    size: 1,
-                    damage: stats.damage * 0.2,
-                    speed: stats.speed * 1.5,
-                    life: stats.life,
-                    range: stats.range * 2,
-                    trailLength: 3,
-                    piercing: 2,
-                    bouncing: 0,
-                    homing: false,
-                  });
-                }
-              }
-            }
           }
         });
 
@@ -1188,6 +1139,10 @@ export default memo(function CanvasGame() {
               const inaccuracy = 1 - stats.accuracy;
               angle += (Math.random() / 4 - 0.125) * inaccuracy;
 
+              if (ps.railgun) {
+                angle = baseAngle + Math.random();
+              }
+              
               fireProjectileInDirection(angle);
             }
 
@@ -1203,6 +1158,9 @@ export default memo(function CanvasGame() {
             
             if (phase === "playing")
               cameraRef.current.shake({ strength: 35, durationMs: 60 });
+
+            if (ps.hand_cannon) 
+            
             ps.fireMuzzleFlash(barrelFlashPosition);
 
             playHit();
@@ -1618,7 +1576,7 @@ export default memo(function CanvasGame() {
 
               if ((enemy.reaperSummonWave ?? 0) === 0 && t >= 0.3) {
                 enemy.reaperSummonWave = 1;
-                for (let ci = 0; ci < 3; ci++) {
+                for (let ci = 0; ci < 30; ci++) {
                   const ang = (ci / 3) * Math.PI * 2;
                   sc(
                     new THREE.Vector3(
@@ -1633,7 +1591,7 @@ export default memo(function CanvasGame() {
 
               if ((enemy.reaperSummonWave ?? 0) === 1 && t >= 0.65) {
                 enemy.reaperSummonWave = 2;
-                for (let ci = 0; ci < 3; ci++) {
+                for (let ci = 0; ci < 30; ci++) {
                   const ang = (ci / 3) * Math.PI * 2 + Math.PI / 3;
                   sc(
                     new THREE.Vector3(
@@ -1668,7 +1626,6 @@ export default memo(function CanvasGame() {
             continue;
           }
 
-          // CROW ENEMY LOGIC
           if (enemy.type === "crow") {
             if (!enemy.velocity) enemy.velocity = new THREE.Vector3(0, 0, 0);
 
@@ -1706,7 +1663,6 @@ export default memo(function CanvasGame() {
               enemy.velocity.z *= Math.max(0, 1 - 8 * delta);
             }
 
-            // Apply knockback acceleration
             if (
               enemy.knockbackAcceleration &&
               enemy.knockbackDuration &&
@@ -1955,7 +1911,6 @@ export default memo(function CanvasGame() {
           const e1 = updatedEnemies[i];
           // Reaper boss skips all enemy-enemy collisions
           if (e1.isBoss && e1.bossType === "reaper") continue;
-          // Broad-phase: skip outer enemy if far from player
           const e1px = e1.position.x - position.x;
           const e1pz = e1.position.z - position.z;
           if (e1px * e1px + e1pz * e1pz > PLAYER_CULL_SQ) continue;
@@ -2058,7 +2013,7 @@ export default memo(function CanvasGame() {
 
         if (damagedThisFrameRef.current) {
           if (phase === "playing")
-            cameraRef.current.shake({ strength: 1000, durationMs: 100 });
+            cameraRef.current.shake({ strength: 100, durationMs: 100 });
         }
         enemyProjectilesRef.current = updatedEnemyProjectiles;
 
@@ -2315,36 +2270,34 @@ export default memo(function CanvasGame() {
       });
     }
 
+    // In handleEnemyDeath, replace the splinter block:
+    // ADD THIS:
     if (ps.splinterBullets) {
       const stats = ps.getProjectileStats();
-      const addProjectile = useProjectiles.getState().addProjectile;
-
-      for (let i = 0; i < 3; i++) {
-        const angle = (i / 3) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
-        const direction = new THREE.Vector3(
-          Math.cos(angle),
-          0,
-          Math.sin(angle),
-        );
-
-        addProjectile({
-          position: enemy.position
-            .clone()
-            .add(direction.clone().multiplyScalar(0.6)),
-          size: 4,
-          direction,
-          damage: stats.damage * 0.2,
-          speed: stats.speed * 1.35,
-          life: 1.2,
-          range: Math.max(12, stats.range * 0.4),
-          trailLength: 1,
-          piercing: 2,
-          bouncing: 0,
-          homing: false,
-        });
-      }
+      const angles = [0, Math.PI * 2 / 3, Math.PI * 4 / 3];
+      useProjectiles.getState().addProjectiles(
+        angles.map(baseAngle => {
+          const angle = baseAngle + (Math.random() - 0.5) * 0.3;
+          const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+          return {
+            position: enemy.position.clone().add(direction.clone().multiplyScalar(0.6)),
+            direction,
+            size: 4,
+            damage: stats.damage * 0.2,
+            speed: stats.speed * 1.35,
+            life: 1.2,
+            range: Math.max(12, stats.range * 0.4),
+            trailLength: 1,
+            piercing: 2,
+            bouncing: 0,
+            homing: false,
+          };
+        })
+      );
     }
-  }
+  };
+
+  
 
   let grassPattern: CanvasPattern | null = null;
 
@@ -2545,11 +2498,10 @@ export default memo(function CanvasGame() {
         barHeight,
       );
 
-      // Progress bar - use solid color instead of gradient
+      // progress bar 
       const progress = reloadProgress / reloadTime;
       const barWidth = snapToGrid(radius * 2 * progress);
 
-      // Simple color based on progress instead of gradient
       const hue = 30 + progress * 10; // Goes from orange to yellow
       ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
       ctx.fillRect(
@@ -2569,7 +2521,6 @@ export default memo(function CanvasGame() {
         barHeight,
       );
 
-      // Outer glow
       ctx.strokeStyle = "rgba(255, 170, 0, 0.3)";
       ctx.lineWidth = 4;
       ctx.strokeRect(
@@ -2589,7 +2540,6 @@ export default memo(function CanvasGame() {
 
       ctx.restore();
 
-      // Spinning chamber indicator
       const spinAngle = progress * Math.PI * 4;
       ctx.save();
       ctx.translate(snapToGrid(centerX), snapToGrid(barY + barHeight + 15));
@@ -2746,6 +2696,7 @@ export default memo(function CanvasGame() {
     }
 
     writeIndexRef.current = idx;
+    highWaterRef.current = Math.max(highWaterRef.current, idx);
   };
   const start = performance.now();
 
@@ -2814,8 +2765,9 @@ export default memo(function CanvasGame() {
     ctx.fillStyle = "#f5d6c1";
 
     const pool = poolRef.current;
+    const limit = Math.min(poolSize, highWaterRef.current + 100);
 
-    for (let i = 0; i < poolSize; i++) {
+    for (let i = 0; i < limit; i++) {
       const p = pool[i];
       if (p.life <= 0) continue;
 
@@ -3269,7 +3221,7 @@ export default memo(function CanvasGame() {
     if (enemy.isBoss && enemy.bossType === "lazarus") {
       return;
     }
-
+    if (enemy.type === "crow") return;
     if (enemy.isBoss && enemy.bossType === "reaper") {
       return;
     }
@@ -3338,10 +3290,6 @@ export default memo(function CanvasGame() {
       ctx.restore();
       return;
     }
-
-    // Crow is rendered in the eye/overlay layer
-    if (enemy.type === "crow") return;
-
     const enemyType: EnemySpriteType = getEnemyType(enemy);
     const bodySprite = enemySpritesByType[enemyType];
     const size = bodySprite.size * bodySprite.scale;

@@ -6,7 +6,7 @@ import { useEnemies } from "../lib/stores/useEnemies";
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from "../components/CanvasGame"
 
 import { Button } from "./ui/button";
-import { Card, CardContent } from "./ui/card";
+
 import { Volume2, VolumeX } from "lucide-react";
 import { HeartHUD, AmmoHUD, frameSprite, drawNineSlice } from "./SpriteProps";
 import { Slider } from "./ui/slider";
@@ -20,7 +20,7 @@ fontWhiteImage.src = "/sprites/font-atlas-white.png";
 const fontRedImage = new Image();
 fontRedImage.src = "/sprites/font-atlas-red.png";
 
-const CONTAINER_SPRITESHEET = "/sprites/upgrades/containers-spritesheet.png";
+const CONTAINER_SPRITESHEET = "/sprites/upgrades/container-spritesheet.png";
 const UPGRADES_SPRITESHEET = "/sprites/upgrade-spritesheet.png";
 
 const SHEET_COLS = 9;
@@ -48,42 +48,42 @@ export function LevelUpScreen() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [isChooseHovered, setIsChooseHovered] = useState(false);
-  const [animationPhase, setAnimationPhase] = useState<
-    "dropdown" | "ready"
-  >("dropdown");
+  const [animationPhase, setAnimationPhase] =
+    useState<"dropdown" | "ready">("dropdown");
 
   const titleCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const descCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const chooseCanvasRef = useRef<HTMLCanvasElement | null>(null);
-
+  const [isVisible, setIsVisible] = useState(false);
+  
   const previewIndex =
     hoveredIndex !== null ? hoveredIndex : selectedIndex;
 
   const displayedUpgrade =
     availableUpgrades?.[previewIndex];
 
-  const playerScreenX =
-    (window.innerWidth - CANVAS_WIDTH) / 2 +
-    CANVAS_WIDTH / 2;
-
-  const playerScreenY =
-    (window.innerHeight - CANVAS_HEIGHT) / 2 +
-    CANVAS_HEIGHT / 2;
-
   useEffect(() => {
-    if (!showLevelUpScreen) return;
+    if (showLevelUpScreen) {
+      setIsVisible(true);
 
-    setSelectedIndex(0);
-    setHoveredIndex(null);
-    setIsChooseHovered(false);
+      setSelectedIndex(0);
+      setHoveredIndex(null);
+      setIsChooseHovered(false);
 
-    setAnimationPhase("dropdown");
+      setAnimationPhase("dropdown");
 
-    const t = setTimeout(() => {
-      setAnimationPhase("ready");
-    }, 450);
+      const t = setTimeout(() => {
+        setAnimationPhase("ready");
+      }, 20);
+    } else {
+      setAnimationPhase("dropdown");
 
-    return () => clearTimeout(t);
+      const t = setTimeout(() => {
+        setIsVisible(false);
+      }, 100); // match transition time
+
+      return () => clearTimeout(t);
+    }
   }, [showLevelUpScreen]);
 
   /* -------------------------
@@ -208,7 +208,7 @@ export function LevelUpScreen() {
   /* -------------------------
      EARLY EXIT
   ------------------------- */
-  if (!showLevelUpScreen || availableUpgrades.length === 0) {
+  if (!isVisible) {
     return null;
   }
 
@@ -246,7 +246,7 @@ export function LevelUpScreen() {
         </div>
 
         {/* UPGRADES */}
-        <div className="flex justify-center gap-0 mb-20">
+        <div className="flex justify-center gap-0 mb-5">
           {availableUpgrades.map((upgrade, i) => {
             const isSelected = i === selectedIndex;
             const isHovered = i === hoveredIndex;
@@ -254,7 +254,7 @@ export function LevelUpScreen() {
             const { col, row } = getIconUV(upgrade.icon);
 
             const SPRITE_PX = 32;
-            const SCALE = 2; 
+            const SCALE = 2.5
             return (
               <div
                 key={upgrade.id}
@@ -265,8 +265,8 @@ export function LevelUpScreen() {
                 onMouseLeave={() => setHoveredIndex(null)}
                 className="relative"
                 style={{
-                  width: "89px",
-                  height: "89px",
+                  width: "120px",
+                  height: "120px",
                   pointerEvents: isReady ? "auto" : "none",
                   opacity: isReady ? 1 : 0,
                   
@@ -279,6 +279,9 @@ export function LevelUpScreen() {
                     backgroundPosition: `0% ${
                       (isSelected || isHovered ? 1 : 0) * 100
                     }%`,
+                    transform: `
+                      
+                    `,
                   }}
                 />
 
@@ -288,7 +291,7 @@ export function LevelUpScreen() {
                     backgroundImage: `url(${UPGRADES_SPRITESHEET})`,
                     width: `${SPRITE_PX * SCALE}px`,
                     height: `${SPRITE_PX * SCALE}px`,
-                    imageRendering: "pixelated",
+                    
 
                     backgroundPosition: `
                       ${-col * SPRITE_PX * SCALE}px
@@ -298,7 +301,7 @@ export function LevelUpScreen() {
                     backgroundSize: `${SHEET_COLS * SPRITE_PX * SCALE}px`,
                     transform: `
                       translate(-50%, -50%)
-                      scale(${isHovered ? 1.51 : isSelected ? 1.51 : 1})
+                      scale(${isHovered || isSelected ? 1.5 : 1})
                     `,
                     
                   }}
@@ -400,6 +403,9 @@ export default function GameUI() {
   const levelCanvasRef = useRef<HTMLCanvasElement | null>(null);
 	const instructionsCanvasRef = useRef<HTMLCanvasElement | null>(null);
 	const showInstructions = elapsedTime < 30;
+  const [hideInstructionsForever, setHideInstructionsForever] =
+    useState(false);
+
   
   const handleStart = () => {
     resetPlayer();
@@ -471,39 +477,68 @@ export default function GameUI() {
   );
 }, [level]);
 
-useEffect(() => {
-  if (!showInstructions) return;
 
-  const canvas = instructionsCanvasRef.current;
-  if (!canvas) return;
 
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
+  useEffect(() => {
+    if (showLevelUpScreen) {
+      setHideInstructionsForever(true);
+    }
+  }, [showLevelUpScreen]);
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.imageSmoothingEnabled = false;
+  useEffect(() => {
+    if (!showInstructions || hideInstructionsForever) return;
 
-  const cx = canvas.width / 2;
+    const canvas = instructionsCanvasRef.current;
+    if (!canvas) return;
 
-  const w = canvas.width;
-const h = canvas.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-drawBitmapText(ctx, "WASD - Move", w * 0.25, h * 0.90, font, fontWhiteImage, {
-  align: "center",
-  scale: 1,
-});
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-drawBitmapText(ctx, "Left Click (Hold) - Shoot", w * 0.50, h * 0.90, font, fontWhiteImage, {
-  align: "center",
-  scale: 1,
-});
+    if (showLevelUpScreen) return;
 
-drawBitmapText(ctx, "R - Reload", w * 0.75, h * 0.90, font, fontWhiteImage, {
-  align: "center",
-  scale: 1,
-});
+    ctx.imageSmoothingEnabled = false;
 
-}, [showInstructions, elapsedSeconds]);
+    const w = canvas.width;
+    const h = canvas.height;
+
+    drawBitmapText(
+      ctx,
+      "WASD - Move",
+      w * 0.25,
+      h * 0.90,
+      font,
+      fontWhiteImage,
+      { align: "center", scale: 1 }
+    );
+
+    drawBitmapText(
+      ctx,
+      "Left Click (Hold) - Shoot",
+      w * 0.50,
+      h * 0.90,
+      font,
+      fontWhiteImage,
+      { align: "center", scale: 1 }
+    );
+
+    drawBitmapText(
+      ctx,
+      "R - Reload",
+      w * 0.75,
+      h * 0.90,
+      font,
+      fontWhiteImage,
+      { align: "center", scale: 1 }
+    );
+  }, [
+    showInstructions,
+    elapsedSeconds,
+    showLevelUpScreen,
+    hideInstructionsForever,
+  ]);
+  
 
   if (phase === "ready") {
     return (
@@ -630,13 +665,12 @@ drawBitmapText(ctx, "R - Reload", w * 0.75, h * 0.90, font, fontWhiteImage, {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-90 z-50">
 
-          <CardContent className="p-8 text-center">
             <h2 className="text-3xl font-bold mb-4 text-red-400">Game Over</h2>
             <p className="text-gray-300 mb-4">You have fallen in the dungeon...</p>
             <Button onClick={restart} className="bg-blue-600 hover:bg-blue-700 text-lg px-8 py-3">
               Try Again
             </Button>
-          </CardContent>
+          
        
       </div>
     );
@@ -685,7 +719,6 @@ drawBitmapText(ctx, "R - Reload", w * 0.75, h * 0.90, font, fontWhiteImage, {
 
           </div>
 
-          <CardContent className="p-0">
             <div className="space-y-2">
               <div className="flex items-center gap-0">
                 <div className="flex gap-1">
@@ -696,9 +729,8 @@ drawBitmapText(ctx, "R - Reload", w * 0.75, h * 0.90, font, fontWhiteImage, {
                 </div>
               </div>
             </div>
-          </CardContent>
+          
 
-        <CardContent className="p-0">
           <div className="space-y-0">
             <div className="gap-0">
               
@@ -711,7 +743,7 @@ drawBitmapText(ctx, "R - Reload", w * 0.75, h * 0.90, font, fontWhiteImage, {
             </div>
             
           </div>
-        </CardContent>
+        
       </div>
 
 

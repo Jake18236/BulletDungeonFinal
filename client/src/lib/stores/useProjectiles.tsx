@@ -71,7 +71,7 @@ export interface Projectile {
 interface ProjectilesState {
   projectiles: Projectile[];
 
-
+  addProjectiles: (configs: Parameters<ProjectilesState['addProjectile']>[0][]) => void;
   addProjectile: (config: {
     position: THREE.Vector3;
     direction: THREE.Vector3;
@@ -130,7 +130,15 @@ let _nextProjectileStoreId = 0;
 export const useProjectiles = create<ProjectilesState>((set, get) => ({
   projectiles: [],
 
-
+  addProjectiles: (configs: Parameters<ProjectilesState['addProjectile']>[0][]) => {
+    set((state) => {
+      for (const config of configs) {
+        state.projectiles.push(buildProjectile(config));
+      }
+      return { projectiles: state.projectiles };
+    });
+  },
+  
   addProjectile: (config: {
     position: THREE.Vector3;
     direction: THREE.Vector3;
@@ -192,9 +200,12 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       triggerOnHit: config.triggerOnHit,
     };
 
-    set((state) => ({
-      projectiles: [...state.projectiles, projectile],
-    }));
+    set((state) => {
+      state.projectiles.push(projectile);
+      return { projectiles: state.projectiles };
+    });
+
+    
   },
 
   // Helper to trim old trail history to prevent unbounded growth
@@ -222,12 +233,17 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
         proj.velocity.z += wobbleZ * delta * 2;
       }
 
-      const travelFactor = Math.min(1, proj.distanceTraveled / 20);
-      const dragBase = 0.4;
-      const dragFalloff = 0.01;
-      const dragFactor = dragBase / (1 + dragFalloff * travelFactor);
-      const speedDecay = Math.max(0, 1 - dragFactor * delta);
-      proj.velocity.multiplyScalar(speedDecay);
+      const minSpeedFactor = 0.15; // keeps some momentum
+      const slowdownRate = 0.05;   // lower = longer glide
+
+      const speedFactor =
+        minSpeedFactor +
+        (1 - minSpeedFactor) *
+          Math.exp(-proj.distanceTraveled * slowdownRate);
+
+      proj.velocity.multiplyScalar(
+        Math.pow(speedFactor, delta)
+      );
 
       const move = proj.velocity.clone().multiplyScalar(delta);
       proj.position.add(move);
@@ -410,8 +426,6 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       updated.push(proj);
     }
 
-    // --- Update ghost trails ---
-
     set({
       projectiles: updated,
     });
@@ -430,6 +444,60 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
 // --------------------------- HELPERS ---------------------------------------
 //
 
+// In useProjectiles.tsx — add this helper outside the store:
+export function buildProjectile(config: {
+  position: THREE.Vector3;
+  direction: THREE.Vector3;
+  life?: number;
+  trailLength: number;
+  damage: number;
+  speed: number;
+  range: number;
+  size: number;
+  homing: boolean;
+  piercing: number;
+  bouncing: number;
+  railgun?: boolean;
+  explosive?: { radius: number; damage: number };
+  chainLightning?: { chains: number; range: number };
+  isSummonProjectile?: boolean;
+  burn?: { damage: number; duration: number };
+  triggerOnHit?: boolean;
+}): Projectile {
+  return {
+    id: String(_nextProjectileStoreId++),
+    position: config.position.clone(),
+    previousPosition: config.position.clone(),
+    velocity: config.direction.clone().normalize().multiplyScalar(config.speed),
+    damage: config.damage,
+    speed: config.speed,
+    life: config.life ?? 3,
+    maxLife: config.life ?? 3,
+    drag: 0.985,
+    maxRange: config.range,
+    distanceTraveled: 0,
+    rotationY: Math.atan2(config.direction.x, config.direction.z),
+    color: getProjectileColor(config),
+    size: config.size,
+    trailColor: getTrailColor(config),
+    trailColorSecondary: getTrailColor(config),
+    trailLength: config.trailLength,
+    homing: config.homing,
+    piercing: config.piercing,
+    piercedEnemies: new Set(),
+    bouncing: config.bouncing,
+    bouncesLeft: config.bouncing,
+    railgun: config.railgun ?? false,
+    pierceKillCount: 0,
+    explosive: config.explosive,
+    chainLightning: config.chainLightning
+      ? { ...config.chainLightning, chainedEnemies: new Set() }
+      : undefined,
+    isSummonProjectile: config.isSummonProjectile,
+    burn: config.burn,
+    triggerOnHit: config.triggerOnHit,
+  };
+}
 
 function getProjectileColor(config: any): string {
   if (config.explosive) return "#ff6600";
