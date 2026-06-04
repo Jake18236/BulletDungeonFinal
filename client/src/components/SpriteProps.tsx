@@ -17,7 +17,7 @@ export type SpriteDef = {
   scale: number;    // relative world/UI size
 };
 
-export type EnemySpriteType = "basic" | "tank" | "eyeball" | "tree";
+export type EnemySpriteType = "basic" | "tank" | "eyeball" | "mage" | "tree";
 
 export const WeaponSprites = {
   revolver: (() => {
@@ -83,6 +83,7 @@ export function HeartHUD({ currentHP, maxHP }: HeartHUDProps) {
 type AmmoHUDProps = {
   ammo: number;
   maxAmmo: number;
+  compact?: boolean;
 };
 
 export function AmmoHUD({ ammo, maxAmmo }: AmmoHUDProps) {
@@ -147,6 +148,7 @@ export const enemySpritesByType: Record<EnemySpriteType, SpriteDef> = {
   basic: createEnemySprite("/sprites/enemy/basic-enemy.png", 32, BASE_SCALE),
   tank: createEnemySprite("/sprites/enemy/tank-enemy.png", 48, BASE_SCALE),
   eyeball: createEnemySprite("/sprites/enemy/eyeball-enemy.png", 48, BASE_SCALE),
+  mage: createEnemySprite("/sprites/enemy/mage-enemy.png", 48, BASE_SCALE),
   tree: createEnemySprite("/sprites/enemy/tree-enemy.png", 48, BASE_SCALE),
 };
 
@@ -154,6 +156,7 @@ export const enemyEyeSpritesByType: Record<EnemySpriteType, SpriteDef> = {
   basic: createEnemySprite("/sprites/enemy/basic-enemy-eyes.png", 32, BASE_SCALE),
   tank: createEnemySprite("/sprites/enemy/tank-enemy-eyes.png", 48, BASE_SCALE),
   eyeball: createEnemySprite("/sprites/enemy/eyeball-enemy-eyes.png", 48, BASE_SCALE),
+  mage: createEnemySprite("/sprites/enemy/mage-enemy-eyes.png", 48, BASE_SCALE),
   tree: createEnemySprite("/sprites/enemy/tree-enemy-eyes.png", 96, BASE_SCALE),
 };
 

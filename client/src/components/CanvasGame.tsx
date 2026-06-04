@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { usePlayer } from "../lib/stores/usePlayer";
 import {
   ENEMY_TYPE_CONFIG,
-  SHOGGOTH_CONFIG,
+  lazarusConfig,
   useEnemies,
   type Enemy,
 } from "../lib/stores/useEnemies";
@@ -13,7 +13,7 @@ import { useGame } from "../lib/stores/useGame";
 import { useAudio } from "../lib/stores/useAudio";
 import { FireParticleSystem } from "../lib/FireParticleSystem";
 import { useProjectiles, TrailParticle } from "../lib/stores/useProjectiles";
-import { useHit } from "../lib/stores/useHit";
+import { useHit, flushHitEffects } from "../lib/stores/useHit";
 import { useSummons } from "../lib/stores/useSummons";
 import { useCamera } from "../lib/stores/useCamera";
 import { useVisualEffects } from "../lib/stores/useVisualEffects";
@@ -74,7 +74,7 @@ export const CANVAS_HEIGHT = window.innerHeight;
 const ROOM_SIZE = 2000;
 const LAZARUS_BASE_BEAM_LENGTH_WORLD = (304 * 4) / 25;
 const LAZARUS_BEAM_LENGTH_WORLD =
-  LAZARUS_BASE_BEAM_LENGTH_WORLD * SHOGGOTH_CONFIG.beamLengthScale;
+  LAZARUS_BASE_BEAM_LENGTH_WORLD * lazarusConfig.beamLengthScale;
 
 const grassSprite = new Image();
 grassSprite.src = "/textures/grass3.png";
@@ -369,7 +369,7 @@ function getEnemyBodyHitRadius(enemy: {
   bossType?: string;
 }) {
   if (enemy.isBoss && enemy.bossType === "lazarus")
-    return SHOGGOTH_CONFIG.bodyHitRadius;
+    return lazarusConfig.bodyHitRadius;
   if (enemy.isBoss && enemy.bossType === "reaper") return 3.2;
   if (enemy.type === "crow") return 0.6;
   if (enemy.type === "mage") return 1.6;
@@ -586,7 +586,7 @@ export default memo(function CanvasGame() {
   const ammo = usePlayer((state) => state.ammo);
   const updateFanFire = usePlayer((state) => state.updateFanFire);
   const movePlayer = usePlayer((state) => state.move);
-  const updateDash = usePlayer((state) => state.updateDash);
+
   const updateDamageFlash = usePlayer((state) => state.updateDamageFlash);
   const maxAmmo = usePlayer((state) => state.maxAmmo);
   const firerate = usePlayer((state) => state.firerate);
@@ -757,10 +757,6 @@ export default memo(function CanvasGame() {
 
       if (e.button === 0) {
         isMouseDown.current = true;
-      } else if (e.button === 2) {
-        // Right-click dash
-        const ps = usePlayer.getState();
-
       }
     };
 
@@ -836,7 +832,7 @@ export default memo(function CanvasGame() {
       if (!canvasRef.current) return;
 
       const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d', { alpha: false });
+      const ctx = canvas.getContext("2d", { alpha: false });
       if (!ctx) return;
 
       const animationNowMs =
@@ -884,7 +880,7 @@ export default memo(function CanvasGame() {
         updateReload(delta);
         updateInvincibility(delta);
         updateRegeneration(delta);
-        updateDash(delta);
+
         updateDamageFlash(delta);
         updateMuzzleFlash();
         updateSummons(delta, position, enemies, addProjectile, playHit);
@@ -1142,7 +1138,7 @@ export default memo(function CanvasGame() {
               if (ps.railgun) {
                 angle = baseAngle + Math.random();
               }
-              
+
               fireProjectileInDirection(angle);
             }
 
@@ -1155,12 +1151,13 @@ export default memo(function CanvasGame() {
             if (ps.fanFire && ammo === 1) {
               ps.startFanFire();
             }
-            
+
             if (phase === "playing")
               cameraRef.current.shake({ strength: 35, durationMs: 60 });
 
-            if (ps.hand_cannon) 
-            
+            if (ps.handCannon)
+              cameraRef.current.shake({ strength: 25, durationMs: 20 });
+
             ps.fireMuzzleFlash(barrelFlashPosition);
 
             playHit();
@@ -1238,18 +1235,20 @@ export default memo(function CanvasGame() {
           if (footstepSpawnTimerRef.current >= 0.11) {
             footstepSpawnTimerRef.current = 0;
             const moveDir = new THREE.Vector3(dx, 0, dz).normalize();
+            const down = new THREE.Vector3(0, 0, -5);
             const side = footstepSideRef.current;
             footstepSideRef.current = side === 1 ? -1 : 1;
             const lateral = new THREE.Vector3(
               -moveDir.z,
               0,
               moveDir.x,
-            ).multiplyScalar(0.35 * side);
+            ).multiplyScalar(0.15 * side);
             footstepMarksRef.current.push({
               id: String(_nextFootstepId++),
               position: bounced.position
                 .clone()
                 .sub(moveDir.clone().multiplyScalar(0.35))
+                .sub(down.clone().multiplyScalar(0.15))
                 .add(lateral),
               life: 0,
               maxLife: 0.6,
@@ -1312,8 +1311,8 @@ export default memo(function CanvasGame() {
             }
             _laz3.set(-_laz2.z, 0, _laz2.x);
 
-            const canAdvance = distanceToPlayer > SHOGGOTH_CONFIG.idealDistance;
-            const canRetreat = distanceToPlayer < SHOGGOTH_CONFIG.minDistance;
+            const canAdvance = distanceToPlayer > lazarusConfig.idealDistance;
+            const canRetreat = distanceToPlayer < lazarusConfig.minDistance;
 
             if (enemy.attackState === "chasing") {
               _laz4.set(0, 0, 0);
@@ -1333,7 +1332,7 @@ export default memo(function CanvasGame() {
                 (enemy.projectileCooldown ?? 0) - delta;
               if (
                 enemy.projectileCooldown <= 0 &&
-                distanceToPlayer <= SHOGGOTH_CONFIG.maxDistance
+                distanceToPlayer <= lazarusConfig.maxDistance
               ) {
                 enemy.attackState = "laser_windup";
                 enemy.windUpTimer = 0;
@@ -1366,16 +1365,16 @@ export default memo(function CanvasGame() {
                 enemy.laserBaseRotation =
                   enemy.rotationY ??
                   Math.atan2(lockedDirection.z, lockedDirection.x);
-                enemy.projectileCooldown = SHOGGOTH_CONFIG.beamDamageInterval;
+                enemy.projectileCooldown = lazarusConfig.beamDamageInterval;
                 playHit();
               }
             } else if (enemy.attackState === "laser_firing") {
               if (phase === "playing")
                 cameraRef.current.shake({ strength: 5, durationMs: 1000 });
               enemy.windUpTimer = (enemy.windUpTimer ?? 0) + delta;
-              const fireDuration = SHOGGOTH_CONFIG.fireDuration;
+              const fireDuration = lazarusConfig.fireDuration;
               const spinAmount =
-                (enemy.windUpTimer ?? 0) * SHOGGOTH_CONFIG.rotationSpeed;
+                (enemy.windUpTimer ?? 0) * lazarusConfig.rotationSpeed;
               const baseRotation =
                 enemy.laserBaseRotation ?? enemy.rotationY ?? 0;
               const currentRotation = baseRotation + spinAmount;
@@ -1385,8 +1384,8 @@ export default memo(function CanvasGame() {
                 (enemy.projectileCooldown ?? 0) - delta;
               if (enemy.projectileCooldown <= 0) {
                 const beamOriginOffsetWorld =
-                  SHOGGOTH_CONFIG.beamOriginOffsetPx / 25;
-                for (const beamOffset of SHOGGOTH_CONFIG.beamAngles) {
+                  lazarusConfig.beamOriginOffsetPx / 25;
+                for (const beamOffset of lazarusConfig.beamAngles) {
                   const beamAngle = currentRotation + beamOffset;
                   _laz5.set(Math.cos(beamAngle), 0, Math.sin(beamAngle));
                   _laz6
@@ -1399,7 +1398,7 @@ export default memo(function CanvasGame() {
                   if (
                     along >= 0.35 &&
                     along <= LAZARUS_BEAM_LENGTH_WORLD &&
-                    lateral <= SHOGGOTH_CONFIG.beamHalfWidthWorld &&
+                    lateral <= lazarusConfig.beamHalfWidthWorld &&
                     invincibilityTimer <= 0 &&
                     !damagedThisFrameRef.current
                   ) {
@@ -1411,7 +1410,7 @@ export default memo(function CanvasGame() {
                     damagedThisFrameRef.current = true;
                   }
                 }
-                enemy.projectileCooldown = SHOGGOTH_CONFIG.beamDamageInterval;
+                enemy.projectileCooldown = lazarusConfig.beamDamageInterval;
               }
               if (enemy.windUpTimer >= fireDuration) {
                 enemy.attackState = "recovering";
@@ -1576,13 +1575,13 @@ export default memo(function CanvasGame() {
 
               if ((enemy.reaperSummonWave ?? 0) === 0 && t >= 0.3) {
                 enemy.reaperSummonWave = 1;
-                for (let ci = 0; ci < 30; ci++) {
+                for (let ci = 0; ci < 2; ci++) {
                   const ang = (ci / 3) * Math.PI * 2;
                   sc(
                     new THREE.Vector3(
-                      enemy.position.x + Math.cos(ang) * 2,
+                      enemy.position.x + Math.cos(ang) * 4,
                       0,
-                      enemy.position.z + Math.sin(ang) * 2,
+                      enemy.position.z + Math.sin(ang) * 3,
                     ),
                     new THREE.Vector3(Math.cos(ang) * 5, 0, Math.sin(ang) * 4),
                   );
@@ -1591,13 +1590,13 @@ export default memo(function CanvasGame() {
 
               if ((enemy.reaperSummonWave ?? 0) === 1 && t >= 0.65) {
                 enemy.reaperSummonWave = 2;
-                for (let ci = 0; ci < 30; ci++) {
+                for (let ci = 0; ci < 4; ci++) {
                   const ang = (ci / 3) * Math.PI * 2 + Math.PI / 3;
                   sc(
                     new THREE.Vector3(
-                      enemy.position.x + Math.cos(ang) * 2,
+                      enemy.position.x + Math.cos(ang) * 3,
                       0,
-                      enemy.position.z + Math.sin(ang) * 2,
+                      enemy.position.z + Math.sin(ang) * 4,
                     ),
                     new THREE.Vector3(Math.cos(ang) * 6, 0, Math.sin(ang) * 5),
                   );
@@ -2148,8 +2147,7 @@ export default memo(function CanvasGame() {
             drawEnemyEyes(eyeCtx, enemy, animationNowMs);
           }
         }
-
-        // Draw terrain obstacle eyes with viewport culling
+        drawEnemyProjectiles(eyeCtx);
         for (const obstacle of terrainRef.current) {
           if (
             isObjectInViewport(
@@ -2165,12 +2163,12 @@ export default memo(function CanvasGame() {
         }
 
         drawTreeLightning(eyeCtx, gameplayElapsedMsRef.current);
-        drawMageLightning(eyeCtx);
-        drawEnemyProjectiles(eyeCtx);
+
         drawExplosionEffects(eyeCtx);
         drawProjectilesAndTrails(eyeCtx, phase !== "playing", position);
         drawEnemyDeaths(eyeCtx, gameplayElapsedMsRef.current);
         drawSummons(eyeCtx, animationNowMs);
+        drawMageLightning(eyeCtx);
         drawSummonLightning(eyeCtx);
         drawDamageNumbers(eyeCtx);
 
@@ -2185,7 +2183,7 @@ export default memo(function CanvasGame() {
 
       drawReloadIndicator(ctx);
       drawWeapon(ctx, "revolver", phase !== "playing");
-
+      flushHitEffects();
       ctx.restore();
 
       // ── Red edge vignette when player takes damage ──
@@ -2244,6 +2242,35 @@ export default memo(function CanvasGame() {
     const ps = usePlayer.getState();
     removeEnemy(enemy.id);
 
+    if (ps.splinterBullets) {
+      const stats = ps.getProjectileStats();
+      const angles = [0, (Math.PI * 2) / 3, (Math.PI * 4) / 3];
+      useProjectiles.getState().addProjectiles(
+        angles.map((baseAngle) => {
+          const angle = baseAngle + (Math.random() - 0.5) * 0.3;
+          const direction = new THREE.Vector3(
+            Math.cos(angle),
+            0,
+            Math.sin(angle),
+          );
+          return {
+            position: enemy.position
+              .clone()
+              .add(direction.clone().multiplyScalar(0.6)),
+            direction,
+            size: 4,
+            damage: stats.damage * 0.2,
+            speed: stats.speed * 1.35,
+            life: 1,
+            range: Math.max(12, stats.range * 0.4),
+            trailLength: 1,
+            piercing: 2,
+            bouncing: 0,
+            homing: false,
+          };
+        }),
+      );
+    }
     // Boss explosion on death
     if (enemy.isBoss) {
       const { applyExplosiveDamage } = useHit.getState();
@@ -2269,35 +2296,7 @@ export default memo(function CanvasGame() {
         frameDurationMs: 85,
       });
     }
-
-    // In handleEnemyDeath, replace the splinter block:
-    // ADD THIS:
-    if (ps.splinterBullets) {
-      const stats = ps.getProjectileStats();
-      const angles = [0, Math.PI * 2 / 3, Math.PI * 4 / 3];
-      useProjectiles.getState().addProjectiles(
-        angles.map(baseAngle => {
-          const angle = baseAngle + (Math.random() - 0.5) * 0.3;
-          const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
-          return {
-            position: enemy.position.clone().add(direction.clone().multiplyScalar(0.6)),
-            direction,
-            size: 4,
-            damage: stats.damage * 0.2,
-            speed: stats.speed * 1.35,
-            life: 1.2,
-            range: Math.max(12, stats.range * 0.4),
-            trailLength: 1,
-            piercing: 2,
-            bouncing: 0,
-            homing: false,
-          };
-        })
-      );
-    }
-  };
-
-  
+  }
 
   let grassPattern: CanvasPattern | null = null;
 
@@ -2498,7 +2497,7 @@ export default memo(function CanvasGame() {
         barHeight,
       );
 
-      // progress bar 
+      // progress bar
       const progress = reloadProgress / reloadTime;
       const barWidth = snapToGrid(radius * 2 * progress);
 
@@ -2790,7 +2789,7 @@ export default memo(function CanvasGame() {
     }
 
     ctx.restore();
-  }
+  };
 
   const drawImpactEffects = (ctx: CanvasRenderingContext2D) => {
     const impactEffects = useVisualEffects.getState().impactEffects;
@@ -3108,7 +3107,7 @@ export default memo(function CanvasGame() {
       const dy = y2 - y1;
       const length = Math.hypot(dx, dy);
       const angle = Math.atan2(dy, dx);
-      const frame = nowMs >= attack.dissipateAt ? 4 : attack.frame;
+      const frame = attack.frame;
 
       if (
         electricityLineSpriteSheet.complete &&
@@ -3253,19 +3252,6 @@ export default memo(function CanvasGame() {
       const drawW = 96;
       const drawH = hasSheet ? Math.round(drawW * (frameH / frameW)) : 96;
       const facingRight = enemy.position.x <= position.x;
-
-      // Casting glow
-      if (isCasting) {
-        const action = enemy.mageAction ?? "lightning";
-        ctx.save();
-        ctx.translate(screenX, screenY);
-        ctx.globalAlpha = 0.35 + Math.sin(performance.now() / 80) * 0.15;
-        ctx.fillStyle = action === "heal" ? "#44ff88" : "#ff3333";
-
-        ctx.globalAlpha = 1;
-        ctx.restore();
-      }
-
       ctx.save();
       ctx.translate(screenX, screenY);
       ctx.imageSmoothingEnabled = false;
@@ -3447,9 +3433,9 @@ export default memo(function CanvasGame() {
       }
 
       const aimAngle = enemy.rotationY ?? 0;
-      const beamLengthPx = 304 * SHOGGOTH_CONFIG.beamLengthScale;
+      const beamLengthPx = 304 * lazarusConfig.beamLengthScale;
       const beamWidthPx = 32;
-      const beamOriginOffsetPx = SHOGGOTH_CONFIG.beamOriginOffsetPx;
+      const beamOriginOffsetPx = lazarusConfig.beamOriginOffsetPx;
       const laserBaseRotation = enemy.laserBaseRotation ?? aimAngle;
 
       const drawTiledBeam = (
@@ -3506,7 +3492,7 @@ export default memo(function CanvasGame() {
       if (enemy.attackState === "laser_windup" && hasWindupSheet) {
         const pulse = 0.82 + Math.sin(animationNowMs / 85) * 0.16;
 
-        for (const beamOffset of SHOGGOTH_CONFIG.beamAngles) {
+        for (const beamOffset of lazarusConfig.beamAngles) {
           const beamAngle = aimAngle + beamOffset;
           const startX = screenX + Math.cos(beamAngle) * beamOriginOffsetPx;
           const startY = screenY + Math.sin(beamAngle) * beamOriginOffsetPx;
@@ -3537,7 +3523,7 @@ export default memo(function CanvasGame() {
           : frameH;
         const fireProgress = Math.min(
           1,
-          (enemy.windUpTimer ?? 0) / SHOGGOTH_CONFIG.fireDuration,
+          (enemy.windUpTimer ?? 0) / lazarusConfig.fireDuration,
         );
 
         let frame = 1;
@@ -3548,10 +3534,10 @@ export default memo(function CanvasGame() {
           frame = Math.min(5, 2 + Math.floor(dissipationProgress * 4));
         }
 
-        for (const beamOffset of SHOGGOTH_CONFIG.beamAngles) {
+        for (const beamOffset of lazarusConfig.beamAngles) {
           const beamAngle =
             laserBaseRotation +
-            (enemy.windUpTimer ?? 0) * SHOGGOTH_CONFIG.rotationSpeed +
+            (enemy.windUpTimer ?? 0) * lazarusConfig.rotationSpeed +
             beamOffset;
           const startX = screenX + Math.cos(beamAngle) * beamOriginOffsetPx;
           const startY = screenY + Math.sin(beamAngle) * beamOriginOffsetPx;
@@ -3657,7 +3643,6 @@ export default memo(function CanvasGame() {
       const facingRight = enemy.position.x <= position.x;
       const vibrateX = isCharging ? Math.sin(animationNowMs / 80) * 5 : 0;
 
-      // Motion blur ghost copies during dash
       if (isDashing && hasSheet) {
         const vLen = Math.hypot(enemy.velocity?.x ?? 0, enemy.velocity?.z ?? 0);
         if (vLen > 3) {

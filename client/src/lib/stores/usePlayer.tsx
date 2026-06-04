@@ -24,21 +24,19 @@ export interface Upgrade {
 // ============================================================================
 
 interface PlayerState {
-  // Position & Movement
+
   position: THREE.Vector3;
   velocity: THREE.Vector3;
   speed: number;
   isMoving: boolean;
   lastMovementTime: number;
 
-  // Health
   hearts: number;
   maxHearts: number;
   invincibilityTimer: number;
   invincibilityDuration: number;
   defense: number;
 
-  // Combat Stats
   firerate: number;
   ammo: number;
   maxAmmo: number;
@@ -66,12 +64,12 @@ interface PlayerState {
   speedWhenFiring: number;
   healPerLevelUp: number;
 
-  // Special Upgrades
   knockbackMultiplier: number;
   instantKillThreshold: number;
   splinterBullets: boolean;
   pierceKilledEnemies: boolean;
   railgun: boolean;
+  handCannon: boolean;
   siegeMode: boolean;
   fanFire: boolean;
   splitFire: boolean;
@@ -82,12 +80,10 @@ interface PlayerState {
   killClipStacks: number;
   speedFiringBonus: number;
 
-  // Regeneration
   regeneration: boolean;
   regenerationInterval: number;
   regenerationTimer: number;
 
-  // Burn effects
   burnDurationMultiplier: number;
 
   muzzleFlashTimer: number;
@@ -96,19 +92,13 @@ interface PlayerState {
   fanFireIndex: number;
   fanFireTimer: number;
 
-  // Special mechanics
   visionRange: number;
   cameraZoom: number;
-  hasDash: boolean;
-  dashCooldown: number;
-  maxDashCooldown: number;
-  isDashing: boolean;
-  dashDirection: THREE.Vector3 | null;
+
   damageFlashTimer: number;
   damageFlashPosition: THREE.Vector3 | null;
   lastDamageKnockback: THREE.Vector3 | null;
 
-  // XP & LEVELING
   xp: number;
   level: number;
   xpToNextLevel: number;
@@ -116,7 +106,6 @@ interface PlayerState {
   availableUpgrades: Upgrade[];
   takenUpgrades: Set<string>;
 
-  // Actions - Movement & Combat
   move: (delta: THREE.Vector3) => void;
   loseHeart: () => void;
   updateInvincibility: (delta: number) => void;
@@ -143,30 +132,22 @@ interface PlayerState {
     chainLightning?: { chains: number; range: number };
   };
 
-  // Actions - Fan Fire
   startFanFire: () => void;
   updateFanFire: (delta: number, fireCallback: () => void) => void;
   fireMuzzleFlash: (position: THREE.Vector3) => void;
   updateMuzzleFlash: () => void;
 
-  // Actions - XP & Leveling
   addXP: (amount: number) => void;
   levelUp: () => void;
   selectUpgrade: (upgrade: Upgrade) => void;
   setShowLevelUpScreen: (show: boolean) => void;
 
-  // Actions - Dash
-  tryDash: (direction: THREE.Vector3) => boolean;
-  updateDash: (delta: number) => void;
-
-  // Actions - Damage feedback
   triggerDamageFlash: (
     position: THREE.Vector3,
     knockback: THREE.Vector3,
   ) => void;
   updateDamageFlash: (delta: number) => void;
 
-  // Actions - Regeneration
   updateRegeneration: (delta: number) => void;
 
   // Reset
@@ -450,6 +431,7 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
         baseDamage: player.baseDamage * 3.5,
         projectileSize: player.projectileSize * 1.5,
         piercing: player.piercing + 1,
+        handCannon: true,
       });
     },
   },
@@ -495,7 +477,10 @@ const ALL_UPGRADES: Record<string, Upgrade> = {
     
     requires: ["power_shot"],
     apply: () => {
-      usePlayer.setState({ homing: true });
+      const player = usePlayer.getState();
+      usePlayer.setState({ homing: true,
+                         life: player.life/2,
+                         });
     },
   },
 
@@ -1031,6 +1016,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   splinterBullets: false,
   pierceKilledEnemies: false,
   railgun: false,
+  handCannon: false,
   siegeMode: false,
   fanFire: false,
   splitFire: false,
@@ -1059,11 +1045,6 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   // Special mechanics
   visionRange: 1,
   cameraZoom: 1,
-  hasDash: false,
-  dashCooldown: 0,
-  maxDashCooldown: 2,
-  isDashing: false,
-  dashDirection: null,
   damageFlashTimer: 0,
   damageFlashPosition: null,
   lastDamageKnockback: null,
@@ -1138,45 +1119,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
 
   setShowLevelUpScreen: (show) => set({ showLevelUpScreen: show }),
 
-  // === DASH ACTIONS ===
-
-  tryDash: (direction) => {
-    const state = get();
-    if (!state.hasDash || state.dashCooldown > 0 || state.isReloading)
-      return false;
-
-    const normalizedDir = direction.clone().normalize();
-    set({
-      isDashing: true,
-      dashDirection: normalizedDir,
-      dashCooldown: state.maxDashCooldown,
-    });
-
-    return true;
-  },
-
-  updateDash: (delta) =>
-    set((state) => {
-      if (state.dashCooldown > 0) {
-        const newCooldown = Math.max(0, state.dashCooldown - delta);
-        return { dashCooldown: newCooldown };
-      }
-
-      if (state.isDashing && state.dashDirection) {
-        const dashSpeed = 35;
-        const dashDuration = 0.15;
-        const move = state.dashDirection
-          .clone()
-          .multiplyScalar(dashSpeed * delta);
-        return {
-          position: state.position.clone().add(move),
-          isDashing: false,
-          dashDirection: null,
-        };
-      }
-
-      return {};
-    }),
+  
 
   // === DAMAGE FEEDBACK ACTIONS ===
 
@@ -1438,6 +1381,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
       splinterBullets: false,
       pierceKilledEnemies: false,
       railgun: false,
+      handCannon: false,
       siegeMode: false,
       fanFire: false,
       splitFire: false,
@@ -1459,11 +1403,6 @@ export const usePlayer = create<PlayerState>((set, get) => ({
       fanFireTimer: 0,
       visionRange: 1,
       cameraZoom: 1,
-      hasDash: false,
-      dashCooldown: 0,
-      maxDashCooldown: 2,
-      isDashing: false,
-      dashDirection: null,
       damageFlashTimer: 0,
       damageFlashPosition: null,
       lastDamageKnockback: null,

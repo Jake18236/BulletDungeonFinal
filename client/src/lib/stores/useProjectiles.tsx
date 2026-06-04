@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import * as THREE from "three";
-import { ENEMY_TYPE_CONFIG, SHOGGOTH_CONFIG } from "./useEnemies";
+import { ENEMY_TYPE_CONFIG, lazarusConfig } from "./useEnemies";
 
 export type TrailParticle = {
   x: number;
@@ -319,7 +319,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
         if (proj.piercedEnemies.has(enemy.id)) continue;
 
         const enemyRadius = enemy.type === "boss"
-          ? SHOGGOTH_CONFIG.bodyHitRadius
+          ? lazarusConfig.bodyHitRadius
           : ENEMY_TYPE_CONFIG[enemy.type === "tank" || enemy.type === "eyeball" ? enemy.type : "basic"].bodyHitRadius;
 
         // Early distance check: quick AABB check before detailed collision

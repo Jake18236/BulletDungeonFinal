@@ -71,12 +71,18 @@ interface VisualEffectsState {
   lightningEffects: LightningEffect[];
 
   addImpact: (position: THREE.Vector3, size: number) => void;
+  addImpactBatch: (impacts: Array<{ x: number; y: number; z: number; size: number }>) => void;
   addExplosion: (position: THREE.Vector3, radius: number, count?: number) => void;
   addDamageNumber: (x: number, y: number, damage: number) => void;
+  addDamageNumberBatch: (numbers: Array<{ x: number; y: number; damage: number }>) => void
   addLightning: (x: number, y: number, angle: number) => void;
   updateEffects: (delta: number) => void;
   reset: () => void;
 }
+let _nextImpactId = 0;
+let _nextDmgId = 0;
+let _nextExplosionId = 0;
+let _nextLightningId = 0;
 
 export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
   particles: [],
@@ -88,152 +94,244 @@ export const useVisualEffects = create<VisualEffectsState>((set, get) => ({
   // ---------------- Impact Effects ----------------
   addImpact: (position: THREE.Vector3, size: number) => {
     const MAX_IMPACT_EFFECTS = 30;
-
     set(state => {
       const effects = state.impactEffects;
       if (effects.length >= MAX_IMPACT_EFFECTS) {
-        effects.shift();
+        // Overwrite oldest instead of shift() which is O(n)
+        effects[0] = {
+          id: `impact_${_nextImpactId++}`,
+          x: position.x,
+          y: position.z,
+          life: 0,
+          maxLife: 0.20,
+          size,
+          frameIndex: 0,
+          totalFrames: 2,
+        };
+      } else {
+        effects.push({
+          id: `impact_${_nextImpactId++}`,
+          x: position.x,
+          y: position.z,
+          life: 0,
+          maxLife: 0.20,
+          size,
+          frameIndex: 0,
+          totalFrames: 2,
+        });
       }
+      return { impactEffects: effects };
+    });
+  },
 
-      const impactEffect: ImpactEffect = {
-        id: `impact_${Date.now()}`,
+  // ---------------- Impact Batch ----------------
+  addImpactBatch: (impacts: Array<{ x: number; y: number; z: number; size: number }>) => {
+    const MAX_IMPACT_EFFECTS = 30;
+    set(state => {
+      const effects = state.impactEffects;
+      for (const imp of impacts) {
+        if (effects.length >= MAX_IMPACT_EFFECTS) {
+          effects[0] = {
+            id: `impact_${_nextImpactId++}`,
+            x: imp.x,
+            y: imp.z,
+            life: 0,
+            maxLife: 0.20,
+            size: imp.size,
+            frameIndex: 0,
+            totalFrames: 2,
+          };
+        } else {
+          effects.push({
+            id: `impact_${_nextImpactId++}`,
+            x: imp.x,
+            y: imp.z,
+            life: 0,
+            maxLife: 0.20,
+            size: imp.size,
+            frameIndex: 0,
+            totalFrames: 2,
+          });
+        }
+      }
+      return { impactEffects: effects };
+    });
+  },
+
+  // ---------------- Explosion ----------------
+  addExplosion: (position, radius, count) => {
+    set(state => {
+      state.explosionEffects.push({
+        id: `big_explosion_${_nextExplosionId++}`,
         x: position.x,
         y: position.z,
         life: 0,
-        maxLife: 0.20,
-        size,
+        maxLife: 0.5,
+        size: radius * 25,
+        radius,
         frameIndex: 0,
-        totalFrames: 2,
-      };
-
-      return {
-        impactEffects: [...effects, impactEffect],
-      };
+        totalFrames: 6,
+      });
+      return { explosionEffects: state.explosionEffects };
     });
-  },
-  // ---------------- Explosion ----------------
-  addExplosion: (position, radius, count) => {
-    const particles: Particle[] = [];
-
-    const explosionEffect: ExplosionEffect = {
-      id: `big_explosion_${Date.now()}`,
-      x: position.x,
-      y: position.z,
-      life: 0,
-      maxLife: 0.5,
-      size: radius * 25,
-      radius,
-      frameIndex: 0,
-      totalFrames: 6,
-    };
-
-    set(state => ({
-      particles: [...state.particles, ...particles],
-      explosionEffects: [...state.explosionEffects, explosionEffect],
-    }));
   },
 
   // ---------------- Damage Numbers ----------------
   addDamageNumber: (x, y, damage) => {
     const MAX_DAMAGE_NUMBERS = 50;
-
     set(state => {
       const numbers = state.damageNumbers;
       if (numbers.length >= MAX_DAMAGE_NUMBERS) {
-        numbers.shift();
+        // Overwrite instead of shift()
+        numbers[0] = {
+          id: `dmg_${_nextDmgId++}`,
+          x,
+          y,
+          damage: Math.round(damage),
+          life: 0,
+          maxLife: 0.8,
+          velocity: { x: 0, y: 0 },
+          scale: 0,
+        };
+      } else {
+        numbers.push({
+          id: `dmg_${_nextDmgId++}`,
+          x,
+          y,
+          damage: Math.round(damage),
+          life: 0,
+          maxLife: 0.8,
+          velocity: { x: 0, y: 0 },
+          scale: 0,
+        });
       }
-
-      const damageNumber: DamageNumber = {
-        id: `dmg_${Date.now()}`,
-        x,
-        y,
-        damage: Math.round(damage),
-        life: 0,
-        maxLife: 0.8,
-        velocity: { x: 0, y: 0 },
-        scale: 0,
-      };
-
-      return {
-        damageNumbers: [...numbers, damageNumber],
-      };
+      return { damageNumbers: numbers };
     });
   },
+
+  // ---------------- Damage Number Batch ----------------
+  addDamageNumberBatch: (numbers: Array<{ x: number; y: number; damage: number }>) => {
+    const MAX_DAMAGE_NUMBERS = 50;
+    set(state => {
+      const arr = state.damageNumbers;
+      for (const n of numbers) {
+        if (arr.length >= MAX_DAMAGE_NUMBERS) {
+          arr[0] = {
+            id: `dmg_${_nextDmgId++}`,
+            x: n.x,
+            y: n.y,
+            damage: Math.round(n.damage),
+            life: 0,
+            maxLife: 0.8,
+            velocity: { x: 0, y: 0 },
+            scale: 0,
+          };
+        } else {
+          arr.push({
+            id: `dmg_${_nextDmgId++}`,
+            x: n.x,
+            y: n.y,
+            damage: Math.round(n.damage),
+            life: 0,
+            maxLife: 0.8,
+            velocity: { x: 0, y: 0 },
+            scale: 0,
+          });
+        }
+      }
+      return { damageNumbers: arr };
+    });
+  },
+
+  // ---------------- Lightning ----------------
   addLightning: (x, y, angle) => {
-    set(state => ({
-      lightningEffects: [...state.lightningEffects, {
-        id: `lightning_${Date.now()}_${Math.random()}`,
+    set(state => {
+      state.lightningEffects.push({
+        id: `lightning_${_nextLightningId++}`,
         x, y, angle, life: 0, maxLife: 0.5, frameIndex: 0, totalFrames: 6,
-      }],
-    }));
+      });
+      return { lightningEffects: state.lightningEffects };
+    });
   },
 
   // ---------------- Update Effects ----------------
+  // Replaces map()+filter() with in-place write-index compaction — zero allocations
   updateEffects: (delta) => {
     const state = get();
 
     // Particles
-    const updatedParticles = state.particles
-      .map(p => {
-        const updated = { ...p };
-        updated.life += delta;
-        updated.position.x += updated.velocity.x * delta;
-        updated.position.z += updated.velocity.z * delta;
-        updated.velocity.multiplyScalar(0.92);
-        updated.alpha = 1 - (updated.life / updated.maxLife);
-        return updated;
-      })
-      .filter(p => p.life < p.maxLife);
+    let w = 0;
+    for (let i = 0; i < state.particles.length; i++) {
+      const p = state.particles[i];
+      p.life += delta;
+      if (p.life >= p.maxLife) continue;
+      p.position.x += p.velocity.x * delta;
+      p.position.z += p.velocity.z * delta;
+      p.velocity.multiplyScalar(0.92);
+      p.alpha = 1 - (p.life / p.maxLife);
+      if (w !== i) state.particles[w] = p;
+      w++;
+    }
+    state.particles.length = w;
 
     // Damage numbers
-    const updatedDamageNumbers = state.damageNumbers
-      .map(d => {
-        const updated = { ...d };
-        updated.life += delta;
-        const lifePercent = updated.life / updated.maxLife;
-        updated.scale = lifePercent < 0.15 ? lifePercent / 0.15 : 1;
-        return updated;
-      })
-      .filter(d => d.life < d.maxLife);
+    w = 0;
+    for (let i = 0; i < state.damageNumbers.length; i++) {
+      const d = state.damageNumbers[i];
+      d.life += delta;
+      if (d.life >= d.maxLife) continue;
+      const lifePercent = d.life / d.maxLife;
+      d.scale = lifePercent < 0.15 ? lifePercent / 0.15 : 1;
+      if (w !== i) state.damageNumbers[w] = d;
+      w++;
+    }
+    state.damageNumbers.length = w;
 
-    const updatedImpacts = state.impactEffects
-    .map(i => {
-      const updated = { ...i };
-      updated.life += delta;
+    // Impact effects
+    w = 0;
+    for (let i = 0; i < state.impactEffects.length; i++) {
+      const imp = state.impactEffects[i];
+      imp.life += delta;
+      if (imp.life >= imp.maxLife) continue;
+      imp.frameIndex = (imp.life / imp.maxLife) < 0.5 ? 0 : 1;
+      if (w !== i) state.impactEffects[w] = imp;
+      w++;
+    }
+    state.impactEffects.length = w;
 
-      // 2-frame animation: first half = frame 0, second half = frame 1
-      const lifePercent = updated.life / updated.maxLife;
-      updated.frameIndex = lifePercent < 0.5 ? 0 : 1;
+    // Explosion effects
+    w = 0;
+    for (let i = 0; i < state.explosionEffects.length; i++) {
+      const e = state.explosionEffects[i];
+      e.life += delta;
+      if (e.life >= e.maxLife) continue;
+      const lifePercent = Math.min(1, e.life / e.maxLife);
+      e.frameIndex = Math.min(e.totalFrames - 1, Math.floor(lifePercent * e.totalFrames));
+      if (w !== i) state.explosionEffects[w] = e;
+      w++;
+    }
+    state.explosionEffects.length = w;
 
-      return updated;
-    })
-    .filter(i => i.life < i.maxLife);
+    // Lightning effects
+    w = 0;
+    for (let i = 0; i < state.lightningEffects.length; i++) {
+      const l = state.lightningEffects[i];
+      l.life += delta;
+      if (l.life >= l.maxLife) continue;
+      const lifePercent = Math.min(1, l.life / l.maxLife);
+      l.frameIndex = Math.min(l.totalFrames - 1, Math.floor(lifePercent * l.totalFrames));
+      if (w !== i) state.lightningEffects[w] = l;
+      w++;
+    }
+    state.lightningEffects.length = w;
 
-    const updatedExplosions = state.explosionEffects
-    .map(e => {
-      const updated = { ...e };
-      updated.life += delta;
-      const lifePercent = Math.min(1, updated.life / updated.maxLife);
-      updated.frameIndex = Math.min(updated.totalFrames - 1, Math.floor(lifePercent * updated.totalFrames));
-      return updated;
-    })
-    .filter(e => e.life < e.maxLife);
-    const updatedLightning = state.lightningEffects
-      .map(l => {
-        const updated = { ...l };
-        updated.life += delta;
-        const lifePercent = Math.min(1, updated.life / updated.maxLife);
-        updated.frameIndex = Math.min(updated.totalFrames - 1, Math.floor(lifePercent * updated.totalFrames));
-        return updated;
-      })
-      .filter(l => l.life < l.maxLife);
-
+    // Single set() for all five arrays, same references so no GC
     set({
-      particles: updatedParticles,
-      damageNumbers: updatedDamageNumbers,
-      impactEffects: updatedImpacts,
-      explosionEffects: updatedExplosions,
-      lightningEffects: updatedLightning,
+      particles: state.particles,
+      damageNumbers: state.damageNumbers,
+      impactEffects: state.impactEffects,
+      explosionEffects: state.explosionEffects,
+      lightningEffects: state.lightningEffects,
     });
   },
 
