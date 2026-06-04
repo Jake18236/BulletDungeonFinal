@@ -121,7 +121,7 @@ export const useSummons = create<SummonState>((set, get) => ({
   ghostBurn: false,
   ghostTriggerOnHit: false,
 
-  scytheDamage: 10,
+  scytheDamage: 20,
   scytheSpeedBonus: false,
   scytheDamageBonus: false,
 
@@ -135,11 +135,11 @@ export const useSummons = create<SummonState>((set, get) => ({
   beastKills: 0,
   bloodsuckers: false,
 
-  daggerDamage: 12,
+  daggerDamage: 18,
   daggerCount: 1,
   daggerBurn: false,
 
-  lightningDamage: 22,
+  lightningDamage: 20,
   electroMage: false,
   electroShotCounter: 0,
   energized: false,
@@ -183,7 +183,7 @@ export const useSummons = create<SummonState>((set, get) => ({
         rotation: 0,
         orbitAngle: orbitAngle,
         orbitRadius: 5,
-        orbitSpeed: 2,
+        orbitSpeed: 1.5,
         lastDamageTime: 0,
         damagedEnemies: {},
       };

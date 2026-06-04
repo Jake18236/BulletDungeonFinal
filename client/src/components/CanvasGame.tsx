@@ -923,7 +923,6 @@ export default memo(function CanvasGame() {
             life: stats.life,
             speed: stats.speed,
             range: stats.range,
-            trailLength: stats.trailLength,
             homing: false,
             piercing: stats.piercing,
             bouncing: stats.bouncing,
@@ -1116,8 +1115,6 @@ export default memo(function CanvasGame() {
                 bouncing: stats.bouncing,
                 railgun: ps.railgun,
                 explosive: projectileExplosive,
-                chainLightning: stats.chainLightning,
-                trailLength: stats.trailLength,
                 burn: projectileBurn,
               });
             };
@@ -1266,25 +1263,22 @@ export default memo(function CanvasGame() {
           delta,
           enemies,
           position,
-          ROOM_SIZE,
           (enemyId, damage, knockback, projectileData) => {
             const enemy = enemies.find((e) => e.id === enemyId);
-            if (enemy) {
+            
               applyHit(
                 {
                   enemy,
                   damage,
                   impactPos: projectileData?.impactPos,
-                  color: projectileData?.color || "#ffffff",
                   knockbackStrength: knockback.length(),
                   explosive: projectileData?.explosive,
-                  chainLightning: projectileData?.chainLightning,
                   burn: projectileData?.burn,
                   isPlayerDamage: true,
                 },
                 enemies,
               );
-            }
+            
           },
           phase !== "playing",
         );
@@ -1575,13 +1569,13 @@ export default memo(function CanvasGame() {
 
               if ((enemy.reaperSummonWave ?? 0) === 0 && t >= 0.3) {
                 enemy.reaperSummonWave = 1;
-                for (let ci = 0; ci < 2; ci++) {
+                for (let ci = 0; ci < 5; ci++) {
                   const ang = (ci / 3) * Math.PI * 2;
                   sc(
                     new THREE.Vector3(
-                      enemy.position.x + Math.cos(ang) * 4,
+                      enemy.position.x + Math.cos(ang) * 7,
                       0,
-                      enemy.position.z + Math.sin(ang) * 3,
+                      enemy.position.z + Math.sin(ang) * 4,
                     ),
                     new THREE.Vector3(Math.cos(ang) * 5, 0, Math.sin(ang) * 4),
                   );
@@ -1906,42 +1900,92 @@ export default memo(function CanvasGame() {
 
         const MAX_SEP_DIST = 7.5;
         const PLAYER_CULL_SQ = 12100; // 110^2 — skip separation for off-screen enemies
-        for (let i = 0; i < updatedEnemies.length; i++) {
-          const e1 = updatedEnemies[i];
-          // Reaper boss skips all enemy-enemy collisions
-          if (e1.isBoss && e1.bossType === "reaper") continue;
-          const e1px = e1.position.x - position.x;
-          const e1pz = e1.position.z - position.z;
-          if (e1px * e1px + e1pz * e1pz > PLAYER_CULL_SQ) continue;
-          const isCrow1 = e1.type === "crow";
-          for (let j = i + 1; j < updatedEnemies.length; j++) {
-            const e2 = updatedEnemies[j];
-            if (e2.isBoss && e2.bossType === "reaper") continue;
-            // Crows only collide with other crows
-            if (isCrow1 !== (e2.type === "crow")) continue;
-            // Axis-aligned early exit (avoids expensive sqrt for most pairs)
-            const dx = e1.position.x - e2.position.x;
-            if (dx > MAX_SEP_DIST || dx < -MAX_SEP_DIST) continue;
-            const dz = e1.position.z - e2.position.z;
-            if (dz > MAX_SEP_DIST || dz < -MAX_SEP_DIST) continue;
-            const minDist =
-              getEnemyCollisionRadius(e1) + getEnemyCollisionRadius(e2);
-            const distSq = dx * dx + dz * dz;
-            if (distSq > 0 && distSq < minDist * minDist) {
-              const dist = Math.sqrt(distSq);
-              const push = (minDist - dist) / 8;
-              const nx = dx / dist;
-              const nz = dz / dist;
-              const e1IsTree = e1.type === "tree";
-              const e2IsTree = e2.type === "tree";
-              // Trees are immovable obstacles - only push the non-tree enemy away
-              if (!e1IsTree) {
-                e1.position.x += nx * push * (e2IsTree ? 2 : 1);
-                e1.position.z += nz * push * (e2IsTree ? 2 : 1);
-              }
-              if (!e2IsTree) {
-                e2.position.x -= nx * push * (e1IsTree ? 2 : 1);
-                e2.position.z -= nz * push * (e1IsTree ? 2 : 1);
+
+        const CELL_SIZE = 8;
+        const grid = new Map<string, Enemy[]>();
+
+        for (const enemy of updatedEnemies) {
+          const cellX = Math.floor(enemy.position.x / CELL_SIZE);
+          const cellZ = Math.floor(enemy.position.z / CELL_SIZE);
+          const key = `${cellX},${cellZ}`;
+
+          let bucket = grid.get(key);
+          if (!bucket) {
+            bucket = [];
+            grid.set(key, bucket);
+          }
+
+          bucket.push(enemy);
+        }
+        const checked = new Set<string>();
+
+        for (const enemy of updatedEnemies) {
+          if (enemy.isBoss && enemy.bossType === "reaper")
+            continue;
+
+          const cellX = Math.floor(enemy.position.x / CELL_SIZE);
+          const cellZ = Math.floor(enemy.position.z / CELL_SIZE);
+
+          // check neighboring cells only
+          for (let ox = -1; ox <= 1; ox++) {
+            for (let oz = -1; oz <= 1; oz++) {
+              const bucket = grid.get(`${cellX + ox},${cellZ + oz}`);
+              if (!bucket) continue;
+
+              for (const other of bucket) {
+                if (enemy === other) continue;
+
+                const pairKey =
+                  enemy.id < other.id
+                    ? enemy.id + "|" + other.id
+                    : other.id + "|" + enemy.id;
+
+                if (checked.has(pairKey)) continue;
+                checked.add(pairKey);
+
+                if (other.isBoss && other.bossType === "reaper")
+                  continue;
+
+                const isCrow1 = enemy.type === "crow";
+                if (isCrow1 !== (other.type === "crow"))
+                  continue;
+
+                const dx = enemy.position.x - other.position.x;
+                const dz = enemy.position.z - other.position.z;
+
+                const minDist =
+                  getEnemyCollisionRadius(enemy) +
+                  getEnemyCollisionRadius(other);
+
+                const distSq = dx * dx + dz * dz;
+
+                if (
+                  distSq > 0 &&
+                  distSq < minDist * minDist
+                ) {
+                  const dist = Math.sqrt(distSq);
+
+                  const push = (minDist - dist) / 8;
+                  const nx = dx / dist;
+                  const nz = dz / dist;
+
+                  const e1IsTree = enemy.type === "tree";
+                  const e2IsTree = other.type === "tree";
+
+                  if (!e1IsTree) {
+                    enemy.position.x +=
+                      nx * push * (e2IsTree ? 2 : 1);
+                    enemy.position.z +=
+                      nz * push * (e2IsTree ? 2 : 1);
+                  }
+
+                  if (!e2IsTree) {
+                    other.position.x -=
+                      nx * push * (e1IsTree ? 2 : 1);
+                    other.position.z -=
+                      nz * push * (e1IsTree ? 2 : 1);
+                  }
+                }
               }
             }
           }
@@ -2247,28 +2291,28 @@ export default memo(function CanvasGame() {
       const angles = [0, (Math.PI * 2) / 3, (Math.PI * 4) / 3];
       useProjectiles.getState().addProjectiles(
         angles.map((baseAngle) => {
-          const angle = baseAngle + (Math.random() - 0.5) * 0.3;
-          const direction = new THREE.Vector3(
-            Math.cos(angle),
-            0,
-            Math.sin(angle),
-          );
+          const angle = baseAngle + (Math.random() - 0.5) * 1;
+          const x = Math.cos(angle);
+          const z = Math.sin(angle);
+
           return {
-            position: enemy.position
-              .clone()
-              .add(direction.clone().multiplyScalar(0.6)),
-            direction,
+            position: new THREE.Vector3(
+              enemy.position.x + x * 0.6,
+              enemy.position.y,
+              enemy.position.z + z * 0.6
+            ),
+            direction: new THREE.Vector3(x, 0, z),
             size: 4,
             damage: stats.damage * 0.2,
-            speed: stats.speed * 1.35,
+            speed: stats.speed * 1.55,
             life: 1,
             range: Math.max(12, stats.range * 0.4),
-            trailLength: 1,
-            piercing: 2,
+            trailLength: 0,
+            piercing: 0,
             bouncing: 0,
             homing: false,
           };
-        }),
+        })
       );
     }
     // Boss explosion on death
@@ -2319,12 +2363,8 @@ export default memo(function CanvasGame() {
     const offsetX = (-position.x * 50) / 2;
     const offsetZ = (-position.z * 50) / 2;
 
-    // Camera offset in pixels
-    const pixelOffsetX = (-position.x * 50) / 2;
-    const pixelOffsetZ = (-position.z * 50) / 2;
     const cameraOffset = cameraRef.current.getRenderOffset();
 
-    // full world offset INCLUDING camera pull
     const worldOffsetX = (-position.x * 50) / 2 + cameraOffset.x;
 
     const worldOffsetY = (-position.z * 50) / 2 + cameraOffset.y;
@@ -2357,7 +2397,7 @@ export default memo(function CanvasGame() {
       const screenY = snapToGrid(
         centerY + ((obstacle.z - position.z) * 50) / 2,
       );
-      const radiusPx = obstacle.radius * 25;
+      const radiusPx = obstacle.radius * 15;
       ctx.imageSmoothingEnabled = false;
 
       if (treeSprite.complete && treeSprite.naturalWidth > 0) {
@@ -2395,37 +2435,6 @@ export default memo(function CanvasGame() {
         ctx.fill();
       }
     });
-
-    // ============================================
-    // WALLS
-    // ============================================
-
-    const wallThickness = 20;
-
-    ctx.fillRect(
-      snapToGrid(centerX - floorSize / 2 + offsetX),
-      snapToGrid(centerY - floorSize / 2 - wallThickness + offsetZ),
-      floorSize,
-      wallThickness,
-    );
-    ctx.fillRect(
-      snapToGrid(centerX - floorSize / 2 + offsetX),
-      snapToGrid(centerY + floorSize / 2 + offsetZ),
-      floorSize,
-      wallThickness,
-    );
-    ctx.fillRect(
-      snapToGrid(centerX + floorSize / 2 + offsetX),
-      snapToGrid(centerY - floorSize / 2 + offsetZ),
-      wallThickness,
-      floorSize,
-    );
-    ctx.fillRect(
-      snapToGrid(centerX - floorSize / 2 - wallThickness + offsetX),
-      snapToGrid(centerY - floorSize / 2 + offsetZ),
-      wallThickness,
-      floorSize,
-    );
   };
 
   const drawXPOrbs = (ctx: CanvasRenderingContext2D) => {
@@ -2443,7 +2452,7 @@ export default memo(function CanvasGame() {
         centerY + ((orb.position.z - position.z) * 50) / 2,
       );
 
-      // Draw particle trail
+      // particle trail
       const trail = orb.trail;
       if (trail && trail.length > 0) {
         const isMagnetized = orb.magnetized && orb.kickTimer <= 0;

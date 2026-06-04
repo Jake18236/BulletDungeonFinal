@@ -12,13 +12,6 @@ export type TrailParticle = {
 };
 
 
-interface SpriteSegment {
-  x: number;
-  z: number;
-  angle: number;
-  age: number;
-}
-
 
 export type DamageSource = {
   type: "player" | "summon" | "enemy";
@@ -42,15 +35,8 @@ export interface Projectile {
   maxRange: number;
   distanceTraveled: number;
   rotationY: number;
-
-  // Visual
-  color: string;
   size: number;
-  trailColor: string;
-  trailColorSecondary: string;
-  trailLength: number;
-
-
+  
   // Special effects
   homing: boolean;
   piercing: number;
@@ -76,7 +62,7 @@ interface ProjectilesState {
     position: THREE.Vector3;
     direction: THREE.Vector3;
     life?: number;
-    trailLength: number;
+
     damage: number;
     speed: number;
     range: number;
@@ -86,7 +72,7 @@ interface ProjectilesState {
     bouncing: number;
 
     explosive?: { radius: number; damage: number };
-    chainLightning?: { chains: number; range: number };
+
     burn?: { damage: number; duration: number };
     railgun?: boolean
   }) => void;
@@ -103,15 +89,13 @@ interface ProjectilesState {
       type?: "basic" | "tank" | "eyeball" | "tree" | "boss" | "crow" | "mage";
     }>,
     playerPos: THREE.Vector3,
-    roomBounds: number,
+
     onHit: (
       enemyId: string, 
       damage: number, 
       knockback: THREE.Vector3,
       projectileData: {
-        color: string;
         explosive?: { radius: number; damage: number };
-        chainLightning?: { chains: number; range: number; chainedEnemies: Set<string> };
         burn?: { damage: number; duration: number };
         isSummonProjectile?: boolean;
         
@@ -143,7 +127,6 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
     position: THREE.Vector3;
     direction: THREE.Vector3;
     life?: number;
-    trailLength: number;
     damage: number;
     speed: number;
     range: number;
@@ -154,7 +137,6 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
     railgun?: boolean;
 
     explosive?: { radius: number; damage: number };
-    chainLightning?: { chains: number; range: number };
 
     isSummonProjectile?: boolean;
     burn?: { damage: number; duration: number };
@@ -174,11 +156,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       maxRange: config.range,
       distanceTraveled: 0,
       rotationY: Math.atan2(config.direction.x, config.direction.z),
-      color: getProjectileColor(config),
       size: config.size,
-      trailColor: getTrailColor(config),
-      trailColorSecondary: getTrailColor(config),
-      trailLength: config.trailLength,
       homing: config.homing,
       piercing: config.piercing,
       piercedEnemies: new Set(),
@@ -188,13 +166,6 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       pierceKillCount: 0,
 
       explosive: config.explosive,
-      chainLightning: config.chainLightning
-        ? {
-            ...config.chainLightning,
-            chainedEnemies: new Set(),
-          }
-        : undefined,
-
       isSummonProjectile: config.isSummonProjectile,
       burn: config.burn,
       triggerOnHit: config.triggerOnHit,
@@ -213,7 +184,7 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
     
   },
 
-  updateProjectiles: (delta, enemies, playerPos, roomBounds, onHit, isPaused) => {
+  updateProjectiles: (delta, enemies, playerPos, onHit, isPaused) => {
     if (isPaused) {
       return;
     }
@@ -315,14 +286,13 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
       let hitEnemy = false;
 
       for (const enemy of enemies) {
-        //skip 
+        if (enemy.health <= 0) continue;
         if (proj.piercedEnemies.has(enemy.id)) continue;
 
         const enemyRadius = enemy.type === "boss"
           ? lazarusConfig.bodyHitRadius
           : ENEMY_TYPE_CONFIG[enemy.type === "tank" || enemy.type === "eyeball" ? enemy.type : "basic"].bodyHitRadius;
 
-        // Early distance check: quick AABB check before detailed collision
         const dx = proj.position.x - enemy.position.x;
         const dz = proj.position.z - enemy.position.z;
         const distSq = dx * dx + dz * dz;
@@ -348,9 +318,11 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
           const closestZ = segmentStart.z + segment.z * t;
           const distToClosestX = closestX - enemyPos.x;
           const distToClosestZ = closestZ - enemyPos.z;
-          const distance = Math.sqrt(distToClosestX * distToClosestX + distToClosestZ * distToClosestZ);
-          
-          if (distance > enemyRadius) continue;
+          const distanceSq =
+            distToClosestX * distToClosestX +
+            distToClosestZ * distToClosestZ;
+
+          if (distanceSq > enemyRadius * enemyRadius) continue;
         }
 
         // Hit detected
@@ -366,9 +338,8 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
             finalDamage = proj.damage * Math.pow(0.8, proj.pierceKillCount);
           }
 
-          // Deal damage & trigger effects
           const knockbackBase = 1;
-          const knockbackFromSpeed = proj.speed / 20;
+          const knockbackFromSpeed = proj.speed / 15;
           const knockbackMagnitude = knockbackBase + knockbackFromSpeed;
 
           onHit(
@@ -376,16 +347,12 @@ export const useProjectiles = create<ProjectilesState>((set, get) => ({
             finalDamage,
             proj.velocity.clone().normalize().multiplyScalar(knockbackMagnitude),
             {
-              color: proj.color,
               explosive: proj.explosive,
-              chainLightning: proj.chainLightning,
               burn: proj.burn,
               impactPos,
             }
           );
 
-          // ===================== RAILGUN KILL CHECK =====================
-          // Check if enemy was killed by this hit
           if (proj.railgun) {
             const enemyAfter = enemies.find(e => e.id === enemy.id);
             if (enemyAfter && enemyAfter.health <= 0) {
@@ -477,11 +444,8 @@ export function buildProjectile(config: {
     maxRange: config.range,
     distanceTraveled: 0,
     rotationY: Math.atan2(config.direction.x, config.direction.z),
-    color: getProjectileColor(config),
+ 
     size: config.size,
-    trailColor: getTrailColor(config),
-    trailColorSecondary: getTrailColor(config),
-    trailLength: config.trailLength,
     homing: config.homing,
     piercing: config.piercing,
     piercedEnemies: new Set(),
@@ -490,29 +454,9 @@ export function buildProjectile(config: {
     railgun: config.railgun ?? false,
     pierceKillCount: 0,
     explosive: config.explosive,
-    chainLightning: config.chainLightning
-      ? { ...config.chainLightning, chainedEnemies: new Set() }
-      : undefined,
     isSummonProjectile: config.isSummonProjectile,
     burn: config.burn,
     triggerOnHit: config.triggerOnHit,
   };
 }
 
-function getProjectileColor(config: any): string {
-  if (config.explosive) return "#ff6600";
-  if (config.chainLightning) return "#00ffff";
-  if (config.homing) return "#ff00ff";
-  if (config.piercing > 0) return "#ffff00";
-  if (config.bouncing > 0) return "#00ff00";
-  return "#ffffff";
-}
-
-function getTrailColor(config: any): string {
-  if (config.explosive) return "rgba(255, 102, 0, 0.5)";
-  if (config.chainLightning) return "rgba(0, 255, 255, 0.5)";
-  if (config.homing) return "rgba(255, 0, 255, 0.5)";
-  if (config.piercing > 0) return "rgba(255, 255, 0, 0.5)";
-  if (config.bouncing > 0) return "rgba(0, 255, 0, 0.5)";
-  return "rgba(255, 255, 255, 0.5)";
-}

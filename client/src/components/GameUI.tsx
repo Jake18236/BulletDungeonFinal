@@ -355,7 +355,7 @@ function DeathScreen({ onRestart }: { onRestart: () => void }) {
           }}
         >
           <NineSliceCanvas
-            width={480}
+            width={580}
             height={36}
             deps={[ready]}
             draw={(ctx, w, h) =>

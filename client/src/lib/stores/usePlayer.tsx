@@ -972,7 +972,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   // Position & Movement
   position: new THREE.Vector3(),
   velocity: new THREE.Vector3(),
-  speed: 10,
+  speed: 9,
   isMoving: false,
   lastMovementTime: 0,
 
@@ -984,7 +984,7 @@ export const usePlayer = create<PlayerState>((set, get) => ({
   defense: 0,
 
   // Combat
-  firerate: 0.4,
+  firerate: 0.3,
   ammo: 6,
   maxAmmo: 6,
   reloadTime: 1,
